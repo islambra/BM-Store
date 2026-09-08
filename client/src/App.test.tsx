@@ -1,0 +1,37 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import App from './App'
+
+vi.mock('./services/api', () => ({
+  getMe: () => Promise.reject(new Error('no session')),
+  trackReferral: () => Promise.resolve({ referralId: 'x' }),
+  getErrorMessage: (e: unknown) => (e instanceof Error ? e.message : 'error'),
+  default: {},
+}))
+
+describe('App routing', () => {
+  beforeEach(() => {
+    localStorage.setItem('bm-store-lang', 'en')
+    sessionStorage.clear()
+  })
+
+  it('renders the home page with header content', async () => {
+    render(<App />)
+    expect(screen.getByText('Best Selling')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Account' }).some((l) => l.getAttribute('href') === '/login')).toBe(true)
+  })
+
+  it('navigates to a routed page', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getAllByRole('link', { name: 'Categories' })[0])
+    expect(window.location.pathname).toBe('/categories')
+  })
+
+  it('renders a fallback for unknown routes', () => {
+    window.history.replaceState({}, '', '/does-not-exist')
+    render(<App />)
+    expect(screen.getByText('404')).toBeInTheDocument()
+  })
+})

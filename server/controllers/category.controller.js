@@ -1,0 +1,64 @@
+import Category from '../models/Category.js'
+import Product from '../models/Product.js'
+import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
+
+const pickFields = (body) => {
+  const fields = ['slug', 'name', 'nameAr', 'nameFr', 'image', 'icon', 'order', 'active']
+  const out = {}
+  for (const f of fields) if (body[f] !== undefined) out[f] = body[f]
+  return out
+}
+
+// Public — active categories only, display order, with active product counts.
+export const getCategories = asyncHandler(async (_req, res) => {
+  const [docs, counts] = await Promise.all([
+    Category.find({ active: true }).sort({ order: 1, name: 1 }).lean(),
+    Product.aggregate([{ $match: { isActive: true } }, { $group: { _id: '$category', count: { $sum: 1 } } }]),
+  ])
+  const countByCategory = new Map(counts.map((c) => [c._id, c.count]))
+  const withCounts = docs.map((c) => ({ ...c, productCount: countByCategory.get(c.slug) || 0 }))
+  return sendSuccess(res, withCounts)
+})
+
+// ---- Admin (router mounts these behind requireAdmin) ----
+
+export const adminList = asyncHandler(async (_req, res) => {
+  const docs = await Category.find().sort({ order: 1, name: 1 }).lean()
+  return sendSuccess(res, docs)
+})
+
+export const adminCreate = asyncHandler(async (req, res) => {
+  const data = pickFields(req.body)
+  if (!data.slug || !data.name) return sendError(res, 'slug and name are required', 400)
+
+  data.slug = String(data.slug).toLowerCase().trim()
+  const exists = await Category.exists({ slug: data.slug })
+  if (exists) return sendError(res, 'A category with this slug already exists', 409)
+
+  const doc = await Category.create(data)
+  return sendSuccess(res, doc, 'Category created', 201)
+})
+
+export const adminUpdate = asyncHandler(async (req, res) => {
+  const data = pickFields(req.body)
+  if (!req.params.id) return sendError(res, 'Category id is required', 400)
+
+  const current = await Category.findById(req.params.id)
+  if (!current) return sendError(res, 'Category not found', 404)
+
+  if (data.slug && data.slug !== current.slug) {
+    const clash = await Category.exists({ slug: String(data.slug).toLowerCase(), _id: { $ne: current._id } })
+    if (clash) return sendError(res, 'A category with this slug already exists', 409)
+    data.slug = String(data.slug).toLowerCase()
+  }
+
+  Object.assign(current, data)
+  const updated = await current.save()
+  return sendSuccess(res, updated, 'Category updated')
+})
+
+export const adminDelete = asyncHandler(async (req, res) => {
+  const doc = await Category.findByIdAndDelete(req.params.id)
+  if (!doc) return sendError(res, 'Category not found', 404)
+  return sendSuccess(res, null, 'Category deleted')
+})

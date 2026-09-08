@@ -1,0 +1,269 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Cairo", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Cairo", ui-sans-serif, system-ui, sans-serif;
+
+  /* Primary brand — professional blue, slightly deepened for premium feel */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dce8fe;
+  --color-brand-200: #bfd4fe;
+  --color-brand-300: #94b5fc;
+  --color-brand-400: #5f8bf8;
+  --color-brand-500: #3b66f0;
+  --color-brand-600: #2453e0;
+  --color-brand-700: #1d40ba;
+  --color-brand-800: #1c388f;
+  --color-brand-900: #1a2f6d;
+
+  /* Accent — warm orange, used carefully (discounts, badges, price emphasis) */
+  --color-accent-300: #fdc38e;
+  --color-accent-400: #fb923c;
+  --color-accent-500: #f97316;
+  --color-accent-600: #e8601f;
+  --color-accent-700: #c14a14;
+
+  /* Semantic status colors */
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+
+  /* Neutral surfaces — cool ink with a subtle blue undertone */
+  --color-canvas: #f5f6f9;
+  --color-surface: #ffffff;
+  --color-ink-900: #101828;
+  --color-ink-700: #2d3648;
+  --color-ink-500: #5b6478;
+  --color-ink-400: #8b95a7;
+  --color-ink-300: #b6bdc9;
+  --color-line: #e7eaf1;
+  --color-line-strong: #d7dce7;
+
+  /* Shadows — calm by default, lifted only on hover */
+  --shadow-soft: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.05);
+  --shadow-lift: 0 4px 10px rgb(16 24 40 / 0.07), 0 14px 40px rgb(16 24 40 / 0.12);
+  --shadow-focused: 0 0 0 3px rgb(36 83 224 / 0.16);
+
+  /* Focus ring compatible with `focus-visible:shadow-focused` */
+  --shadow-focus: 0 0 0 3px rgb(36 83 224 / 0.16);
+
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pop: pop 0.2s ease-out both;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-ink-900 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  ::selection {
+    @apply bg-brand-600/15 text-brand-800;
+  }
+
+  /* RTL adjustments — Cairo carries Arabic beautifully */
+  [dir="rtl"] body,
+  [dir="rtl"] {
+    font-family: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+}
+
+@layer utilities {
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .page-heading {
+    @apply mb-6;
+  }
+}
+
+/* ---- Buttons ----------------------------------------------------------- */
+
+@utility btn {
+  @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-55;
+}
+
+@utility btn-sm {
+  @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-55;
+}
+
+@utility btn-primary {
+  @apply btn bg-brand-600 text-white shadow-[0_1px_2px_rgb(16_24_40/0.12)] hover:bg-brand-700 active:scale-[0.99];
+}
+
+@utility btn-secondary {
+  @apply btn bg-brand-50 text-brand-700 hover:bg-brand-100 active:scale-[0.99];
+}
+
+@utility btn-ghost {
+  @apply btn bg-transparent text-ink-700 hover:bg-ink-900/5 active:scale-[0.99];
+}
+
+@utility btn-dark {
+  @apply btn bg-ink-900 text-white hover:bg-brand-700 active:scale-[0.99];
+}
+
+@utility btn-danger {
+  @apply btn bg-danger-600 text-white hover:bg-danger-700 active:scale-[0.99];
+}
+
+@utility btn-outline {
+  @apply btn border border-line-strong bg-surface text-ink-700 hover:border-brand-400 hover:text-brand-700 active:scale-[0.99];
+}
+
+/* ---- Chips / badges ---------------------------------------------------- */
+
+@utility chip {
+  @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs font-semibold text-ink-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700;
+}
+
+@utility chip-active {
+  @apply chip border-transparent bg-brand-600 text-white hover:border-transparent hover:bg-brand-600 hover:text-white;
+}
+
+/* ---- Forms ------------------------------------------------------------- */
+
+@utility input {
+  @apply w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink-900 shadow-[0_1px_2px_rgb(16_24_40/0.03)] transition-all duration-200 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:shadow-focus;
+}
+
+@utility input-sm {
+  @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 transition-all duration-200 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:shadow-focus;
+}
+
+@utility input-error {
+  @apply border-danger-500 focus:border-danger-500 focus:shadow-[0_0_0_3px_rgb(220_38_38/0.12)];
+}
+
+@utility label {
+  @apply mb-1.5 block text-xs font-semibold text-ink-700;
+}
+
+/* ---- Cards ------------------------------------------------------------- */
+
+.card {
+  @apply rounded-2xl border border-line bg-surface;
+}
+
+/* ---- Badge / icon button ------------------------------------------------ */
+
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+}
+
+.icon-btn {
+  @apply relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-ink-500 transition-colors duration-200 hover:bg-ink-900/5 hover:text-ink-900 focus-visible:outline-none focus-visible:shadow-focus;
+}
+
+/* ---- Section syntax ------------------------------------------------------ */
+
+.section-title {
+  @apply flex items-end justify-between gap-4;
+}
+.section-heading {
+  @apply text-xl font-bold tracking-tight text-ink-900 sm:text-2xl;
+}
+
+.eyebrow {
+  @apply text-[11px] font-bold uppercase tracking-[0.12em] text-brand-600;
+}
+
+/* ---- Skeleton ------------------------------------------------------------ */
+
+.skeleton {
+  @apply relative overflow-hidden rounded-lg bg-ink-900/8;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.65) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* ---- Misc ---------------------------------------------------------------- */
+
+.divider {
+  @apply h-px w-full bg-line;
+}
+
+/* Reduced motion: tone down animations */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001s !important;
+    transition-duration: 0.001s !important;
+  }
+}
