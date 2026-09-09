@@ -4,41 +4,31 @@ import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
 import { getErrorMessage } from '../../services/api'
-import { Toggle } from '../common/FormControls'
+import { Field, Input } from '../common/FormControls'
+import ImageUploader from '../common/ImageUploader'
 import { ErrorNote, Loader, Table } from './adminShared'
-
-const iconChoices = ['spices', 'cosmetics', 'baking', 'nuts', 'legumes', 'natural', 'dried', 'oilsHoney']
 
 export default function CategoriesSection() {
   const { t } = useLanguage()
   const { data, loading, error, reload } = useAsync(() => api.getAdminCategories())
-  const [form, setForm] = useState({ name: '', nameAr: '', nameFr: '', slug: '', icon: 'spices', image: '', order: 1, active: false })
+  const [form, setForm] = useState({ name: '', nameAr: '', image: '' })
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
-  const set = (k: string, v: string | number | boolean) => setForm((f) => ({ ...f, [k]: v }))
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
 
   const create = async () => {
-    if (!form.name.trim() || !form.slug.trim()) return
+    if (!form.name.trim()) return
     setBusy(true)
     setNotice('')
     try {
-      await api.createCategory({ ...form, name: form.name.trim(), slug: form.slug.trim(), image: form.image.trim() })
-      setForm({ name: '', nameAr: '', nameFr: '', slug: '', icon: 'spices', image: '', order: 1, active: false })
+      await api.createCategory({ name: form.name.trim(), nameAr: form.nameAr.trim() || undefined, image: form.image.trim() || undefined, active: true })
+      setForm({ name: '', nameAr: '', image: '' })
       void reload()
     } catch (err) {
       setNotice(getErrorMessage(err))
     } finally {
       setBusy(false)
-    }
-  }
-
-  const toggleActive = async (id: string, active: boolean) => {
-    try {
-      await api.updateCategory(id, { active })
-      void reload()
-    } catch (err) {
-      setNotice(getErrorMessage(err))
     }
   }
 
@@ -57,19 +47,16 @@ export default function CategoriesSection() {
   return (
     <div className="space-y-5">
       {notice && <ErrorNote message={notice} />}
-      <Table headers={[t('admin.category.create'), t('admin.category.slug'), t('admin.category.active')]}>
+      <Table headers={[t('admin.category.name'), t('admin.category.nameAr')]}>
         {(data ?? []).map((c) => (
           <tr key={String(c._id)} className="hover:bg-canvas">
             <td className="px-4 py-3">
-              <p className="font-semibold text-ink-900">{c.name}</p>
-              <p className="text-xs text-ink-500">
-                {c.nameAr} · {c.nameFr}
-              </p>
+              <div className="flex items-center gap-3">
+                <img src={c.image} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                <p className="font-semibold text-ink-900">{c.name}</p>
+              </div>
             </td>
-            <td className="px-4 py-3 font-mono text-xs text-ink-500">{c.slug}</td>
-            <td className="px-4 py-3">
-              <Toggle checked={c.active} onChange={(v) => void toggleActive(String(c._id), v)} />
-            </td>
+            <td className="px-4 py-3 text-ink-500">{c.nameAr}</td>
             <td className="px-4 py-3 text-end">
               <button type="button" onClick={() => void remove(String(c._id))} className="icon-btn text-red-700">
                 <Trash2 size={17} />
@@ -83,20 +70,16 @@ export default function CategoriesSection() {
           <Plus size={16} className="text-brand-600" />
           {t('admin.category.create')}
         </h3>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <input className="input" placeholder={t('admin.category.name')} value={form.name} onChange={(e) => set('name', e.target.value)} />
-          <input className="input" placeholder={t('admin.category.slug')} value={form.slug} onChange={(e) => set('slug', e.target.value)} />
-          <input className="input" placeholder={t('admin.category.nameAr')} value={form.nameAr} onChange={(e) => set('nameAr', e.target.value)} />
-          <input className="input" placeholder={t('admin.category.nameFr')} value={form.nameFr} onChange={(e) => set('nameFr', e.target.value)} />
-          <input className="input" placeholder={t('admin.banner.image')} value={form.image} onChange={(e) => set('image', e.target.value)} dir="ltr" />
-          <select className="input" value={form.icon} onChange={(e) => set('icon', e.target.value)}>
-            {iconChoices.map((ic) => (
-              <option key={ic} value={ic}>
-                {ic}
-              </option>
-            ))}
-          </select>
-          <input className="input" type="number" placeholder={t('admin.category.order')} value={form.order} onChange={(e) => set('order', Number(e.target.value) || 1)} />
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Field label={t('admin.category.name')} required>
+            <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
+          </Field>
+          <Field label={t('admin.category.nameAr')}>
+            <Input dir="rtl" value={form.nameAr} onChange={(e) => set('nameAr', e.target.value)} />
+          </Field>
+          <Field label={t('admin.category.image')}>
+            <ImageUploader label={t('admin.category.image')} value={form.image} onChange={(v) => set('image', v as string)} />
+          </Field>
         </div>
         <button type="button" onClick={() => void create()} disabled={busy} className="btn-primary mt-4">
           {t('admin.category.create')}

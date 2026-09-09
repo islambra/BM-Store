@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, ArrowLeft, ShieldCheck, Truck, BadgeCheck, Headphones, AlertCircle, PackageOpen } from 'lucide-react'
+import { ArrowRight, ArrowLeft, AlertCircle, PackageOpen } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useAsync } from '../hooks/useAsync'
 import { loadOffers, loadBestSellers } from '../services/catalog'
@@ -9,13 +9,6 @@ import SectionHeader from '../components/common/SectionHeader'
 import HeroSlider from '../components/home/HeroSlider'
 import { ProductCardSkeleton } from '../components/common/Skeletons'
 import EmptyState from '../components/common/EmptyState'
-
-const trust = [
-  { key: 'trust.secure', keyDesc: 'trust.secureDesc', icon: ShieldCheck },
-  { key: 'trust.delivery', keyDesc: 'trust.deliveryDesc', icon: Truck },
-  { key: 'trust.quality', keyDesc: 'trust.qualityDesc', icon: BadgeCheck },
-  { key: 'trust.support', keyDesc: 'trust.supportDesc', icon: Headphones },
-]
 
 function ProductGrid({
   products,
@@ -104,27 +97,6 @@ export default function Home() {
       </section>
 
       {/* Trust / service */}
-      <section
-        className="mt-12 overflow-hidden rounded-3xl border border-line bg-surface sm:mt-14"
-        aria-label={t('home.services')}
-      >
-        <div className="grid grid-cols-1 gap-px sm:grid-cols-2 lg:grid-cols-4">
-          {trust.map((item) => {
-            const Icon = item.icon
-            return (
-              <div key={item.key} className="flex items-start gap-3 p-5 sm:p-6">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                  <Icon size={22} />
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-ink-900">{t(item.key)}</h3>
-                  <p className="mt-0.5 text-xs leading-relaxed text-ink-500">{t(item.keyDesc)}</p>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </section>
 
       <div className="mt-14 pb-2" />
     </div>

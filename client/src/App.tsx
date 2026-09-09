@@ -4,6 +4,7 @@ import { CatalogProvider } from './context/CatalogContext'
 import { StoreProvider } from './context/StoreContext'
 import { AuthProvider } from './context/AuthContext'
 import Layout from './components/layout/Layout'
+import AdminLayout from './components/layout/AdminLayout'
 import ScrollToTop from './components/common/ScrollToTop'
 import { RequireRole } from './components/auth/RequireRole'
 import Home from './pages/Home'
@@ -15,12 +16,13 @@ import ProductPage from './pages/ProductPage'
 import SearchPage from './pages/SearchPage'
 import CartPage from './pages/CartPage'
 import WishlistPage from './pages/WishlistPage'
-import AccountPage from './pages/AccountPage'
+import DashboardPage from './pages/DashboardPage'
 import AuthPage from './pages/AuthPage'
 import CheckoutPage from './pages/CheckoutPage'
 import InfoPage from './pages/InfoPage'
 import NotFoundPage from './pages/NotFoundPage'
 import MarketerPage from './pages/MarketerPage'
+import MarketerAuthPage from './pages/MarketerAuthPage'
 import AdminPage from './pages/AdminPage'
 
 export default function App() {
@@ -43,24 +45,24 @@ export default function App() {
                   <Route path="/search" element={<SearchPage />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/wishlist" element={<WishlistPage />} />
-                  <Route path="/account" element={<AccountPage />} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <RequireRole roles={['USER', 'MARKETER']}>
+                        <DashboardPage />
+                      </RequireRole>
+                    }
+                  />
                   <Route path="/login" element={<AuthPage mode="login" />} />
                   <Route path="/register" element={<AuthPage mode="register" />} />
-                  <Route path="/forgot" element={<AuthPage mode="forgot" />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
+                  <Route path="/marketer/signup" element={<MarketerAuthPage mode="signup" />} />
+                  <Route path="/marketer/login" element={<MarketerAuthPage mode="login" />} />
                   <Route
                     path="/marketer"
                     element={
                       <RequireRole roles={['MARKETER', 'ADMIN']}>
                         <MarketerPage />
-                      </RequireRole>
-                    }
-                  />
-                  <Route
-                    path="/admin"
-                    element={
-                      <RequireRole roles={['ADMIN']}>
-                        <AdminPage />
                       </RequireRole>
                     }
                   />
@@ -70,6 +72,16 @@ export default function App() {
                   <Route path="/privacy" element={<InfoPage kind="privacy" />} />
                   <Route path="/terms" element={<InfoPage kind="terms" />} />
                   <Route path="*" element={<NotFoundPage />} />
+                </Route>
+                <Route element={<AdminLayout />}>
+                  <Route
+                    path="/admin"
+                    element={
+                      <RequireRole roles={['ADMIN']}>
+                        <AdminPage />
+                      </RequireRole>
+                    }
+                  />
                 </Route>
               </Routes>
             </AuthProvider>

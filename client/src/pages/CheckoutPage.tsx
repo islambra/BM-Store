@@ -143,7 +143,7 @@ export default function CheckoutPage() {
             {t('checkout.review')}
           </div>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link to="/account" className="btn-primary">
+            <Link to="/dashboard" className="btn-primary">
               {t('checkout.trackOrders')}
             </Link>
             <Link to="/" className="btn-ghost">

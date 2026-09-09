@@ -12,7 +12,7 @@ api.interceptors.response.use(
   async (err) => {
     const original = err.config
     const url = original?.url ?? ''
-    const isAuth = ['/auth/login', '/auth/register', '/auth/refresh'].some((p) => url.includes(p))
+    const isAuth = ['/auth/login', '/auth/register', '/auth/register-marketer', '/auth/refresh'].some((p) => url.includes(p))
     if (err.response?.status === 401 && original && !original._retry && !isAuth) {
       original._retry = true
       try {
@@ -91,16 +91,48 @@ export function changePassword(body: { currentPassword: string; newPassword: str
   return patch<null>('/auth/password', body)
 }
 
-export function login(email: string, password: string) {
-  return post<AuthPayload>('/auth/login', { email, password })
+export function login(phone: string, password: string) {
+  return post<AuthPayload>('/auth/login', { phone, password })
 }
 
-export function register(name: string, email: string, password: string) {
-  return post<AuthPayload>('/auth/register', { name, email, password })
+export function register(name: string, phone: string, password: string) {
+  return post<AuthPayload>('/auth/register', { name, phone, password })
+}
+
+export interface RegisterMarketerInput {
+  name: string
+  phone: string
+  password: string
+  baridiMob?: string
+  ccp?: string
+  ccpKey?: string
+}
+
+export function registerMarketer(body: RegisterMarketerInput) {
+  return post<BecomeMarketerPayload>('/auth/register-marketer', body)
 }
 
 export function logout() {
   return post<null>('/auth/logout')
+}
+
+export async function uploadImage(file: File): Promise<{ url: string }> {
+  const fd = new FormData()
+  fd.append('image', file)
+  const res = await api.post<ApiResponse<{ url: string }>>('/admin/upload', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  const url = res.data?.data?.url ?? ''
+  if (!url) throw new Error('Upload failed')
+  if (url.startsWith('http')) return { url }
+  const origin = (() => {
+    try {
+      return new URL(api.defaults.baseURL ?? '', window.location.origin).origin
+    } catch {
+      return window.location.origin
+    }
+  })()
+  return { url: `${origin}${url.startsWith('/') ? url : `/${url}`}` }
 }
 
 export interface BecomeMarketerPayload extends AuthPayload {
@@ -257,7 +289,7 @@ export interface MarketerProfilePayload {
     referralCode: string
     referralLink: string
     status: string
-    payoutDetails: { ccp?: string; baridiMob?: string }
+    payoutDetails: { ccp?: string; ccpKey?: string; baridiMob?: string }
     totalEarnings: number
     createdAt: string
   }
@@ -277,7 +309,7 @@ export function updateMarketerMe(body: {
   publicName?: string
   bio?: string
   avatar?: string
-  payoutDetails?: { ccp?: string; baridiMob?: string }
+  payoutDetails?: { ccp?: string; ccpKey?: string; baridiMob?: string }
 }) {
   return patch<unknown>('/marketer/me', body)
 }
@@ -318,7 +350,7 @@ export interface AdminMarketer {
     status: string
     publicName: string
     totalEarnings: number
-    payoutDetails: { ccp?: string; baridiMob?: string }
+    payoutDetails: { ccp?: string; ccpKey?: string; baridiMob?: string }
   } | null
   stats: {
     visits: number
@@ -328,6 +360,10 @@ export interface AdminMarketer {
 
 export function getAdminUsers() {
   return get<Page & { users: AdminUser[] }>('/admin/users')
+}
+
+export function deleteAdminUser(id: string) {
+  return remove<null>(`/admin/users/${id}`)
 }
 
 export function getAdminMarketers() {

@@ -1,13 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as api from '../services/api'
-import type { User } from '../services/api'
+import type { User, RegisterMarketerInput } from '../services/api'
 
 interface AuthContextValue {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<User>
-  register: (name: string, email: string, password: string) => Promise<User>
+  login: (phone: string, password: string) => Promise<User>
+  register: (name: string, phone: string, password: string) => Promise<User>
+  registerMarketer: (input: RegisterMarketerInput) => Promise<User>
   logout: () => Promise<void>
   becomeMarketer: () => Promise<User>
   isMarketer: boolean
@@ -38,14 +39,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { user } = await api.login(email, password)
+  const login = useCallback(async (phone: string, password: string) => {
+    const { user } = await api.login(phone, password)
     setUser(user)
     return user
   }, [])
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
-    const { user } = await api.register(name, email, password)
+  const register = useCallback(async (name: string, phone: string, password: string) => {
+    const { user } = await api.register(name, phone, password)
+    setUser(user)
+    return user
+  }, [])
+
+  const registerMarketer = useCallback(async (input: RegisterMarketerInput) => {
+    const { user } = await api.registerMarketer(input)
     setUser(user)
     return user
   }, [])
@@ -70,12 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       login,
       register,
+      registerMarketer,
       logout,
       becomeMarketer,
       isMarketer: !!user && (user.role === 'MARKETER' || user.role === 'ADMIN'),
       isAdmin: !!user && user.role === 'ADMIN',
     }),
-    [user, loading, login, register, logout, becomeMarketer]
+    [user, loading, login, register, registerMarketer, logout, becomeMarketer]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

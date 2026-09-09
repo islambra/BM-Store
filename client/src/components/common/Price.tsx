@@ -1,12 +1,10 @@
 import { useLanguage } from '../../context/LanguageContext'
-import type { Lang } from '../../i18n/translations'
 
 export function formatPrice(value: number, lang: string) {
-  const activeLang = lang as Lang
+  const activeLang = lang as 'en' | 'ar'
   const integer = Math.round(value)
   const grouped = new Intl.NumberFormat('en-US').format(integer)
   if (activeLang === 'ar') return `${grouped.replace(/,/g, '\u202F')} دج`
-  if (activeLang === 'fr') return `${grouped.replace(/,/g, '\u202F')} DA`
   return `${grouped} DA`
 }
 

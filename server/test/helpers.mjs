@@ -36,6 +36,14 @@ export async function clearCollection(name) {
 
 const uniq = (tag) => `${tag}-${Date.now()}-${Math.floor(Math.random() * 100000)}@bmstore.test`
 
+let phoneCounter = 0
+export const uniquePhone = () => {
+  phoneCounter += 1
+  const base = String(Date.now()).slice(-8)
+  const seq = String(phoneCounter).padStart(4, '0')
+  return `07${base}${seq}`.slice(0, 13)
+}
+
 export async function createUser({ name = 'Test User', role = 'USER', password = 'Secret@1234' } = {}) {
   const email = uniq(role.toLowerCase())
   const user = await User.create({

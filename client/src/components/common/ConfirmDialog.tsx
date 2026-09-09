@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
-import { AlertTriangle, X } from 'lucide-react'
-import { useLanguage } from '../../context/LanguageContext'
+import { AlertTriangle } from 'lucide-react'
 
 export default function ConfirmDialog({
   open,
@@ -23,8 +22,6 @@ export default function ConfirmDialog({
   busy?: boolean
   danger?: boolean
 }) {
-  const { t } = useLanguage()
-
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -47,7 +44,7 @@ export default function ConfirmDialog({
       aria-label={title}
       className="fixed inset-0 z-[60] flex items-end justify-center p-4 sm:items-center"
     >
-      <div className="absolute inset-0 animate-fade-in bg-ink-900/50 backdrop-blur-[2px]" onClick={onCancel} />
+      <div className="absolute inset-0 animate-fade-in bg-ink-900/60 backdrop-blur-md" onClick={onCancel} />
       <div className="relative w-full max-w-md animate-pop rounded-2xl bg-surface p-6 shadow-lift">
         <span
           className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
@@ -71,9 +68,6 @@ export default function ConfirmDialog({
             {busy ? `${confirmLabel}…` : confirmLabel}
           </button>
         </div>
-        <button type="button" onClick={onCancel} aria-label={t('common.close')} className="icon-btn absolute end-3 top-3 text-ink-400">
-          <X size={18} />
-        </button>
       </div>
     </div>
   )

@@ -10,7 +10,6 @@ function Probe() {
       <p>{t('nav.home')}</p>
       <p>{t('brand.tagline')}</p>
       <button type="button" onClick={() => setLang('en')}>EN</button>
-      <button type="button" onClick={() => setLang('fr')}>FR</button>
       <button type="button" onClick={() => setLang('ar')}>AR</button>
     </div>
   )
@@ -43,7 +42,8 @@ describe('language switching', () => {
     expect(screen.getByText('Premium natural products, delivered across Algeria')).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('ltr')
 
-    await user.click(screen.getByRole('button', { name: 'FR' }))
-    expect(screen.getByText('Accueil')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'AR' }))
+    expect(screen.getByText('الرئيسية')).toBeInTheDocument()
+    expect(document.documentElement.dir).toBe('rtl')
   })
 })

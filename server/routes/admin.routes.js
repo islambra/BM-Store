@@ -9,6 +9,7 @@ import {
   recordPayout,
   getPayouts,
   adminDeleteMarketer,
+  adminDeleteUser,
 } from '../controllers/admin.controller.js'
 import {
   adminListProducts,
@@ -25,6 +26,7 @@ router.use(requireAuth)
 router.use(requireAdmin)
 
 router.get('/users', getUsers)
+router.delete('/users/:id', adminDeleteUser)
 
 router.get('/marketers', getMarketers)
 router.delete('/marketers/:id', adminDeleteMarketer)

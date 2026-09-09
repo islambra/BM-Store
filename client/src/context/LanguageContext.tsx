@@ -17,7 +17,7 @@ const STORAGE_KEY = 'bm-store-lang'
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved === 'en' || saved === 'fr' || saved === 'ar' ? saved : 'ar'
+    return saved === 'en' || saved === 'ar' ? saved : 'ar'
   })
 
   const dir = lang === 'ar' ? 'rtl' : 'ltr'

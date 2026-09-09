@@ -27,13 +27,36 @@ export const adminList = asyncHandler(async (_req, res) => {
   return sendSuccess(res, docs)
 })
 
+const slugify = (name) =>
+  String(name)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50) || 'category'
+
+async function uniqueSlug(name, exceptId) {
+  const base = slugify(name)
+  if (!exceptId && !(await Category.exists({ slug: base }))) return base
+  for (let i = 2; i < 100; i += 1) {
+    const candidate = `${base}-${i}`
+    const exists = await Category.exists({ slug: candidate, _id: { $ne: exceptId } })
+    if (!exists) return candidate
+  }
+  return `${base}-${Date.now()}`
+}
+
 export const adminCreate = asyncHandler(async (req, res) => {
   const data = pickFields(req.body)
-  if (!data.slug || !data.name) return sendError(res, 'slug and name are required', 400)
+  if (!data.name) return sendError(res, 'name is required', 400)
 
-  data.slug = String(data.slug).toLowerCase().trim()
-  const exists = await Category.exists({ slug: data.slug })
-  if (exists) return sendError(res, 'A category with this slug already exists', 409)
+  if (data.slug) {
+    data.slug = String(data.slug).toLowerCase().trim()
+    const exists = await Category.exists({ slug: data.slug })
+    if (exists) return sendError(res, 'A category with this slug already exists', 409)
+  } else {
+    data.slug = await uniqueSlug(data.name)
+  }
 
   const doc = await Category.create(data)
   return sendSuccess(res, doc, 'Category created', 201)

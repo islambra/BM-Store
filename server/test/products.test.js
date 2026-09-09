@@ -127,7 +127,7 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
     assert.equal(res.body.data.descriptionFr, 'Description en français')
   })
 
-  it('enforces a maximum of 4 product images', async () => {
+  it('enforces a maximum of 5 product images', async () => {
     const agent = await adminAgent()
     const images = Array.from({ length: 6 }, (_, i) => `/img/${i}.jpg`)
     const res = await agent.post('/api/admin/products').send({
@@ -138,7 +138,7 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
       images,
     })
     assert.equal(res.status, 201)
-    assert.equal(res.body.data.images.length, 4)
+    assert.equal(res.body.data.images.length, 5)
   })
 
   it('requires oldPrice above price for special offers on create', async () => {

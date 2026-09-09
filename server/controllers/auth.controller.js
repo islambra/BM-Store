@@ -25,35 +25,54 @@ const safeUser = (u) => ({
   createdAt: u.createdAt,
 })
 
+const normalizePhone = (value) => String(value ?? '').trim().replace(/[^+\d\s-]/g, '').replace(/[\s-]+/g, '')
+
 export const register = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.body
 
-  if (!name?.trim() || !email?.trim() || !password) {
-    return sendError(res, 'Name, email and password are required', 400)
+  if (!name?.trim() || !phone || !password) {
+    return sendError(res, 'Name, phone number and password are required', 400)
   }
   if (typeof password !== 'string' || password.length < 8) {
     return sendError(res, 'Password must be at least 8 characters', 400)
   }
 
-  const exists = await User.findOne({ email: String(email).toLowerCase() }).lean()
-  if (exists) return sendError(res, 'An account with this email already exists', 409)
+  const phoneKey = normalizePhone(phone)
+  const clash = await User.findOne({ phone: phoneKey }).lean()
+  if (clash) return sendError(res, 'An account with this phone number already exists', 409)
+
+  let emailClean
+  if (email?.trim()) {
+    emailClean = String(email).toLowerCase().trim()
+    const emailClash = await User.findOne({ email: emailClean }).lean()
+    if (emailClash) return sendError(res, 'An account with this email already exists', 409)
+  }
 
   const passwordHash = await bcrypt.hash(password, 10)
-  const user = await User.create({ name: name.trim(), email, passwordHash, role: 'USER', phone: phone || undefined })
+  const user = await User.create({
+    name: name.trim(),
+    phone: phoneKey,
+    email: emailClean || undefined,
+    passwordHash,
+    role: 'USER',
+  })
 
   setAuthCookies(res, user)
   return sendSuccess(res, { user: safeUser(user) }, 'Account created', 201)
 })
 
 export const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body
-  if (!email?.trim() || !password) return sendError(res, 'Email and password are required', 400)
+  const identifier = String(req.body.phone ?? req.body.email ?? req.body.identifier ?? '').trim()
+  const { password } = req.body
+  if (!identifier || !password) return sendError(res, 'Phone number and password are required', 400)
 
-  const user = await User.findOne({ email: String(email).toLowerCase() }).select('+passwordHash').lean(true)
-  if (!user || !user.passwordHash) return sendError(res, 'Invalid email or password', 401)
+  const key = identifier.toLowerCase()
+  const query = { $or: [{ phone: normalizePhone(identifier) }, { email: key }] }
+  const user = await User.findOne(query).select('+passwordHash').lean(true)
+  if (!user || !user.passwordHash) return sendError(res, 'Invalid phone or password', 401)
 
   const ok = await bcrypt.compare(password, user.passwordHash)
-  if (!ok) return sendError(res, 'Invalid email or password', 401)
+  if (!ok) return sendError(res, 'Invalid phone or password', 401)
 
   setAuthCookies(res, user)
   return sendSuccess(res, { user: safeUser(user) }, 'Logged in')
@@ -162,6 +181,54 @@ export const becomeMarketer = asyncHandler(async (req, res) => {
     })
   }
 
+  return sendSuccess(
+    res,
+    {
+      user: safeUser(user),
+      marketer: {
+        referralCode: profile.referralCode,
+        referralLink: referralLink(profile.referralCode),
+        publicName: profile.publicName,
+        status: profile.status,
+      },
+    },
+    'Welcome to the marketer program',
+    201
+  )
+})
+
+export const registerMarketer = asyncHandler(async (req, res) => {
+  const { name, phone, password, baridiMob, ccp, ccpKey } = req.body ?? {}
+
+  if (!name?.trim() || !phone || !password) {
+    return sendError(res, 'Full name, phone number and password are required', 400)
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return sendError(res, 'Password must be at least 8 characters', 400)
+  }
+
+  const phoneKey = normalizePhone(phone)
+  const clash = await User.findOne({ phone: phoneKey }).lean()
+  if (clash) return sendError(res, 'An account with this phone number already exists', 409)
+
+  const passwordHash = await bcrypt.hash(password, 10)
+  const user = await User.create({ name: name.trim(), phone: phoneKey, passwordHash, role: 'MARKETER' })
+
+  let code = generateReferralCode()
+  while (await MarketerProfile.exists({ referralCode: code })) code = generateReferralCode()
+
+  const profile = await MarketerProfile.create({
+    user: user._id,
+    publicName: user.name,
+    referralCode: code,
+    payoutDetails: {
+      ccp: String(ccp ?? '').trim() || undefined,
+      baridiMob: String(baridiMob ?? '').trim() || undefined,
+      ccpKey: String(ccpKey ?? '').trim() || undefined,
+    },
+  })
+
+  setAuthCookies(res, user)
   return sendSuccess(
     res,
     {

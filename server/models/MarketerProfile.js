@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 const payoutDetailsSchema = new mongoose.Schema(
   {
     ccp: { type: String, trim: true },
+    ccpKey: { type: String, trim: true },
     baridiMob: { type: String, trim: true },
   },
   { _id: false }

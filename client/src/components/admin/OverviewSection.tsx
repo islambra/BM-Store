@@ -1,4 +1,4 @@
-import { ClipboardList, Store as StoreIcon, Tags, Users } from 'lucide-react'
+import { Banknote, CheckCircle2, ClipboardList, Clock3, ShoppingBag, Store as StoreIcon, Tags, Users } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -12,14 +12,35 @@ export default function OverviewSection() {
   const products = useAsync(() => api.getAdminProducts())
   const orders = useAsync(() => api.getAdminOrders())
 
+  const adminUsers = users.data?.users ?? []
+  const customers = adminUsers.filter((u) => u.role === 'USER').length
+  const allOrders = (orders.data?.orders ?? []) as Array<{
+    _id: string
+    orderRef: string
+    total: number
+    status: string
+    customer: { fullName: string; phone: string }
+  }>
+  const pending = allOrders.filter((o) => o.status === 'pending-review' || o.status === 'pending').length
+  const delivered = allOrders.filter((o) => o.status === 'delivered').length
+  const revenue = allOrders.filter((o) => o.status === 'delivered').reduce((sum, o) => sum + (o.total ?? 0), 0)
+  const commissionsPending = (marketers.data?.marketers ?? []).reduce(
+    (sum, m) => sum + (m.stats?.commission?.pending ?? 0),
+    0
+  )
+
   const stats = [
-    { icon: Users, label: t('admin.tabs.users'), value: users.data?.total ?? 0 },
-    { icon: StoreIcon, label: t('admin.tabs.marketers'), value: marketers.data?.marketers.length ?? 0 },
-    { icon: Tags, label: t('admin.tabs.products'), value: products.data?.total ?? products.data?.products.length ?? 0 },
-    { icon: ClipboardList, label: t('admin.tabs.orders'), value: orders.data?.orders.length ?? 0 },
+    { icon: Users, label: t('admin.statCustomers'), value: customers },
+    { icon: StoreIcon, label: t('admin.statMarketers'), value: marketers.data?.marketers.length ?? 0 },
+    { icon: Tags, label: t('admin.statProducts'), value: products.data?.total ?? products.data?.products.length ?? 0 },
+    { icon: ShoppingBag, label: t('admin.statOrders'), value: allOrders.length },
+    { icon: Clock3, label: t('admin.statPending'), value: pending },
+    { icon: CheckCircle2, label: t('admin.statDelivered'), value: delivered },
+    { icon: Banknote, label: t('admin.statRevenue'), value: formatPrice(revenue, lang) },
+    { icon: StoreIcon, label: t('admin.statCommissions'), value: formatPrice(commissionsPending, lang) },
   ]
 
-  const recent = (orders.data?.orders ?? []).slice(0, 5)
+  const recent = allOrders.slice(0, 5)
 
   return (
     <div className="space-y-5">
@@ -27,7 +48,9 @@ export default function OverviewSection() {
         {stats.map((s) => (
           <div key={s.label} className="rounded-2xl border border-line bg-surface p-5">
             <s.icon size={18} className="text-brand-600" />
-            <p className="mt-2 text-2xl font-extrabold tracking-tight text-ink-900">{s.value.toLocaleString()}</p>
+            <p className="mt-2 text-xl font-extrabold tracking-tight text-ink-900 sm:text-2xl" dir="ltr">
+              {s.value}
+            </p>
             <p className="mt-0.5 text-xs text-ink-500">{s.label}</p>
           </div>
         ))}

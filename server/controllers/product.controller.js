@@ -118,7 +118,7 @@ const pickProductFields = (body, current = null) => {
   for (const f of fields) {
     if (body[f] !== undefined) out[f] = body[f]
   }
-  if (body.images !== undefined) out.images = Array.isArray(body.images) ? body.images.slice(0, 4) : []
+  if (body.images !== undefined) out.images = Array.isArray(body.images) ? body.images.slice(0, 5) : []
   if (body.tags !== undefined) out.tags = body.tags
   if (body.stock !== undefined) out.stock = Math.max(0, Number(body.stock))
   if (body.lowStockThreshold !== undefined) out.lowStockThreshold = Math.max(0, Number(body.lowStockThreshold))
@@ -191,6 +191,7 @@ export const adminCreateProduct = asyncHandler(async (req, res) => {
 
   const data = pickProductFields(body)
   if (data.oldPrice === undefined || data.oldPrice === null) delete data.oldPrice
+  if (data.stock === undefined) data.stock = 100
   data.slug = await uniqueSlug(data.name)
   const product = await Product.create(data)
   return sendSuccess(res, product, 'Product created', 201)

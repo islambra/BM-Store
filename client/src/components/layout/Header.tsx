@@ -1,11 +1,14 @@
-﻿import { Link, NavLink } from 'react-router-dom'
-import { Heart, ShoppingCart, User, Megaphone } from 'lucide-react'
+﻿import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Heart, ShoppingCart, Megaphone } from 'lucide-react'
 import Logo from '../common/Logo'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import SearchBar from '../common/SearchBar'
+import UserMenu from './UserMenu'
+import BecomeMarketerPrompt from '../common/BecomeMarketerPrompt'
 import { useLanguage } from '../../context/LanguageContext'
 import { useStore } from '../../context/StoreContext'
 import { useAuth } from '../../context/AuthContext'
+import { useBecomeMarketer } from '../../hooks/useBecomeMarketer'
 
 const desktopLink =
   'inline-flex h-10 items-center px-3 text-sm font-semibold text-ink-700 transition-colors hover:text-brand-700'
@@ -51,14 +54,17 @@ function WishlistIcon() {
 export default function Header() {
   const { t } = useLanguage()
   const { user } = useAuth()
+  const location = useLocation()
+  const isAdminRoute = location.pathname.startsWith('/admin')
+  const isMarketerRoute = location.pathname.startsWith('/marketer')
+  const become = useBecomeMarketer()
+
   const nav = [
     { to: '/', label: t('nav.home'), end: true },
     { to: '/categories', label: t('nav.categories'), end: false },
     { to: '/special-offers', label: t('nav.deals'), end: false },
     { to: '/best-sellers', label: t('nav.bestSellers'), end: false },
   ]
-
-  const accountTo = user ? '/account' : '/login'
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur">
@@ -74,9 +80,7 @@ export default function Header() {
         {/* Desktop actions */}
         <div className="hidden items-center gap-1 lg:flex">
           <LanguageSwitcher />
-          <Link to={accountTo} className="icon-btn" aria-label={t('common.account')} title={t('common.account')}>
-            <User size={20} />
-          </Link>
+          <UserMenu variant="desktop" />
           <WishlistIcon />
           <CartIcon />
         </div>
@@ -115,16 +119,26 @@ export default function Header() {
           </div>
 
           <div className="ms-auto flex items-center gap-4">
-            <Link
-              to="/marketer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
-            >
-              <Megaphone size={15} />
-              {t('marketer.become')}
-            </Link>
+            {!isAdminRoute && !isMarketerRoute && (user?.role !== 'ADMIN') && (user?.role !== 'MARKETER') && (
+              <button
+                type="button"
+                onClick={become.open}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+              >
+                <Megaphone size={15} />
+                {t('marketer.become')}
+              </button>
+            )}
           </div>
         </div>
       </nav>
+
+      <BecomeMarketerPrompt
+        open={become.promptOpen}
+        busy={become.busy}
+        onCancel={() => become.setPromptOpen(false)}
+        onConfirm={() => void become.confirmLogoutAndContinue()}
+      />
     </header>
   )
 }

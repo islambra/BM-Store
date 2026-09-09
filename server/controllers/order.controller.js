@@ -138,6 +138,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 
   const wasConfirmed = order.status !== 'confirmed' && status === 'confirmed'
+  const wasDelivered = order.status !== 'delivered' && status === 'delivered'
 
   order.status = status
   await order.save()
@@ -146,22 +147,6 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     for (const item of order.items) {
       if (item.productId) {
         await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.qty, confirmedSales: item.qty } })
-      }
-    }
-
-    if (order.commissionAmount > 0 && order.referredBy) {
-      const profile = await MarketerProfile.findById(order.referredBy)
-      if (profile) {
-        await Commission.create({
-          marketer: profile.user,
-          order: order._id,
-          orderId: order.orderRef,
-          rate: COMMISSION_RATE,
-          amount: order.commissionAmount,
-          status: 'PENDING',
-        })
-        profile.totalEarnings += order.commissionAmount
-        await profile.save()
       }
     }
 
@@ -174,6 +159,22 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
           { upsert: true }
         )
       }
+    }
+  }
+
+  if (wasDelivered && order.commissionAmount > 0 && order.referredBy) {
+    const profile = await MarketerProfile.findById(order.referredBy)
+    if (profile) {
+      await Commission.create({
+        marketer: profile.user,
+        order: order._id,
+        orderId: order.orderRef,
+        rate: COMMISSION_RATE,
+        amount: order.commissionAmount,
+        status: 'PENDING',
+      })
+      profile.totalEarnings += order.commissionAmount
+      await profile.save()
     }
   }
 

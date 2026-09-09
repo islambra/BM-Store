@@ -1,26 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { User, Package, MapPin, Heart, Settings, LogOut, Store, ShieldCheck, ChevronRight, ChevronLeft, AlertTriangle, Phone } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, Heart, LayoutDashboard, LogOut, Megaphone, Package, Phone, ShieldCheck, Store, User } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { getErrorMessage, getMyOrders } from '../services/api'
-import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
+import EmptyState from '../components/common/EmptyState'
 import OrderStatusBadge from '../components/common/OrderStatusBadge'
-import { Alert, Toggle } from '../components/common/FormControls'
+import BecomeMarketerPrompt from '../components/common/BecomeMarketerPrompt'
 import { formatPrice } from '../components/common/Price'
+import { getMyOrders } from '../services/api'
 import { ORDERS_STORAGE_KEY } from '../config/shop'
+import { useBecomeMarketer } from '../hooks/useBecomeMarketer'
 import type { Order } from '../types'
-
-const sections = [
-  { id: 'profile', icon: User, key: 'account.profile' },
-  { id: 'orders', icon: Package, key: 'account.orders' },
-  { id: 'addresses', icon: MapPin, key: 'account.addresses' },
-  { id: 'wishlist', icon: Heart, key: 'account.wishlist' },
-  { id: 'settings', icon: Settings, key: 'account.settings' },
-] as const
-
-type SectionId = (typeof sections)[number]['id']
 
 const roleKey = (role: string) =>
   role === 'ADMIN' ? 'account.roleAdmin' : role === 'MARKETER' ? 'account.roleMarketer' : 'account.roleUser'
@@ -36,9 +27,8 @@ function loadLocalOrders(): Order[] {
 
 function ProfileCard() {
   const { t } = useLanguage()
-  const { user, logout, becomeMarketer } = useAuth()
-  const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<{ tone: 'info' | 'danger'; text: string } | null>(null)
+  const { user, logout } = useAuth()
+  const become = useBecomeMarketer()
 
   if (!user) {
     return (
@@ -64,19 +54,6 @@ function ProfileCard() {
     )
   }
 
-  const onBecomeMarketer = async () => {
-    setBusy(true)
-    setNotice(null)
-    try {
-      await becomeMarketer()
-      setNotice({ tone: 'info', text: t('account.becomeMarketerDone') })
-    } catch (err) {
-      setNotice({ tone: 'danger', text: getErrorMessage(err) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <div className="rounded-2xl border border-line bg-surface p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -91,7 +68,10 @@ function ProfileCard() {
                 {t(roleKey(user.role))}
               </span>
             </div>
-            <p className="text-sm text-ink-500">{user.email}</p>
+            <p className="flex items-center gap-1.5 text-sm text-ink-500">
+              <Phone size={13} className="shrink-0" />
+              {user.email ? `${user.email} · ${user.phone ?? ''}` : (user.phone ?? '')}
+            </p>
           </div>
         </div>
         <button type="button" onClick={() => void logout()} className="btn-secondary shrink-0 text-danger-600 hover:text-danger-700">
@@ -100,15 +80,9 @@ function ProfileCard() {
         </button>
       </div>
 
-      {notice && (
-        <Alert tone={notice.tone} className="mt-4">
-          {notice.text}
-        </Alert>
-      )}
-
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         {user.role === 'USER' && (
-          <button type="button" onClick={() => void onBecomeMarketer()} disabled={busy} className="btn-primary justify-start disabled:opacity-60">
+          <button type="button" onClick={become.open} className="btn-primary justify-start">
             <Store size={17} />
             {t('account.becomeMarketer')}
           </button>
@@ -133,6 +107,13 @@ function ProfileCard() {
           {t('account.becomeMarketerDesc')}
         </p>
       )}
+
+      <BecomeMarketerPrompt
+        open={become.promptOpen}
+        busy={become.busy}
+        onCancel={() => become.setPromptOpen(false)}
+        onConfirm={() => void become.confirmLogoutAndContinue()}
+      />
     </div>
   )
 }
@@ -167,7 +148,7 @@ function OrdersPanel() {
                 <OrderStatusBadge status={o.status} />
               </div>
               <span className="text-xs text-ink-400">
-                {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-DZ' : 'en-US', {
+                {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US', {
                   day: 'numeric',
                   month: 'long',
                   year: 'numeric',
@@ -214,89 +195,76 @@ function OrdersPanel() {
   )
 }
 
-export default function AccountPage() {
+export default function DashboardPage() {
   const { t, lang } = useLanguage()
-  const [active, setActive] = useState<SectionId>('profile')
-  const Chevron = lang === 'ar' ? ChevronLeft : ChevronRight
+  const { user } = useAuth()
+  const become = useBecomeMarketer()
+  const Chevron = lang === 'ar' ? ArrowLeft : ArrowRight
 
-  const [notifState, setNotifState] = useState({ email: true, push: false, updates: true })
+  const quickLinks = [
+    { to: '/dashboard', icon: Package, title: t('dashboard.orders'), desc: t('dashboard.ordersDesc') },
+    { to: '/wishlist', icon: Heart, title: t('common.wishlist'), desc: t('dashboard.wishlistDesc') },
+    { to: '/special-offers', icon: Megaphone, title: t('nav.deals'), desc: t('dashboard.offersDesc') },
+  ]
 
   return (
     <div className="container-app pt-6 sm:pt-10">
-      <PageHeader icon={User} title={t('account.title')} subtitle={t('account.subtitle')} />
+      <PageHeader
+        icon={LayoutDashboard}
+        title={t('dashboard.title')}
+        subtitle={t('dashboard.subtitle', { name: user?.name ?? '' })}
+      />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[240px_1fr]">
-        {/* Nav */}
-        <aside>
-          <div className="flex gap-1 overflow-x-auto no-scrollbar lg:sticky lg:top-32 lg:flex-col lg:gap-1.5 lg:rounded-2xl lg:border lg:border-line lg:bg-surface lg:p-3">
-            {sections.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setActive(s.id)}
-                className={`inline-flex shrink-0 items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-semibold transition-colors lg:w-full ${
-                  active === s.id
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-ink-700 hover:bg-ink-900/5'
-                }`}
-              >
-                <s.icon size={18} />
-                {t(s.key)}
-              </button>
-            ))}
+      <ProfileCard />
+
+      {user?.role === 'USER' && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand-200 bg-brand-50 p-6">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-ink-900">{t('dashboard.marketer')}</h2>
+            <p className="mt-1 text-sm text-ink-600">{t('dashboard.marketerDesc')}</p>
           </div>
-        </aside>
+          <button type="button" onClick={become.open} className="btn-primary shrink-0">
+            <Megaphone size={16} />
+            {t('account.signUpMarketer')}
+            <Chevron size={16} />
+          </button>
+        </div>
+      )}
 
-        {/* Content */}
-        <section>
-          {active === 'profile' && <ProfileCard />}
+      <BecomeMarketerPrompt
+        open={become.promptOpen}
+        busy={become.busy}
+        onCancel={() => become.setPromptOpen(false)}
+        onConfirm={() => void become.confirmLogoutAndContinue()}
+      />
 
-          {active === 'orders' && <OrdersPanel />}
+      <div className="mt-6">
+        <h2 className="mb-3 text-lg font-bold text-ink-900">{t('account.orders')}</h2>
+        <OrdersPanel />
+      </div>
 
-          {active === 'addresses' && (
-            <div className="rounded-2xl border border-line bg-surface">
-              <EmptyState icon={MapPin} title={t('account.addresses')} description={t('account.addressesDesc')} />
-            </div>
-          )}
-
-          {active === 'wishlist' && (
-            <div className="rounded-2xl border border-line bg-surface p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-bold text-ink-900">{t('account.wishlist')}</h2>
-                  <p className="mt-1 text-sm text-ink-500">{t('account.wishlistDesc')}</p>
-                </div>
-                <Link to="/wishlist" className="btn-primary shrink-0">
-                  {t('common.wishlist')}
-                  <Chevron size={16} />
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {active === 'settings' && (
-            <div className="rounded-2xl border border-line bg-surface p-6">
-              <h2 className="text-lg font-bold text-ink-900">{t('account.settings')}</h2>
-              <div className="mt-5 space-y-3">
-                {[
-                  { key: 'email' as const, label: t('account.emailNotif') },
-                  { key: 'push' as const, label: t('account.pushNotif') },
-                  { key: 'updates' as const, label: t('account.orderUpdates') },
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between rounded-xl border border-line p-4">
-                    <span className="text-sm font-medium text-ink-700">{item.label}</span>
-                    <Toggle
-                      checked={notifState[item.key]}
-                      onChange={(v) => setNotifState((s) => ({ ...s, [item.key]: v }))}
-                      label={item.label}
-                    />
-                  </div>
-                ))}
-                <p className="pt-1 text-xs text-ink-400">{t('account.comingSoon')}</p>
-              </div>
-            </div>
-          )}
-        </section>
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {quickLinks.map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="group rounded-2xl border border-line bg-surface p-6 transition-colors hover:border-brand-300"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
+              <link.icon size={20} />
+            </span>
+            <h3 className="mt-4 flex items-center justify-between gap-2 font-bold text-ink-900">
+              {link.title}
+              <Chevron
+                size={16}
+                className={`text-ink-300 transition-transform group-hover:-translate-x-0.5 ${
+                  lang === 'ar' ? '' : 'group-hover:translate-x-0.5'
+                }`}
+              />
+            </h3>
+            <p className="mt-1 text-sm text-ink-500">{link.desc}</p>
+          </Link>
+        ))}
       </div>
     </div>
   )

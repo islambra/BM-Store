@@ -12,6 +12,7 @@ export const getUsers = asyncHandler(async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = {}
   if (req.query.role) query.role = req.query.role
+  else query.role = { $ne: 'ADMIN' }
   if (req.query.q) {
     query.$or = [
       { name: { $regex: req.query.q, $options: 'i' } },
@@ -158,4 +159,23 @@ export const adminDeleteMarketer = asyncHandler(async (req, res) => {
   ])
 
   return sendSuccess(res, { id: String(user._id) }, 'Marketer deleted with all related data')
+})
+
+export const adminDeleteUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id)
+  if (!user) return sendError(res, 'User not found', 404)
+  if (user.role === 'ADMIN') return sendError(res, 'Cannot delete admin user', 400)
+  if (String(user._id) === String(req.user._id)) {
+    return sendError(res, 'You cannot delete your own account', 400)
+  }
+
+  await Promise.all([
+    MarketerProfile.deleteMany({ user: user._id }),
+    Referral.deleteMany({ marketer: user._id }),
+    Commission.deleteMany({ marketer: user._id }),
+    Payout.deleteMany({ marketer: user._id }),
+    User.deleteOne({ _id: user._id }),
+  ])
+
+  return sendSuccess(res, { id: String(user._id) }, 'User deleted with all related data')
 })

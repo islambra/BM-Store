@@ -43,6 +43,13 @@ describe('categories', () => {
     assert.equal(dup.status, 409)
   })
 
+  it('auto-generates a slug when omitted', async () => {
+    const h = await adminHeaders()
+    const created = await request(app).post('/api/admin/categories').set(h).send({ name: 'Fresh Honey' })
+    assert.equal(created.status, 201)
+    assert.equal(created.body.data.slug, 'fresh-honey')
+  })
+
   it('USER cannot create categories', async () => {
     const res = await request(app).post('/api/admin/categories').send({ slug: 'spices', name: 'Spices' })
     assert.equal(res.status, 401)

@@ -3,19 +3,19 @@ import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import app from '../app.js'
-import { connectTest, disconnectTest, createAdmin, createUser, createMarketer, createProduct } from './helpers.mjs'
+import { connectTest, disconnectTest, createAdmin, createUser, createMarketer, createProduct, uniquePhone } from './helpers.mjs'
 import User from '../models/User.js'
 import Product from '../models/Product.js'
 import Commission from '../models/Commission.js'
 
-const email = () => `ord-${Date.now()}-${Math.floor(Math.random() * 99999)}@bmstore.test`
+const phone = uniquePhone
 
 async function registerAgent(name) {
-  const address = email()
-  await request(app).post('/api/auth/register').send({ name, email: address, password: 'Secret@1234' })
+  const number = phone()
+  await request(app).post('/api/auth/register').send({ name, phone: number, password: 'Secret@1234' })
   const agent = request.agent(app)
-  await agent.post('/api/auth/login').send({ email: address, password: 'Secret@1234' })
-  return { agent, email: address, id: (await agent.get('/api/auth/me')).body.data.user.id }
+  await agent.post('/api/auth/login').send({ phone: number, password: 'Secret@1234' })
+  return { agent, id: (await agent.get('/api/auth/me')).body.data.user.id }
 }
 
 describe('orders', () => {

@@ -49,14 +49,16 @@ export interface TextControlProps extends InputHTMLAttributes<HTMLInputElement> 
   icon?: LucideIcon | null
   state?: 'default' | 'error'
   invalid?: boolean
+  trailing?: ReactNode
 }
 
-export function Input({ icon: Icon, state = 'default', invalid, className = '', ...rest }: TextControlProps) {
+export function Input({ icon: Icon, state = 'default', invalid, className = '', trailing, ...rest }: TextControlProps) {
   const iconCls = invalid || state === 'error' ? 'text-danger-500' : 'text-ink-400'
   return (
     <div className="relative">
       {Icon && <Icon size={17} className={`pointer-events-none absolute start-3.5 top-1/2 -translate-y-1/2 ${iconCls}`} />}
-      <input className={`input ${Icon ? 'ps-11' : ''} ${invalid || state === 'error' ? 'input-error' : ''} ${className}`} {...rest} />
+      <input className={`input ${Icon ? 'ps-11' : ''} ${trailing ? 'pe-12' : ''} ${invalid || state === 'error' ? 'input-error' : ''} ${className}`} {...rest} />
+      {trailing}
     </div>
   )
 }

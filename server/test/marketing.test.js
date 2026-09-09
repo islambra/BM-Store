@@ -3,16 +3,16 @@ import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import app from '../app.js'
-import { connectTest, disconnectTest, createUser, createMarketer } from './helpers.mjs'
+import { connectTest, disconnectTest, createUser, createMarketer, uniquePhone } from './helpers.mjs'
 import MarketerProfile from '../models/MarketerProfile.js'
 
-const email = () => `mk-${Date.now()}-${Math.floor(Math.random() * 99999)}@bmstore.test`
+const phone = uniquePhone
 
 async function marketerAgent() {
-  const address = email()
-  await request(app).post('/api/auth/register').send({ name: 'Marketer Candidate', email: address, password: 'Secret@1234' })
+  const number = phone()
+  await request(app).post('/api/auth/register').send({ name: 'Marketer Candidate', phone: number, password: 'Secret@1234' })
   const agent = request.agent(app)
-  await agent.post('/api/auth/login').send({ email: address, password: 'Secret@1234' })
+  await agent.post('/api/auth/login').send({ phone: number, password: 'Secret@1234' })
   const upgrade = await agent.post('/api/auth/become-marketer')
   assert.equal(upgrade.status, 201)
   return { agent, code: upgrade.body.data.marketer.referralCode, marketerId: upgrade.body.data.user.id }

@@ -75,7 +75,7 @@ export default function Footer() {
               <li><Link className="transition-colors hover:text-white" to="/special-offers">{t('nav.deals')}</Link></li>
               <li><Link className="transition-colors hover:text-white" to="/best-sellers">{t('nav.bestSellers')}</Link></li>
               <li><Link className="transition-colors hover:text-white" to="/wishlist">{t('common.wishlist')}</Link></li>
-              <li><Link className="transition-colors hover:text-white" to="/account">{t('common.account')}</Link></li>
+              <li><Link className="transition-colors hover:text-white" to="/dashboard">{t('common.account')}</Link></li>
               <li><Link className="transition-colors hover:text-white" to="/marketer">{t('marketer.become')}</Link></li>
             </ul>
           </div>

@@ -77,7 +77,7 @@ export default function OrdersSection() {
                   <OrderStatusBadge status={o.status} />
                 </div>
                 <span className="text-xs text-ink-400">
-                  {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-DZ' : 'en-US')}
+                  {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US')}
                 </span>
               </div>
               <ul className="mt-3 space-y-1.5">
