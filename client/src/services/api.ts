@@ -68,6 +68,11 @@ async function patch<T>(path: string, body?: unknown): Promise<T> {
   return res.data?.data as T
 }
 
+async function put<T>(path: string, body?: unknown): Promise<T> {
+  const res = await api.put<ApiResponse<T>>(path, body)
+  return res.data?.data as T
+}
+
 async function remove<T = null>(path: string): Promise<T> {
   const res = await api.delete<ApiResponse<T>>(path)
   return res.data?.data as T
@@ -472,8 +477,32 @@ export interface PostRecord {
     discount?: number
   }
   status: 'draft' | 'published'
+  likesCount?: number
+  commentsCount?: number
+  userLiked?: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface CommentAuthor {
+  _id: string
+  name: string
+  avatar?: string | null
+}
+
+export interface CommentRecord {
+  _id: string
+  postId: string
+  text: string
+  createdAt: string
+  updatedAt: string
+  authorId: string
+  author: CommentAuthor | null
+}
+
+export interface LikeResult {
+  liked: boolean
+  likesCount: number
 }
 
 export interface CreatePostInput {
@@ -537,6 +566,40 @@ export function getPublishedPosts(params?: { page?: number; limit?: number }) {
 
 export function getPublishedPostsHome() {
   return get<PostRecord[]>('/posts/home')
+}
+
+export function getPostById(id: string) {
+  return get<PostRecord>(`/posts/${id}`)
+}
+
+export function likePost(id: string) {
+  return post<LikeResult>(`/posts/${id}/like`)
+}
+
+export function unlikePost(id: string) {
+  return remove<LikeResult>(`/posts/${id}/like`)
+}
+
+export function getComments(postId: string, params?: { page?: number; limit?: number }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  return get<{ comments: CommentRecord[]; page: number; total: number; pages: number }>(
+    `/posts/${postId}/comments${q ? `?${q}` : ''}`
+  )
+}
+
+export function createComment(postId: string, text: string) {
+  return post<CommentRecord>(`/posts/${postId}/comments`, { text })
+}
+
+export function updateComment(commentId: string, text: string) {
+  return put<CommentRecord>(`/comments/${commentId}`, { text })
+}
+
+export function deleteComment(commentId: string) {
+  return remove<null>(`/comments/${commentId}`)
 }
 
 export function recordPayout(body: { marketerId: string; amount: number; period: string; method: 'CCP' | 'BaridiMob'; reference?: string }) {

@@ -102,8 +102,8 @@ Post {
 Index: { status, createdAt: -1 }
 ```
 
-(Old social-style Post/Reaction/Comment models are unused — no routes/UI — and
-were replaced so the media section matches the new spec.)
+(The existing `server/models/Reaction.js` and `server/models/Comment.js` are
+reused for the v2 like/comment engagement system — see section 15.)
 
 ## 11. API routes
 
@@ -167,3 +167,75 @@ Docs:
   `<video>` depends on codec support; MP4/WebM are the safe choices.
 - The homepage posts section is hidden when zero posts are published (posters
   cleared as intended, no empty card shown).
+
+---
+
+# V2 — Likes, Comments & Share (2026-09-10)
+
+## 15. What was added
+
+- **Single post page** `/posts/:id` (auto-opens the comments section).
+- **Like system** — authenticated users, one like per user per post
+  (DB-enforced), real counts, unlike supported, optimistic UI with rollback on
+  error. Guests are redirected to `/login` (returning to the same post after
+  login via `location.state.from`).
+- **Comments** — create/edit/delete your own, admin may delete any, oldest
+  first, 8 per page with "Load more", inline editing, empty state, confirm
+  dialog on delete, real author avatars/initials, no replies.
+- **Share** — native `navigator.share()` when available, otherwise a modal
+  with Copy Link / WhatsApp / Facebook / Telegram (buttons open in a new tab).
+- **Post page redesign** — removed the hero ("Blog & Updates / Latest Posts /
+  subtitle / N posts"), now a centered single-column social feed; card got a
+  header (store mark + date), likes/comments totals row, and a
+  Heart/MessageCircle/Share2 action bar.
+- **Everything remains non-skeleton**: counts and `userLiked` are computed
+  from real `Reaction`/`Comment` documents — no fake/zero-padded data.
+
+## 16. Backend (engagement)
+
+- Reuses `server/models/Reaction.js` (`type: 'like'`, unique index on
+  `{post, user}` → one like per user, idempotent duplicates swallowed) and
+  `server/models/Comment.js` (`post`, `author`, `text`, max 1000 chars).
+- `post.controller.js`:
+  - `enrichPosts(docs, viewerId)` — adds `likesCount`, `commentsCount`,
+    `userLiked` via aggregation + per-viewer lookup.
+  - `getPublishedPosts`/`getPublishedPostsHome`/`getPostById` now enriched and
+    `optionalAuth` (guests still get real counts).
+  - `likePost` / `unlikePost` → `{liked, likesCount}`.
+  - `listComments` (asc, page size 8), `createComment`, `updateComment`
+    (owner only), `deleteComment` (owner or ADMIN).
+  - `adminDeletePost` cascades: removes all Reactions + Comments of the post.
+- Comment payloads expose `{_id, name, avatar}` for the author — never
+  `email`/`phone`.
+- New route files: `server/routes/post.routes.js` (public reads + like +
+  comment collection) and `server/routes/comments.routes.js`
+  (`PUT`/`DELETE /api/comments/:commentId`).
+
+## 17. Client (engagement)
+
+- `services/api.ts` — `put` helper; `likePost`, `unlikePost`, `getPostById`,
+  `getComments`, `createComment`, `updateComment`, `deleteComment`; types
+  `CommentRecord`, `LikeResult`; `PostRecord` gained `likesCount`,
+  `commentsCount`, `userLiked`.
+- `services/catalog.ts` — `PostItem` engagement fields + `loadPost(id)`.
+- `components/post/PostCard.tsx` — redesigned as a social card (header row,
+  totals row, action bar, collapsible comments, optimistic like, share).
+- `components/post/CommentsSection.tsx` — new (composer w/ guest login prompt,
+  list, inline edit, delete confirm, load-more, empty state).
+- `components/post/ShareModal.tsx` — new (portaled, native share + copy/whatsapp/facebook/telegram).
+- `pages/PostsPage.tsx` — hero removed; centered single-column feed.
+- `pages/SinglePostPage.tsx` — new; `/posts/:id` route in `App.tsx`.
+- `components/layout/Layout.tsx` — footer hidden for `/posts` **and** `/posts/:id`
+  (`pathname.startsWith('/posts')`).
+- i18n — EN/AR keys `posts.*` (like/liked, comments, share, writeComment,
+  noComments, deleteComment…).
+
+## 18. Tests (server: `server/test/post-engagement.test.js`, 10 tests)
+
+Guest 401s on like/comment · duplicate like prevented · unlike · real counts +
+`userLiked` for logged-in viewer · safe author object (no email/phone) ·
+empty/oversized comment rejected · owner-only edit · owner/admin delete ·
+pagination + count updates · post deletion cascades to likes/comments.
+
+Results: Server `npm test` — **79/79 PASS**. Client build — **PASS**.
+Client tests — **5/5 PASS**.

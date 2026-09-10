@@ -39,8 +39,14 @@ marketers have no store or product CRUD.
 | GET    | `/categories`         | active only, ordered by `order`; each category includes `productCount` | `Category[]` |
 | GET    | `/banners`            | active only (max 5 enforced); image-only payload `{_id, image, link, order}` | `HeroBanner[]` |
 | GET    | `/posts/home`         | latest 6 published posts, populated product `{_id, name, nameAr, slug, image, price, oldPrice, isSpecialOffer, discount}` | `Post[]` |
-| GET    | `/posts`              | `?page&limit` (paged, published only)                    | `{posts, page, total, pages}` |
-| GET    | `/posts/:id`          | single published post                                    | `{post}` |
+| GET    | `/posts`              | `?page&limit` (paged, published only); each post includes `likesCount`, `commentsCount`, and `userLiked` (when authenticated) | `{posts, page, total, pages}` |
+| GET    | `/posts/:id`          | single published post (same enriched shape)                | `{post}` |
+| POST   | `/posts/:id/like`     | auth required; idempotent (one like per user per post)     | `{liked, likesCount}` |
+| DELETE | `/posts/:id/like`     | auth required; removes the viewer's like                   | `{liked, likesCount}` |
+| GET    | `/posts/:id/comments` | `?page&limit` (default/page size 8, oldest first)          | `{comments, page, total, pages}` |
+| POST   | `/posts/:id/comments` | auth required; `{text}` (1..1000 chars)                    | `{comment}` (201) |
+| PUT    | `/comments/:commentId` | auth required, **owner only**; `{text}`                    | `{comment}` |
+| DELETE | `/comments/:commentId` | auth required; owner **or** ADMIN                          | – |
 
 ### Post shape
 
@@ -49,6 +55,14 @@ Posts carry multilingual text flat (`textEn`, `textAr`) plus media.
 `images` cleared). `productId` references the existing Product (`_id`) — the
 server validates it exists and never stores duplicate product data. `status`
 is `draft` | `published`. Public endpoints only return `published` posts.
+
+Every public post payload also includes `likesCount`, `commentsCount`, and
+`userLiked` (true when the authenticated viewer liked it; `optionalAuth` is used
+so guests still get working counts). Likes are stored in the `Reaction` model
+(`type: 'like'`, unique index on `{post, user}` — duplicate likes are
+swallowed). Comments are stored in the `Comment` model and expose a safe author
+object `{_id, name, avatar}` — never `email`/`phone`. Deleting a post cascades
+to its likes and comments.
 
 ### Public product shape
 

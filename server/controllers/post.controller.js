@@ -1,5 +1,7 @@
 import Post from '../models/Post.js'
 import Product from '../models/Product.js'
+import Comment from '../models/Comment.js'
+import Reaction from '../models/Reaction.js'
 import mongoose from 'mongoose'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 
@@ -11,6 +13,43 @@ const pickFields = (body) => {
 }
 
 const MAX_IMAGES = 5
+
+const toCommentPayload = (c) => {
+  const author = c.author
+  return {
+    _id: c._id,
+    postId: c.post,
+    text: c.text,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+    authorId: author?._id,
+    author: author ? { _id: author._id, name: author.name, avatar: author.avatar } : null,
+  }
+}
+
+async function enrichPosts(docs, viewerId) {
+  const ids = docs.map((d) => d._id)
+  if (ids.length === 0) return docs
+  const [likes, comments, myLikes] = await Promise.all([
+    Reaction.aggregate([
+      { $match: { post: { $in: ids }, type: 'like' } },
+      { $group: { _id: '$post', count: { $sum: 1 } } },
+    ]),
+    Comment.aggregate([{ $match: { post: { $in: ids } } }, { $group: { _id: '$post', count: { $sum: 1 } } }]),
+    viewerId
+      ? Reaction.find({ post: { $in: ids }, user: viewerId, type: 'like' }).select('post').lean()
+      : Promise.resolve([]),
+  ])
+  const likesMap = new Map(likes.map((r) => [String(r._id), r.count]))
+  const commentsMap = new Map(comments.map((r) => [String(r._id), r.count]))
+  const likedSet = new Set(myLikes.map((r) => String(r.post)))
+  return docs.map((d) => ({
+    ...d,
+    likesCount: likesMap.get(String(d._id)) ?? 0,
+    commentsCount: commentsMap.get(String(d._id)) ?? 0,
+    userLiked: likedSet.has(String(d._id)),
+  }))
+}
 
 // ---- Public ----
 
@@ -29,27 +68,143 @@ export const getPublishedPosts = asyncHandler(async (req, res) => {
     Post.countDocuments(query),
   ])
 
-  return sendSuccess(res, { posts: docs, page, limit, total, pages: Math.ceil(total / limit) })
+  const enriched = await enrichPosts(docs, req.user?._id)
+  return sendSuccess(res, { posts: enriched, page, limit, total, pages: Math.ceil(total / limit) })
 })
 
-export const getPublishedPostsHome = asyncHandler(async (_req, res) => {
+export const getPublishedPostsHome = asyncHandler(async (req, res) => {
   const docs = await Post.find({ status: 'published' })
     .sort({ createdAt: -1 })
     .limit(6)
     .populate('productId', 'name nameAr slug image price oldPrice isSpecialOffer discount')
     .lean()
-  return sendSuccess(res, docs)
+  const enriched = await enrichPosts(docs, req.user?._id)
+  return sendSuccess(res, enriched)
 })
 
 export const getPostById = asyncHandler(async (req, res) => {
   const { id } = req.params
   if (!mongoose.isValidObjectId(id)) return sendError(res, 'Post not found', 404)
 
-  const doc = await Post.findById(id)
+  const doc = await Post.findOne({ _id: id, status: 'published' })
     .populate('productId', 'name nameAr slug image price oldPrice isSpecialOffer discount')
     .lean()
   if (!doc) return sendError(res, 'Post not found', 404)
-  return sendSuccess(res, doc)
+  const [enriched] = await enrichPosts([doc], req.user?._id)
+  return sendSuccess(res, enriched)
+})
+
+// ---- Likes ----
+
+export const likePost = asyncHandler(async (req, res) => {
+  const { id } = req.params
+  if (!mongoose.isValidObjectId(id)) return sendError(res, 'Post not found', 404)
+  const post = await Post.findOne({ _id: id, status: 'published' })
+  if (!post) return sendError(res, 'Post not found', 404)
+
+  try {
+    await Reaction.create({ post: id, user: req.user._id, type: 'like' })
+  } catch (err) {
+    if (err.code !== 11000) throw err
+  }
+  const likesCount = await Reaction.countDocuments({ post: id, type: 'like' })
+  return sendSuccess(res, { liked: true, likesCount })
+})
+
+export const unlikePost = asyncHandler(async (req, res) => {
+  const { id } = req.params
+  if (!mongoose.isValidObjectId(id)) return sendError(res, 'Post not found', 404)
+  const post = await Post.findOne({ _id: id, status: 'published' })
+  if (!post) return sendError(res, 'Post not found', 404)
+
+  await Reaction.deleteOne({ post: id, user: req.user._id, type: 'like' })
+  const likesCount = await Reaction.countDocuments({ post: id, type: 'like' })
+  return sendSuccess(res, { liked: false, likesCount })
+})
+
+// ---- Comments ----
+
+export const listComments = asyncHandler(async (req, res) => {
+  const { id } = req.params
+  if (!mongoose.isValidObjectId(id)) return sendError(res, 'Post not found', 404)
+  const post = await Post.findOne({ _id: id, status: 'published' }).lean()
+  if (!post) return sendError(res, 'Post not found', 404)
+
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+  const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 8))
+  const [docs, total] = await Promise.all([
+    Comment.find({ post: id })
+      .sort({ createdAt: 1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate('author', 'name avatar')
+      .lean(),
+    Comment.countDocuments({ post: id }),
+  ])
+
+  return sendSuccess(res, {
+    comments: docs.map(toCommentPayload),
+    page,
+    limit,
+    total,
+    pages: Math.ceil(total / limit),
+  })
+})
+
+export const createComment = asyncHandler(async (req, res) => {
+  const { id } = req.params
+  if (!mongoose.isValidObjectId(id)) return sendError(res, 'Post not found', 404)
+  const post = await Post.findOne({ _id: id, status: 'published' }).lean()
+  if (!post) return sendError(res, 'Post not found', 404)
+
+  const text = String(req.body?.text ?? '').trim()
+  if (!text) return sendError(res, 'Comment text is required', 400)
+  if (text.length > 1000) return sendError(res, 'Comment is too long (max 1000 characters)', 400)
+
+  const doc = await Comment.create({ post: id, author: req.user._id, text })
+  const payload = {
+    _id: doc._id,
+    postId: doc.post,
+    text: doc.text,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    authorId: req.user._id,
+    author: { _id: req.user._id, name: req.user.name, avatar: req.user.avatar },
+  }
+  return sendSuccess(res, payload, 'Comment added', 201)
+})
+
+export const updateComment = asyncHandler(async (req, res) => {
+  const { commentId } = req.params
+  if (!mongoose.isValidObjectId(commentId)) return sendError(res, 'Comment not found', 404)
+  const comment = await Comment.findById(commentId)
+  if (!comment) return sendError(res, 'Comment not found', 404)
+  if (String(comment.author) !== String(req.user._id)) {
+    return sendError(res, 'You can only edit your own comments', 403)
+  }
+
+  const text = String(req.body?.text ?? '').trim()
+  if (!text) return sendError(res, 'Comment text is required', 400)
+  if (text.length > 1000) return sendError(res, 'Comment is too long (max 1000 characters)', 400)
+
+  comment.text = text
+  await comment.save()
+  await comment.populate('author', 'name avatar')
+  return sendSuccess(res, toCommentPayload(comment), 'Comment updated')
+})
+
+export const deleteComment = asyncHandler(async (req, res) => {
+  const { commentId } = req.params
+  if (!mongoose.isValidObjectId(commentId)) return sendError(res, 'Comment not found', 404)
+  const comment = await Comment.findById(commentId)
+  if (!comment) return sendError(res, 'Comment not found', 404)
+
+  const isOwner = String(comment.author) === String(req.user._id)
+  const isAdmin = req.user.role === 'ADMIN'
+  if (!isOwner && !isAdmin) return sendError(res, 'You can only delete your own comments', 403)
+
+  await comment.deleteOne()
+  return sendSuccess(res, null, 'Comment deleted')
 })
 
 // ---- Admin ----
@@ -121,6 +276,10 @@ export const adminUpdatePost = asyncHandler(async (req, res) => {
 export const adminDeletePost = asyncHandler(async (req, res) => {
   const doc = await Post.findByIdAndDelete(req.params.id)
   if (!doc) return sendError(res, 'Post not found', 404)
+  await Promise.all([
+    Reaction.deleteMany({ post: doc._id }),
+    Comment.deleteMany({ post: doc._id }),
+  ])
   return sendSuccess(res, null, 'Post deleted')
 })
 

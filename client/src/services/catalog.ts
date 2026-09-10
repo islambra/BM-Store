@@ -8,6 +8,7 @@ import {
   listProducts,
   getPublishedPostsHome,
   getPublishedPosts,
+  getPostById,
   type BannerRecord,
   type CategoryRecord,
   type ProductRecord,
@@ -185,6 +186,9 @@ export interface PostItem {
     isSpecialOffer?: boolean
     discount?: number
   }
+  likesCount: number
+  commentsCount: number
+  userLiked: boolean
   createdAt: string
 }
 
@@ -209,6 +213,9 @@ export function toPost(r: PostRecord): PostItem | null {
       isSpecialOffer: p.isSpecialOffer,
       discount: p.discount,
     },
+    likesCount: r.likesCount ?? 0,
+    commentsCount: r.commentsCount ?? 0,
+    userLiked: r.userLiked ?? false,
     createdAt: r.createdAt,
   }
 }
@@ -225,4 +232,9 @@ export async function loadPostsPage(page = 1, limit = 6): Promise<{ posts: PostI
     total: res.total,
     pages: res.pages,
   }
+}
+
+export async function loadPost(id: string): Promise<PostItem | null> {
+  const record = await getPostById(id)
+  return toPost(record)
 }

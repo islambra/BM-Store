@@ -6,7 +6,7 @@ import MobileNav from './MobileNav'
 import { trackReferral } from '../../services/api'
 
 const AUTH_PATHS = ['/login', '/register', '/marketer/signup', '/marketer/login']
-const FOOTERLESS_PATHS = ['/cart', '/wishlist', '/posts']
+const FOOTERLESS_PATHS = ['/cart', '/wishlist']
 
 function ReferralTracker() {
   useEffect(() => {
@@ -28,7 +28,7 @@ function ReferralTracker() {
 export default function Layout() {
   const { pathname } = useLocation()
   const isAuthPage = AUTH_PATHS.includes(pathname)
-  const showFooter = !isAuthPage && !FOOTERLESS_PATHS.includes(pathname)
+  const showFooter = !isAuthPage && !FOOTERLESS_PATHS.includes(pathname) && !pathname.startsWith('/posts')
   return (
     <div className="flex min-h-screen flex-col">
       <ReferralTracker />
