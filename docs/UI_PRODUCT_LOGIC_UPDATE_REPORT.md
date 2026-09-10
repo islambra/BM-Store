@@ -30,23 +30,16 @@ points are implemented and verified.
 - Deleted `client/src/components/common/Rating.tsx`; removed the rating filter and the
   "sort by rating" option from `FilterPanel`/`SortSelect` and the `rating` sort key
   from the server `sortMap`.
-- Seed data no longer contains ratings, review counts, fake discounts, or fake sales.
-
 ## 4. Best Selling fallback when there are no sales
 - Fresh storefront (all `confirmedSales = 0`) falls back to creation-date order
   (`createdAt: 1`), so the Home "Best Sellers" section shows the first-created
-  products (the first 4 seed products are now the normal items). The dedicated
-  page lists them all.
-- Re-running the seed sets every product's `confirmedSales` back to `0`, producing the
-  no-sales fallback state for approval/testing.
+  products. The dedicated page lists them all.
 
 ## 5. Special Offers will be separated
 - Already on the public API (`?offer=true`) and storefront (`/special-offers` page);
   `/best-sellers` reuses the same bilateral split. No change needed here.
 
 ## 6. Special Offer = explicit flag (`isSpecialOffer`) with `oldPrice > price`
-- Migration-safe: the seed derives `isSpecialOffer` from the presence of `oldPrice`
-  (existing offer products keep their flag).
 - `validateOffer()` (server) enforces `oldPrice > price > 0` and that enabling a
   special offer requires a valid stored `oldPrice`.
 
@@ -96,7 +89,6 @@ points are implemented and verified.
 ## Files modified
 - `server/controllers/product.controller.js` — sortMap, `toPublic`, `pickProductFields`, create/update/toggle old-price handling + validation.
 - `server/models/Product.js` — removed `rating`/`reviewCount`.
-- `server/seed/seed.js` — no fake ratings/reviews/sales/discounts; offers derived from `oldPrice`; `confirmedSales: 0`; normal-first ordering.
 - `server/test/products.test.js` — updated + 4 new/amended tests.
 - `client/src/types/index.ts`, `client/src/services/api.ts`, `client/src/services/catalog.ts` — removed `rating`/`reviewCount`.
 - `client/src/components/product/ProductCard.tsx`, `client/src/pages/ProductPage.tsx` — offer-only discount UI; rating UI removed.
@@ -112,5 +104,4 @@ points are implemented and verified.
   tests (upstream network flake) — re-run the offending file to confirm; not a code
   defect. On a live dev DB, the no-sales fallback order is the products' existing
   creation order, so first-created offers may still appear in Best Sellers until you
-  toggle them off Special Offer in the admin (or reseed a fresh DB) — the seed
-  reordering applies to new databases.
+  toggle them off Special Offer in the admin.

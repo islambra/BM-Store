@@ -12,6 +12,8 @@ import CategoriesPage from './pages/CategoriesPage'
 import CategoryPage from './pages/CategoryPage'
 import SpecialOffersPage from './pages/SpecialOffersPage'
 import BestSellersPage from './pages/BestSellersPage'
+import PostsPage from './pages/PostsPage'
+import SinglePostPage from './pages/SinglePostPage'
 import ProductPage from './pages/ProductPage'
 import SearchPage from './pages/SearchPage'
 import CartPage from './pages/CartPage'
@@ -41,6 +43,8 @@ export default function App() {
                   <Route path="/special-offers" element={<SpecialOffersPage />} />
                   <Route path="/deals" element={<Navigate to="/special-offers" replace />} />
                   <Route path="/best-sellers" element={<BestSellersPage />} />
+                  <Route path="/posts" element={<PostsPage />} />
+                  <Route path="/posts/:id" element={<SinglePostPage />} />
                   <Route path="/product/:id" element={<ProductPage />} />
                   <Route path="/search" element={<SearchPage />} />
                   <Route path="/cart" element={<CartPage />} />

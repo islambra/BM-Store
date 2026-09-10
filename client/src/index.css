@@ -87,10 +87,12 @@
   html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-canvas font-sans text-ink-900 antialiased;
+    overflow-x: clip;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 

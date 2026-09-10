@@ -19,6 +19,13 @@ import {
   adminToggleProduct,
 } from '../controllers/product.controller.js'
 import { listOrders, updateOrderStatus } from '../controllers/order.controller.js'
+import {
+  adminListPosts,
+  adminCreatePost,
+  adminUpdatePost,
+  adminDeletePost,
+  adminPublishPost,
+} from '../controllers/post.controller.js'
 
 const router = Router()
 
@@ -50,6 +57,12 @@ router.get('/banners', banner.adminList)
 router.post('/banners', banner.adminCreate)
 router.patch('/banners/:id', banner.adminUpdate)
 router.delete('/banners/:id', banner.adminDelete)
+
+router.get('/posts', adminListPosts)
+router.post('/posts', adminCreatePost)
+router.patch('/posts/:id', adminUpdatePost)
+router.delete('/posts/:id', adminDeletePost)
+router.patch('/posts/:id/publish', adminPublishPost)
 
 router.post('/payouts', recordPayout)
 router.get('/payouts', getPayouts)

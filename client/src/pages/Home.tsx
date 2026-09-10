@@ -7,6 +7,7 @@ import type { Product } from '../types'
 import ProductCard from '../components/product/ProductCard'
 import SectionHeader from '../components/common/SectionHeader'
 import HeroSlider from '../components/home/HeroSlider'
+import HomePostsSection from '../components/home/HomePostsSection'
 import { ProductCardSkeleton } from '../components/common/Skeletons'
 import EmptyState from '../components/common/EmptyState'
 
@@ -95,6 +96,9 @@ export default function Home() {
           </p>
         )}
       </section>
+
+      {/* Latest Posts */}
+      <HomePostsSection />
 
       {/* Trust / service */}
 

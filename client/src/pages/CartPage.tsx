@@ -1,22 +1,26 @@
-import { Link } from 'react-router-dom'
-import { ShoppingCart, Trash2, Minus, Plus, ArrowRight, ArrowLeft, Truck } from 'lucide-react'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ShoppingCart, Trash2, Minus, Plus, ArrowRight, ArrowLeft, LogIn } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useStore } from '../context/StoreContext'
+import { useAuth } from '../context/AuthContext'
 import { localizedName } from '../utils/localize'
-import { FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from '../config/shop'
+import { DELIVERY_FEE } from '../config/shop'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
+import { Alert } from '../components/common/FormControls'
 import { formatPrice } from '../components/common/Price'
 
 export default function CartPage() {
   const { t, lang } = useLanguage()
   const { cart, updateQuantity, removeFromCart, cartTotal } = useStore()
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const ArrowIcon = lang === 'ar' ? ArrowLeft : ArrowRight
+  const [loginNotice, setLoginNotice] = useState(false)
 
-  const delivery = cartTotal > 0 && cartTotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0
+  const delivery = cartTotal > 0 ? DELIVERY_FEE : 0
   const total = cartTotal + delivery
-  const progress = Math.min((cartTotal / FREE_DELIVERY_THRESHOLD) * 100, 100)
-  const freeReached = cartTotal >= FREE_DELIVERY_THRESHOLD
 
   if (cart.length === 0) {
     return (
@@ -42,6 +46,20 @@ export default function CartPage() {
         title={t('cart.title')}
         subtitle={t('cart.subtitle')}
       />
+
+      {loginNotice && (
+        <div className="mt-4">
+          <Alert tone="warning">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <LogIn size={16} />
+              {t('cart.loginRequired')}
+              <Link to="/login" state={{ from: '/cart' }} className="font-bold underline underline-offset-2">
+                {t('common.login')}
+              </Link>
+            </span>
+          </Alert>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
         {/* Items */}
@@ -113,22 +131,6 @@ export default function CartPage() {
           <div className="rounded-2xl border border-line bg-surface p-5 lg:sticky lg:top-32">
             <h2 className="text-base font-bold text-ink-900">{t('cart.summary')}</h2>
 
-            {/* Delivery progress */}
-            <div className="mt-4 rounded-xl bg-canvas p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold text-ink-700">
-                <Truck size={15} className="shrink-0 text-brand-600" />
-                {freeReached
-                  ? t('cart.freeReached')
-                  : t('header.freeDelivery', { amount: formatPrice(FREE_DELIVERY_THRESHOLD - cartTotal, lang) })}
-              </div>
-              <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-ink-900/10">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${freeReached ? 'bg-success-500' : 'bg-brand-500'}`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex justify-between">
                 <dt className="text-ink-500">{t('cart.subtotal')}</dt>
@@ -136,19 +138,27 @@ export default function CartPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-ink-500">{t('cart.delivery')}</dt>
-                <dd className={`font-semibold ${delivery === 0 ? 'text-brand-600' : 'text-ink-900'}`}>
-                  {delivery === 0 ? t('cart.deliveryFree') : formatPrice(delivery, lang)}
-                </dd>
+                <dd className="font-semibold text-ink-900">{formatPrice(delivery, lang)}</dd>
               </div>
               <div className="flex items-center justify-between border-t border-line pt-3">
                 <dt className="font-bold text-ink-900">{t('cart.total')}</dt>
                 <dd className="text-lg font-extrabold text-ink-900">{formatPrice(total, lang)}</dd>
               </div>
             </dl>
-            <Link to="/checkout" className="btn-primary mt-5 w-full py-3.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (!user) {
+                  setLoginNotice(true)
+                  return
+                }
+                navigate('/checkout')
+              }}
+              className="btn-primary mt-5 w-full py-3.5"
+            >
               {t('cart.checkout')}
               <ArrowIcon size={17} />
-            </Link>
+            </button>
             <Link to="/categories" className="btn-ghost mt-2 w-full">
               {t('cart.continue')}
             </Link>

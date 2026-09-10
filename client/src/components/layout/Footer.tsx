@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Mail, Megaphone } from 'lucide-react'
+import { Mail } from 'lucide-react'
 import logo from '../../assets/logo.jpg'
 import { useLanguage } from '../../context/LanguageContext'
 import { useCatalog } from '../../context/CatalogContext'
@@ -40,7 +40,7 @@ export default function Footer() {
   const { categories } = useCatalog()
 
   return (
-    <footer className="mt-16 bg-ink-900 pb-24 text-white lg:pb-0">
+    <footer className="mt-16 bg-ink-900 pb-28 text-white lg:pb-0">
       <div className="container-app py-12">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div className="max-w-sm">
@@ -116,24 +116,6 @@ export default function Footer() {
               ))}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Marketer invite band */}
-      <div className="border-t border-white/10">
-        <div className="container-app flex flex-col items-start justify-between gap-4 py-6 sm:flex-row sm:items-center">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-brand-300">
-              <Megaphone size={17} />
-            </span>
-            <div>
-              <p className="text-sm font-bold text-white">{t('footer.marketerTitle')}</p>
-              <p className="mt-0.5 text-xs text-white/60">{t('footer.marketerDesc')}</p>
-            </div>
-          </div>
-          <Link to="/marketer" className="btn-primary">
-            {t('marketer.become')}
-          </Link>
         </div>
       </div>
 

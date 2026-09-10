@@ -111,3 +111,27 @@ export interface MarketerProfile {
   totalEarnings: number
   createdAt: string
 }
+
+export interface PostProduct {
+  name: string
+  nameAr?: string
+  slug: string
+  image: string
+  price: number
+  oldPrice?: number
+  isSpecialOffer?: boolean
+  discount?: number
+}
+
+export interface Post {
+  _id: string
+  textEn?: string
+  textAr?: string
+  mediaType: 'images' | 'video'
+  images: string[]
+  video?: string | null
+  productId: PostProduct
+  status: 'draft' | 'published'
+  createdAt: string
+  updatedAt: string
+}

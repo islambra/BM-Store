@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  ClipboardList, Image as ImageIcon, LayoutGrid, Megaphone, ShieldCheck, Tags, UserRound, Users,
+  ClipboardList, Image as ImageIcon, LayoutGrid, Megaphone, MessageSquare, ShieldCheck, Tags, UserRound, Users,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import PageHeader from '../components/common/PageHeader'
@@ -14,6 +14,7 @@ import OrdersSection from '../components/admin/OrdersSection'
 import ProductsSection from '../components/admin/ProductsSection'
 import CategoriesSection from '../components/admin/CategoriesSection'
 import BannersSection from '../components/admin/BannersSection'
+import PostsSection from '../components/admin/PostsSection'
 
 export default function AdminPage() {
   const { t } = useLanguage()
@@ -28,6 +29,7 @@ export default function AdminPage() {
     { id: 'products', label: t('admin.tabs.products'), icon: Tags },
     { id: 'categories', label: t('admin.tabs.categories'), icon: LayoutGrid },
     { id: 'banners', label: t('admin.tabs.banners'), icon: ImageIcon },
+    { id: 'posts', label: t('admin.tabs.posts'), icon: MessageSquare },
   ]
 
   return (
@@ -42,6 +44,7 @@ export default function AdminPage() {
         {active === 'products' && <ProductsSection />}
         {active === 'categories' && <CategoriesSection />}
         {active === 'banners' && <BannersSection />}
+        {active === 'posts' && <PostsSection />}
       </AdminShell>
     </div>
   )

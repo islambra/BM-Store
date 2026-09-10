@@ -451,6 +451,94 @@ export function deleteBanner(id: string) {
   return remove<null>(`/admin/banners/${id}`)
 }
 
+// ---- posts (admin) --------------------------------------------------------
+
+export interface PostRecord {
+  _id: string
+  textEn?: string
+  textAr?: string
+  mediaType: 'images' | 'video'
+  images: string[]
+  video?: string | null
+  productId: {
+    _id: string
+    name: string
+    nameAr?: string
+    slug: string
+    image: string
+    price: number
+    oldPrice?: number
+    isSpecialOffer?: boolean
+    discount?: number
+  }
+  status: 'draft' | 'published'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatePostInput {
+  textEn?: string
+  textAr?: string
+  mediaType: 'images' | 'video'
+  images?: string[]
+  video?: string
+  productId: string
+  status?: 'draft' | 'published'
+}
+
+export function getAdminPosts() {
+  return get<{ posts: PostRecord[] }>('/admin/posts')
+}
+
+export function createPost(body: CreatePostInput) {
+  return post<PostRecord>('/admin/posts', body)
+}
+
+export function updatePost(id: string, body: Partial<CreatePostInput>) {
+  return patch<PostRecord>(`/admin/posts/${id}`, body)
+}
+
+export function deletePost(id: string) {
+  return remove<null>(`/admin/posts/${id}`)
+}
+
+export function publishPost(id: string) {
+  return patch<PostRecord>(`/admin/posts/${id}/publish`)
+}
+
+export async function uploadVideo(file: File): Promise<{ url: string }> {
+  const fd = new FormData()
+  fd.append('video', file)
+  const res = await api.post<ApiResponse<{ url: string }>>('/admin/upload/video', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  const url = res.data?.data?.url ?? ''
+  if (!url) throw new Error('Upload failed')
+  if (url.startsWith('http')) return { url }
+  const origin = (() => {
+    try {
+      return new URL(api.defaults.baseURL ?? '', window.location.origin).origin
+    } catch {
+      return window.location.origin
+    }
+  })()
+  return { url: `${origin}${url.startsWith('/') ? url : `/${url}`}` }
+}
+
+// ---- posts (public) -------------------------------------------------------
+
+export function getPublishedPosts(params?: { page?: number; limit?: number }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  return get<{ posts: PostRecord[]; page: number; total: number; pages: number }>(`/posts${q ? `?${q}` : ''}`)
+}
+
+export function getPublishedPostsHome() {
+  return get<PostRecord[]>('/posts/home')
+}
+
 export function recordPayout(body: { marketerId: string; amount: number; period: string; method: 'CCP' | 'BaridiMob'; reference?: string }) {
   return post<Record<string, unknown>>('/admin/payouts', body)
 }

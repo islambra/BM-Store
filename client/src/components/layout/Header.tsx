@@ -64,6 +64,7 @@ export default function Header() {
     { to: '/categories', label: t('nav.categories'), end: false },
     { to: '/special-offers', label: t('nav.deals'), end: false },
     { to: '/best-sellers', label: t('nav.bestSellers'), end: false },
+    { to: '/posts', label: t('nav.posts'), end: false },
   ]
 
   return (
@@ -75,6 +76,11 @@ export default function Header() {
         {/* Search — prominent on both mobile and desktop */}
         <div className="mx-auto w-full max-w-xl flex-1 ps-1 sm:ps-4">
           <SearchBar />
+        </div>
+
+        {/* Mobile language */}
+        <div className="lg:hidden">
+          <LanguageSwitcher />
         </div>
 
         {/* Desktop actions */}
@@ -99,13 +105,23 @@ export default function Header() {
               {item.label}
             </NavLink>
           ))}
+          {!isAdminRoute && !isMarketerRoute && (user?.role !== 'ADMIN') && (user?.role !== 'MARKETER') && (
+            <button
+              type="button"
+              onClick={become.open}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            >
+              <Megaphone size={14} />
+              {t('marketer.become')}
+            </button>
+          )}
         </div>
       </nav>
 
       {/* Desktop secondary nav */}
       <nav className="hidden border-t border-line lg:block" aria-label="Main">
         <div className="container-app flex h-11 items-center">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             {nav.map((item) => (
               <NavLink
                 key={item.to}

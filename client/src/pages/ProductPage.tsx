@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Heart,
   ShoppingCart,
   Minus,
   Plus,
-  Truck,
-  RotateCcw,
-  ShieldCheck,
   Check,
   PackageX,
+  LogIn,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useCatalog } from '../context/CatalogContext'
 import { useStore } from '../context/StoreContext'
+import { useAuth } from '../context/AuthContext'
 import { localizedName, localizedText } from '../utils/localize'
 import { loadProduct, loadProductsPage } from '../services/catalog'
 import type { Product } from '../types'
@@ -21,6 +20,7 @@ import ProductCard from '../components/product/ProductCard'
 import Price, { formatPrice } from '../components/common/Price'
 import Breadcrumb from '../components/common/Breadcrumb'
 import EmptyState from '../components/common/EmptyState'
+import { Alert } from '../components/common/FormControls'
 import { ProductCardSkeleton } from '../components/common/Skeletons'
 
 export default function ProductPage() {
@@ -29,6 +29,7 @@ export default function ProductPage() {
   const { t, lang } = useLanguage()
   const { categoryBySlug, localizeCategory } = useCatalog()
   const { addToCart, toggleWishlist, isWishlisted } = useStore()
+  const { user } = useAuth()
 
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -37,6 +38,7 @@ export default function ProductPage() {
   const [qty, setQty] = useState(1)
   const [mainImage, setMainImage] = useState(0)
   const [added, setAdded] = useState(false)
+  const [loginNotice, setLoginNotice] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -112,11 +114,15 @@ export default function ProductPage() {
 
   const handleBuyNow = () => {
     addToCart(product, qty)
+    if (!user) {
+      setLoginNotice(true)
+      return
+    }
     navigate('/checkout')
   }
 
   return (
-    <div className="container-app pt-6 sm:pt-10">
+    <div className="container-app pt-4 sm:pt-6">
       <Breadcrumb
         items={[
           { label: t('nav.categories'), to: '/categories' },
@@ -125,7 +131,7 @@ export default function ProductPage() {
         ]}
       />
 
-      <div className="mt-5 grid gap-8 lg:grid-cols-2 lg:gap-12">
+      <div className="mt-4 grid gap-6 lg:grid-cols-2 lg:gap-10">
         {/* Gallery */}
         <div>
           <div className="relative overflow-hidden rounded-3xl border border-line bg-surface">
@@ -134,7 +140,7 @@ export default function ProductPage() {
                 -{product.discount}%
               </span>
             )}
-            <div className="aspect-square">
+            <div className="aspect-square lg:aspect-[4/3]">
               <img
                 src={product.images[mainImage] ?? product.image}
                 alt={name}
@@ -143,14 +149,14 @@ export default function ProductPage() {
             </div>
           </div>
           {product.images.length > 1 && (
-            <div className="mt-3 flex gap-3 overflow-x-auto no-scrollbar">
+            <div className="mt-2.5 flex gap-3 overflow-x-auto no-scrollbar">
               {product.images.map((src, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setMainImage(i)}
                   aria-label={`Image ${i + 1}`}
-                  className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all ${
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all ${
                     mainImage === i ? 'border-brand-600' : 'border-transparent hover:border-ink-900/20'
                   }`}
                 >
@@ -172,11 +178,11 @@ export default function ProductPage() {
               localizeCategory(product.categoryName || product.category)
             )}
           </span>
-          <h1 className="mt-2 text-2xl font-extrabold leading-tight tracking-tight text-ink-900 sm:text-3xl">
+          <h1 className="mt-1.5 text-xl font-extrabold leading-tight tracking-tight text-ink-900 sm:text-2xl">
             {name}
           </h1>
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="mt-2.5 flex flex-wrap items-center gap-3">
             {product.stock > 0 ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
                 <Check size={13} />
@@ -187,7 +193,7 @@ export default function ProductPage() {
             )}
           </div>
 
-          <div className="mt-5 flex items-end gap-3">
+          <div className="mt-4 flex items-end gap-3">
             <Price
               value={product.price}
               compareAt={product.isSpecialOffer ? product.oldPrice : undefined}
@@ -200,25 +206,10 @@ export default function ProductPage() {
             )}
           </div>
 
-          {description && <p className="mt-5 text-sm leading-relaxed text-ink-700">{description}</p>}
-
-          <div className="mt-6 grid grid-cols-3 gap-2.5">
-            <div className="rounded-xl bg-canvas p-3 text-center">
-              <Truck size={20} className="mx-auto mb-1.5 text-brand-600" />
-              <p className="text-[11px] font-semibold text-ink-700">{t('trust.delivery')}</p>
-            </div>
-            <div className="rounded-xl bg-canvas p-3 text-center">
-              <RotateCcw size={20} className="mx-auto mb-1.5 text-brand-600" />
-              <p className="text-[11px] font-semibold text-ink-700">{t('product.returns')}</p>
-            </div>
-            <div className="rounded-xl bg-canvas p-3 text-center">
-              <ShieldCheck size={20} className="mx-auto mb-1.5 text-brand-600" />
-              <p className="text-[11px] font-semibold text-ink-700">{t('trust.secure')}</p>
-            </div>
-          </div>
+          {description && <p className="mt-4 text-sm leading-relaxed text-ink-700">{description}</p>}
 
           {/* Actions */}
-          <div className="mt-7 space-y-3">
+          <div className="mt-5 space-y-3">
             <div className="flex items-center gap-3">
               <div className="flex items-center rounded-xl border border-line bg-surface">
                 <button
@@ -268,25 +259,25 @@ export default function ProductPage() {
             </div>
           </div>
 
-          {/* Shipping note */}
-          <div className="mt-6 rounded-2xl border border-line bg-surface p-4 text-sm">
-            <div className="flex items-center gap-2.5 text-ink-700">
-              <Truck size={18} className="shrink-0 text-brand-600" />
-              <p>
-                <span className="font-semibold">{t('product.shipping')}:</span> {t('product.shippingRow')}
-              </p>
+          {loginNotice && (
+            <div className="mt-4">
+              <Alert tone="warning">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <LogIn size={16} />
+                  {t('cart.loginRequired')}
+                  <Link to="/login" state={{ from: `/product/${product.id}` }} className="font-bold underline underline-offset-2">
+                    {t('common.login')}
+                  </Link>
+                </span>
+              </Alert>
             </div>
-            <div className="mt-2.5 flex items-center gap-2.5 text-ink-500">
-              <RotateCcw size={18} className="shrink-0 text-brand-600" />
-              <p>{t('product.returns')}</p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Related */}
       {related.length > 0 && (
-        <section className="mt-14" aria-label={t('product.related')}>
+        <section className="mt-10" aria-label={t('product.related')}>
           <div className="mb-6 flex items-end justify-between gap-4">
             <h2 className="section-heading">{t('product.related')}</h2>
           </div>

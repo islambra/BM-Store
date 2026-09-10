@@ -1,4 +1,5 @@
 import ConfirmDialog from './ConfirmDialog'
+import { LogOut } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 
 export default function LogoutModal({
@@ -12,7 +13,8 @@ export default function LogoutModal({
   onConfirm: () => void
   onCancel: () => void
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
+  const rtl = lang === 'ar'
 
   return (
     <ConfirmDialog
@@ -23,6 +25,7 @@ export default function LogoutModal({
       cancelLabel={t('common.cancel')}
       danger
       busy={busy}
+      icon={<LogOut size={22} className={rtl ? '-scale-x-100' : ''} />}
       onConfirm={onConfirm}
       onCancel={onCancel}
     />

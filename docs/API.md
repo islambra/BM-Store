@@ -38,6 +38,17 @@ marketers have no store or product CRUD.
 | GET    | `/products/:id`       |                                                   | `{product}` |
 | GET    | `/categories`         | active only, ordered by `order`; each category includes `productCount` | `Category[]` |
 | GET    | `/banners`            | active only (max 5 enforced); image-only payload `{_id, image, link, order}` | `HeroBanner[]` |
+| GET    | `/posts/home`         | latest 6 published posts, populated product `{_id, name, nameAr, slug, image, price, oldPrice, isSpecialOffer, discount}` | `Post[]` |
+| GET    | `/posts`              | `?page&limit` (paged, published only)                    | `{posts, page, total, pages}` |
+| GET    | `/posts/:id`          | single published post                                    | `{post}` |
+
+### Post shape
+
+Posts carry multilingual text flat (`textEn`, `textAr`) plus media.
+`mediaType` is `images` (up to 5 `images[]`) or `video` (single `video` URL,
+`images` cleared). `productId` references the existing Product (`_id`) — the
+server validates it exists and never stores duplicate product data. `status`
+is `draft` | `published`. Public endpoints only return `published` posts.
 
 ### Public product shape
 
@@ -62,8 +73,8 @@ special offers (requires `oldPrice > price > 0`).
 | GET    | `/orders/me`| access cookie | orders belonging to the logged-in user                  | `{orders}` |
 
 The server recomputes all prices/totals and stores product price snapshots on
-order items; client-supplied prices are ignored. Delivery is free above
-`FREE_DELIVERY_THRESHOLD`; otherwise `DELIVERY_FEE` (from `config/shop.js`).
+order items; client-supplied prices are ignored. A flat `DELIVERY_FEE` is added
+to every order (from `config/shop.js`).
 If `referralId` is given, the order is attributed to the owning marketer and a
 10% commission is stored until the order is confirmed. Reward discounts apply
 per line only to `isRewardEligible` products for logged-in users (see
@@ -121,6 +132,13 @@ see `models/Reward.js` `getRewardDiscount`.)
 | DELETE | `/admin/banners/:id`       |                                             | – |
 | POST   | `/admin/payouts`           | `{marketerId, amount, period, method(CCP\|BaridiMob), reference?}` | `{payout}` (201) |
 | GET    | `/admin/payouts`           | `?marketer&period`                          | `{payouts}` |
+| GET    | `/admin/posts`             | all posts (draft + published), product populated | `{posts}` |
+| POST   | `/admin/posts`             | `{textEn?, textAr?, mediaType, images?, video?, productId, status?}`; product required & validated, images capped at 5, video posts clear images | `{post}` (201) |
+| PATCH  | `/admin/posts/:id`         | partial update; same validation as create   | `{post}` |
+| DELETE | `/admin/posts/:id`         |                                             | – |
+| PATCH  | `/admin/posts/:id/publish` | toggles `draft` ⇄ `published`               | `{post}` |
+| POST   | `/admin/upload`            | image upload (gridfs), max 5 MB              | `{url}` (201) |
+| POST   | `/admin/upload/video`      | video upload (gridfs), max 50 MB (mp4/webm/ogg/mov) | `{url}` (201) |
 
 Error statuses: `400` validation, `401` unauthenticated, `403` wrong role /
 suspended marketing, `404` not found, `409` duplicate key, `500` internal,

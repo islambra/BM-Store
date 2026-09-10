@@ -41,8 +41,7 @@
   green): `isSpecialOffer` + `confirmedSales` on Product, `best-selling`/`offer`
   catalog queries, dynamic discount computation, max-4 images, `confirmedSales`
   increment on confirm, `PATCH /auth/me`, `PATCH /auth/password`, admin
-  `orderCount`+`totalSpent`, image-only public banners, category `productCount`,
-  seeded offers/sales stats.
+  `orderCount`+`totalSpent`, image-only public banners, category `productCount`.
 
 ---
 
@@ -74,8 +73,8 @@
   `{_id, image, link, order}`; admin create requires only `image`; max 5 active
   enforced.
 - [x] **12. Category product counts.** Public categories include `productCount`.
-- [x] **13. Seeded catalog.** Seed sets `isSpecialOffer` + `confirmedSales` per
-  product and keeps flat multilingual fields.
+- [x] **13. Catalog structure.** Products support `isSpecialOffer` + `confirmedSales`
+  with flat multilingual fields.
 
 ### Client
 - [x] **14. Storefront on real API.** Home, Categories, Category, Search,

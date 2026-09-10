@@ -18,13 +18,22 @@ async function registerAgent(name) {
   return { agent, id: (await agent.get('/api/auth/me')).body.data.user.id }
 }
 
+async function createCustomerAgent() {
+  const number = phone()
+  await request(app).post('/api/auth/register').send({ name: 'Customer', phone: number, password: 'Secret@1234' })
+  const agent = request.agent(app)
+  await agent.post('/api/auth/login').send({ phone: number, password: 'Secret@1234' })
+  return agent
+}
+
 describe('orders', () => {
   before(connectTest)
   after(disconnectTest)
 
-  it('creates an order as a guest with server-computed totals', async () => {
+  it('creates an order with server-computed totals', async () => {
+    const agent = await createCustomerAgent()
     const product = await createProduct({ name: 'Saffron 5g', price: 800, stock: 10 })
-    const res = await request(app).post('/api/orders').send({
+    const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 2, price: 1 }],
       customer: {
         fullName: 'Ahmed Benali',
@@ -44,9 +53,10 @@ describe('orders', () => {
     assert.equal(res.body.data.order.status, 'pending-review')
   })
 
-  it('gives free delivery above the threshold', async () => {
+  it('charges a flat delivery fee on every order', async () => {
+    const agent = await createCustomerAgent()
     const product = await createProduct({ name: 'Expensive Product', price: 1400, stock: 5 })
-    const res = await request(app).post('/api/orders').send({
+    const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 2, price: 1 }],
       customer: {
         fullName: 'Sara Larbi',
@@ -57,13 +67,14 @@ describe('orders', () => {
       },
     })
     assert.equal(res.status, 201)
-    assert.equal(res.body.data.order.delivery, 0)
-    assert.equal(res.body.data.order.total, res.body.data.order.subtotal)
+    assert.equal(res.body.data.order.delivery, 350)
+    assert.equal(res.body.data.order.total, res.body.data.order.subtotal + 350)
   })
 
   it('uses server price, ignoring client-supplied price', async () => {
+    const agent = await createCustomerAgent()
     const product = await createProduct({ name: 'Price Check', price: 500, stock: 3 })
-    const res = await request(app).post('/api/orders').send({
+    const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 1, price: 1 }],
       customer: {
         fullName: 'Client',
@@ -78,8 +89,9 @@ describe('orders', () => {
   })
 
   it('rejects an order exceeding stock', async () => {
+    const agent = await createCustomerAgent()
     const product = await createProduct({ name: 'Low Stock', price: 300, stock: 2 })
-    const res = await request(app).post('/api/orders').send({
+    const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 5 }],
       customer: {
         fullName: 'Client',
@@ -93,8 +105,9 @@ describe('orders', () => {
   })
 
   it('rejects an inactive product', async () => {
+    const agent = await createCustomerAgent()
     const product = await createProduct({ name: 'Inactive', price: 300, stock: 10, isActive: false })
-    const res = await request(app).post('/api/orders').send({
+    const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 1 }],
       customer: { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
     })
@@ -102,6 +115,7 @@ describe('orders', () => {
   })
 
   it('rejects invalid orders', async () => {
+    const agent = await createCustomerAgent()
     const tombstones = [
       { items: [], customer: {} },
       {},
@@ -109,9 +123,17 @@ describe('orders', () => {
       { items: [], customer: null },
     ]
     for (const body of tombstones) {
-      const res = await request(app).post('/api/orders').send(body)
+      const res = await agent.post('/api/orders').send(body)
       assert.equal(res.status, 400)
     }
+  })
+
+  it('rejects unauthenticated order creation', async () => {
+    const res = await request(app).post('/api/orders').send({
+      items: [{ productId: '000000000000000000000000', qty: 1 }],
+      customer: { fullName: 'X', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
+    })
+    assert.equal(res.status, 401)
   })
 
   it('links an order to a logged-in customer and exposes it via /orders/me', async () => {
@@ -182,7 +204,7 @@ describe('admin order management + product CRUD', () => {
     await admin.post('/api/auth/login').send({ email, password })
 
     const product = await createProduct({ name: 'Ordered', price: 100, stock: 5 })
-    const order = await request(app).post('/api/orders').send({
+    const order = await admin.post('/api/orders').send({
       items: [{ productId: product._id, qty: 1 }],
       customer: { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
     })
@@ -210,7 +232,7 @@ describe('admin order management + product CRUD', () => {
     await admin.post('/api/auth/login').send({ email, password })
 
     const product = await createProduct({ name: 'Flow', price: 100, stock: 5 })
-    const order = await request(app).post('/api/orders').send({
+    const order = await admin.post('/api/orders').send({
       items: [{ productId: product._id, qty: 1 }],
       customer: { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
     })

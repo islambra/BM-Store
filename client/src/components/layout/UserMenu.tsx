@@ -77,17 +77,18 @@ export default function UserMenu({ variant }: { variant: Variant }) {
         to={to}
         aria-label={label}
         aria-current={isActivePage ? 'page' : undefined}
-        className="relative flex flex-col items-center gap-1 pb-1.5 pt-1.5"
+        className="relative flex w-full flex-col items-center gap-0.5 py-2"
       >
-        {isActivePage && <span className="absolute inset-x-5 top-0 h-0.5 rounded-full bg-brand-600" />}
         <span
-          className={`relative flex h-9 w-14 items-center justify-center rounded-full transition-colors ${
-            isActivePage ? 'bg-brand-50 text-brand-700' : 'text-ink-500'
+          className={`relative flex h-8 w-14 items-center justify-center rounded-full transition-colors ${
+            isActivePage
+              ? 'bg-brand-600 text-white shadow-[0_4px_10px_rgb(36_83_224/0.35)]'
+              : 'text-ink-500'
           }`}
         >
-          <User size={21} strokeWidth={isActivePage ? 2.4 : 2} />
+          <User size={19} strokeWidth={isActivePage ? 2.4 : 2} />
         </span>
-        <span className={`text-[10px] leading-none ${isActivePage ? 'font-bold text-brand-700' : 'font-semibold text-ink-500'}`}>
+        <span className={`max-w-full truncate text-[10px] leading-none ${isActivePage ? 'font-bold text-brand-700' : 'font-medium text-ink-500'}`}>
           {label}
         </span>
       </Link>
@@ -205,17 +206,18 @@ export default function UserMenu({ variant }: { variant: Variant }) {
         onClick={() => setOpen(true)}
         aria-label={t('common.account')}
         aria-current={userRouteActive ? 'page' : undefined}
-        className="relative flex flex-col items-center gap-1 pb-1.5 pt-1.5"
+        className="relative flex w-full flex-col items-center gap-0.5 py-2"
       >
-        {userRouteActive && <span className="absolute inset-x-5 top-0 h-0.5 rounded-full bg-brand-600" />}
         <span
-          className={`relative flex h-9 w-14 items-center justify-center rounded-full transition-colors ${
-            userRouteActive ? 'bg-brand-50 text-brand-700' : 'text-ink-500'
+          className={`relative flex h-8 w-14 items-center justify-center rounded-full transition-colors ${
+            userRouteActive
+              ? 'bg-brand-600 text-white shadow-[0_4px_10px_rgb(36_83_224/0.35)]'
+              : 'text-ink-500'
           }`}
         >
-          <Icon size={21} strokeWidth={userRouteActive ? 2.4 : 2} />
+          <Icon size={19} strokeWidth={userRouteActive ? 2.4 : 2} />
         </span>
-        <span className={`text-[10px] leading-none ${userRouteActive ? 'font-bold text-brand-700' : 'font-semibold text-ink-500'}`}>
+        <span className={`max-w-full truncate text-[10px] leading-none ${userRouteActive ? 'font-bold text-brand-700' : 'font-medium text-ink-500'}`}>
           {t('common.account')}
         </span>
       </button>

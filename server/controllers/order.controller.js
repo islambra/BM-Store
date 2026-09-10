@@ -7,7 +7,6 @@ import Referral from '../models/Referral.js'
 import Reward, { getRewardDiscount } from '../models/Reward.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 
-export const FREE_DELIVERY_THRESHOLD = 2500
 export const DELIVERY_FEE = 350
 const COMMISSION_RATE = 10
 
@@ -74,7 +73,7 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
 
   const subtotal = cleanItems.reduce((sum, it) => sum + it.price * it.qty, 0)
-  const shipping = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE
+  const shipping = DELIVERY_FEE
   const total = subtotal + shipping - totalRewardDiscount
 
   let referredBy = null

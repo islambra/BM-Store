@@ -12,12 +12,14 @@ import {
   ArrowLeft,
   ShoppingCart,
   HandCoins,
+  LogIn,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useStore } from '../context/StoreContext'
+import { useAuth } from '../context/AuthContext'
 import { localizedName } from '../utils/localize'
 import { wilayas, getWilayaName } from '../data/wilayas'
-import { FREE_DELIVERY_THRESHOLD, DELIVERY_FEE, ORDERS_STORAGE_KEY } from '../config/shop'
+import { DELIVERY_FEE, ORDERS_STORAGE_KEY } from '../config/shop'
 import { formatPrice } from '../components/common/Price'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
@@ -37,10 +39,11 @@ function loadOrders(): Order[] {
 export default function CheckoutPage() {
   const { t, lang } = useLanguage()
   const { cart, cartTotal, clearCart } = useStore()
+  const { user } = useAuth()
   const ArrowIcon = lang === 'ar' ? ArrowLeft : ArrowRight
 
-  const [fullName, setFullName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [fullName, setFullName] = useState(user?.name ?? '')
+  const [phone, setPhone] = useState(user?.phone ?? '')
   const [wilaya, setWilaya] = useState('')
   const [commune, setCommune] = useState('')
   const [address, setAddress] = useState('')
@@ -49,7 +52,7 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
-  const delivery = cartTotal > 0 && cartTotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0
+  const delivery = cartTotal > 0 ? DELIVERY_FEE : 0
   const total = cartTotal + delivery
 
   const submit = async (e: React.FormEvent) => {
@@ -121,6 +124,24 @@ export default function CheckoutPage() {
             </Link>
           }
         />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container-app flex justify-center pt-10 sm:pt-16">
+        <div className="w-full max-w-lg">
+          <Alert tone="warning">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <LogIn size={16} />
+              {t('cart.loginRequired')}
+              <Link to="/login" state={{ from: '/checkout' }} className="font-bold underline underline-offset-2">
+                {t('common.login')}
+              </Link>
+            </span>
+          </Alert>
+        </div>
       </div>
     )
   }
@@ -305,9 +326,7 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-ink-500">{t('cart.delivery')}</dt>
-                <dd className={`font-semibold ${delivery === 0 ? 'text-brand-600' : 'text-ink-900'}`}>
-                  {delivery === 0 ? t('cart.deliveryFree') : formatPrice(delivery, lang)}
-                </dd>
+                <dd className="font-semibold text-ink-900">{formatPrice(delivery, lang)}</dd>
               </div>
               <div className="flex items-center justify-between border-t border-line pt-3">
                 <dt className="font-bold text-ink-900">{t('cart.total')}</dt>

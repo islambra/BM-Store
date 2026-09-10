@@ -6,9 +6,12 @@ import {
   getProductById,
   getProductBySlug,
   listProducts,
+  getPublishedPostsHome,
+  getPublishedPosts,
   type BannerRecord,
   type CategoryRecord,
   type ProductRecord,
+  type PostRecord,
 } from './api'
 
 const VALID_ICONS = ['spices', 'cosmetics', 'baking', 'nuts', 'legumes', 'natural', 'dried', 'oilsHoney'] as const
@@ -160,4 +163,66 @@ export async function loadProductsByIds(ids: string[]): Promise<Product[]> {
   const unique = Array.from(new Set(ids))
   const settled = await Promise.allSettled(unique.map((id) => cachedProductFetcher(id)))
   return settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+}
+
+// ---- posts ----------------------------------------------------------------
+
+export interface PostItem {
+  id: string
+  textEn?: string
+  textAr?: string
+  mediaType: 'images' | 'video'
+  images: string[]
+  video?: string | null
+  product: {
+    id: string
+    name: string
+    nameAr?: string
+    slug: string
+    image: string
+    price: number
+    oldPrice?: number
+    isSpecialOffer?: boolean
+    discount?: number
+  }
+  createdAt: string
+}
+
+export function toPost(r: PostRecord): PostItem | null {
+  if (!r.productId) return null
+  const p = r.productId
+  return {
+    id: r._id,
+    textEn: r.textEn,
+    textAr: r.textAr,
+    mediaType: r.mediaType,
+    images: r.images ?? [],
+    video: r.video,
+    product: {
+      id: p._id,
+      name: p.name,
+      nameAr: p.nameAr,
+      slug: p.slug,
+      image: p.image,
+      price: p.price,
+      oldPrice: p.oldPrice,
+      isSpecialOffer: p.isSpecialOffer,
+      discount: p.discount,
+    },
+    createdAt: r.createdAt,
+  }
+}
+
+export async function loadHomePosts(): Promise<PostItem[]> {
+  const records = await getPublishedPostsHome()
+  return records.map(toPost).filter(Boolean) as PostItem[]
+}
+
+export async function loadPostsPage(page = 1, limit = 6): Promise<{ posts: PostItem[]; total: number; pages: number }> {
+  const res = await getPublishedPosts({ page, limit })
+  return {
+    posts: res.posts.map(toPost).filter(Boolean) as PostItem[],
+    total: res.total,
+    pages: res.pages,
+  }
 }

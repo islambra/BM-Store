@@ -17,6 +17,7 @@ import marketerRoutes from './routes/marketer.routes.js'
 import marketingRoutes from './routes/marketing.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import uploadRoutes from './routes/upload.routes.js'
+import postRoutes from './routes/post.routes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -71,6 +72,7 @@ app.use('/api/marketer', marketerRoutes)
 app.use('/api/marketing', marketingRoutes)
 app.use('/api/admin/upload', uploadRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/posts', postRoutes)
 
 app.use((_req, res) => sendError(res, 'Route not found', 404))
 
