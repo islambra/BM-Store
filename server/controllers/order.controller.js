@@ -14,8 +14,35 @@ const randomRef = () => `BM-${crypto.randomBytes(3).toString('hex').toUpperCase(
 
 const isValidStatus = (s) => ORDER_STATUSES.includes(s)
 
+/**
+ * Resolves the active referral for an order. The referral must be valid at the
+ * moment the order is created. Once attributed, the order permanently belongs
+ * to the marketer, even if the referral window expires or the marketer is later
+ * suspended.
+ */
+async function resolveActiveReferral(req, referralId) {
+  if (!req.user?._id && !referralId) return null
+  const now = new Date()
+  let ref = null
+
+  if (referralId) {
+    const candidate = await Referral.findOne({ _id: referralId, active: true, expiresAt: { $gt: now } })
+      .sort({ createdAt: -1 })
+      .lean()
+    if (candidate) ref = candidate
+  }
+
+  if (!ref && req.user?._id) {
+    ref = await Referral.findOne({ customer: req.user._id, active: true, expiresAt: { $gt: now } })
+      .sort({ createdAt: -1 })
+      .lean()
+  }
+
+  return ref
+}
+
 export const createOrder = asyncHandler(async (req, res) => {
-  const { items, customer, referralId } = req.body ?? {}
+  const { items, customer, referralId: requestedReferralId } = req.body ?? {}
 
   if (!Array.isArray(items) || items.length === 0) {
     return sendError(res, 'Order must contain at least one item', 400)
@@ -77,15 +104,23 @@ export const createOrder = asyncHandler(async (req, res) => {
   const total = subtotal + shipping - totalRewardDiscount
 
   let referredBy = null
+  let marketerId = null
+  let attributedReferralId = null
+  let referralCode = null
+  let referredAt = null
   let commissionAmount = 0
-  if (referralId) {
-    const referral = await Referral.findById(referralId).lean()
-    if (referral) {
-      const profile = await MarketerProfile.findOne({ user: referral.marketer, status: 'active' }).lean()
-      if (profile) {
-        referredBy = profile._id
-        commissionAmount = Math.round(subtotal * (COMMISSION_RATE / 100) * 100) / 100
-      }
+
+  const resolvedRef = await resolveActiveReferral(req, requestedReferralId)
+
+  if (resolvedRef) {
+    const profile = await MarketerProfile.findOne({ user: resolvedRef.marketer }).lean()
+    if (profile && String(profile.user) !== String(userId)) {
+      referredBy = profile._id
+      marketerId = profile.user
+      attributedReferralId = resolvedRef._id
+      referralCode = resolvedRef.referralCode
+      referredAt = new Date()
+      commissionAmount = Math.round(subtotal * (COMMISSION_RATE / 100) * 100) / 100
     }
   }
 
@@ -111,9 +146,28 @@ export const createOrder = asyncHandler(async (req, res) => {
     total,
     status: 'pending-review',
     referredBy,
+    marketer: marketerId,
+    referralId: attributedReferralId,
+    referralCode,
+    referredAt,
     referralAttributed: Boolean(referredBy),
     commissionAmount,
   })
+
+  if (commissionAmount > 0 && marketerId) {
+    try {
+      await Commission.create({
+        marketer: marketerId,
+        order: order._id,
+        orderId: orderRef,
+        rate: COMMISSION_RATE,
+        amount: commissionAmount,
+        status: 'PENDING',
+      })
+    } catch (e) {
+      if (e.code !== 11000) throw e
+    }
+  }
 
   return sendSuccess(res, { order }, 'Order request received', 201)
 })
@@ -122,6 +176,25 @@ export const getMyOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 }).lean()
   return sendSuccess(res, { orders })
 })
+
+async function releaseCommission(order, toStatus, extraFields = {}) {
+  if (!order.commissionAmount || !order.referredBy) return false
+  const updated = await Commission.findOneAndUpdate(
+    { order: order._id, status: 'PENDING' },
+    { $set: { status: toStatus, ...extraFields } },
+    { new: true }
+  )
+  if (!updated) return false
+
+  if (toStatus === 'AVAILABLE') {
+    const profile = await MarketerProfile.findById(order.referredBy)
+    if (profile) {
+      profile.totalEarnings = Math.round((profile.totalEarnings + order.commissionAmount) * 100) / 100
+      await profile.save()
+    }
+  }
+  return true
+}
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body ?? {}
@@ -161,20 +234,12 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     }
   }
 
-  if (wasDelivered && order.commissionAmount > 0 && order.referredBy) {
-    const profile = await MarketerProfile.findById(order.referredBy)
-    if (profile) {
-      await Commission.create({
-        marketer: profile.user,
-        order: order._id,
-        orderId: order.orderRef,
-        rate: COMMISSION_RATE,
-        amount: order.commissionAmount,
-        status: 'PENDING',
-      })
-      profile.totalEarnings += order.commissionAmount
-      await profile.save()
-    }
+  if (wasDelivered) {
+    await releaseCommission(order, 'AVAILABLE', { availableAt: new Date() })
+  }
+
+  if (status === 'cancelled' || status === 'rejected') {
+    await releaseCommission(order, 'CANCELLED')
   }
 
   return sendSuccess(res, { order }, 'Order status updated')

@@ -15,7 +15,7 @@ import { Users, Search as SearchIcon, Trash2 } from 'lucide-react'
 interface AdminUser {
   _id: string
   name: string
-  email: string
+  phone?: string
   role: string
   avatar?: string | null
   createdAt: string
@@ -42,7 +42,6 @@ export default function AdminCustomersPage() {
 
   useEffect(() => {
     if (data?.users) {
-      // Filter out ADMIN users
       setAllUsers(data.users.filter((u: AdminUser) => u.role !== 'ADMIN'))
     }
   }, [data])
@@ -61,7 +60,7 @@ export default function AdminCustomersPage() {
     return allUsers.filter(
       (u: AdminUser) =>
         u.name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q)
+        u.phone?.toLowerCase().includes(q)
     )
   }, [allUsers, debouncedSearch])
 
@@ -99,9 +98,9 @@ export default function AdminCustomersPage() {
       sortable: true,
     },
     {
-      key: 'email',
-      header: t('admin.email'),
-      render: (u: AdminUser) => <span className="text-ink-500">{u.email}</span>,
+      key: 'phone',
+      header: t('admin.phone'),
+      render: (u: AdminUser) => <span className="text-ink-500">{u.phone ?? '—'}</span>,
       sortable: true,
     },
     {

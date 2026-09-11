@@ -70,7 +70,7 @@ function ProfileCard() {
             </div>
             <p className="flex items-center gap-1.5 text-sm text-ink-500">
               <Phone size={13} className="shrink-0" />
-              {user.email ? `${user.email} · ${user.phone ?? ''}` : (user.phone ?? '')}
+              <span dir="ltr">{user.phone ?? ''}</span>
             </p>
           </div>
         </div>

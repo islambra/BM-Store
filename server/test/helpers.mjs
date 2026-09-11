@@ -34,8 +34,6 @@ export async function clearCollection(name) {
   await mongoose.connection.db.collection(name).deleteMany({})
 }
 
-const uniq = (tag) => `${tag}-${Date.now()}-${Math.floor(Math.random() * 100000)}@bmstore.test`
-
 let phoneCounter = 0
 export const uniquePhone = () => {
   phoneCounter += 1
@@ -45,14 +43,14 @@ export const uniquePhone = () => {
 }
 
 export async function createUser({ name = 'Test User', role = 'USER', password = 'Secret@1234' } = {}) {
-  const email = uniq(role.toLowerCase())
+  const phone = uniquePhone()
   const user = await User.create({
     name,
-    email,
+    phone,
     role,
     passwordHash: await bcrypt.hash(password, 10),
   })
-  return { user, email, password }
+  return { user, phone, password }
 }
 
 export async function createAdmin() {
@@ -60,13 +58,13 @@ export async function createAdmin() {
 }
 
 export async function createMarketer({ name = 'Test Marketer' } = {}) {
-  const { user, email, password } = await createUser({ name, role: 'MARKETER' })
+  const { user, phone, password } = await createUser({ name, role: 'MARKETER' })
   let code = `MKT${Date.now().toString(36).toUpperCase()}`
   while (await MarketerProfile.exists({ referralCode: code })) {
     code = `MKT${Math.random().toString(36).slice(2, 8).toUpperCase()}`
   }
   const profile = await MarketerProfile.create({ user: user._id, referralCode: code, publicName: name })
-  return { user, email, password, profile }
+  return { user, phone, password, profile }
 }
 
 export async function createCategory({ slug, name, active = true, order = 0, icon = 'spices' }) {

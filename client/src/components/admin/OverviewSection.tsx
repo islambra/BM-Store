@@ -25,7 +25,7 @@ export default function OverviewSection() {
   const delivered = allOrders.filter((o) => o.status === 'delivered').length
   const revenue = allOrders.filter((o) => o.status === 'delivered').reduce((sum, o) => sum + (o.total ?? 0), 0)
   const commissionsPending = (marketers.data?.marketers ?? []).reduce(
-    (sum, m) => sum + (m.stats?.commission?.pending ?? 0),
+    (sum, m) => sum + (m.stats?.availableBalance ?? 0) + (m.stats?.pendingEarnings ?? 0),
     0
   )
 

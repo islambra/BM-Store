@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import { before, after, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
@@ -13,9 +13,9 @@ describe('hero banners (max 5 active)', () => {
   after(disconnectTest)
 
   async function adminAgent() {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
     return agent
   }
 

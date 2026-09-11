@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Phone, Lock, User, ArrowRight, ArrowLeft, Eye, EyeOff, LoaderCircle, ShieldCheck, Truck, BadgeCheck } from 'lucide-react'
+import { Phone, Lock, User, ArrowRight, ArrowLeft, Eye, EyeOff, LoaderCircle, ShieldCheck, Truck, BadgeCheck, X } from 'lucide-react'
 import logo from '../assets/logo.jpg'
 import { useLanguage } from '../context/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { getErrorMessage } from '../services/api'
-import { Alert, Field, Input } from '../components/common/FormControls'
+import { localizeError } from '../utils/errors'
+import { getStoredReferral } from '../services/referral'
+import { Field, Input } from '../components/common/FormControls'
 
 export type AuthMode = 'login' | 'register'
 
@@ -27,6 +28,12 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
 
   const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
 
+  useEffect(() => {
+    if (error) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [error])
+
   const features = [
     { icon: ShieldCheck, title: t('trust.secure') },
     { icon: Truck, title: t('trust.delivery') },
@@ -47,13 +54,13 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
     setBusy(true)
     try {
       if (mode === 'register') {
-        await register(name, phone, password)
+        await register(name, phone, password, { referralId: getStoredReferral()?.id })
       } else {
         await login(phone, password)
       }
       navigate(from, { replace: true })
     } catch (err) {
-      setError(getErrorMessage(err))
+      setError(localizeError(err, t))
     } finally {
       setBusy(false)
     }
@@ -72,6 +79,22 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <div className="container-app flex flex-col items-center justify-center py-8 lg:py-12">
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 flex w-full max-w-3xl items-start justify-between gap-3 rounded-2xl border border-danger-100 bg-danger-50 p-4 text-sm font-medium text-danger-700"
+        >
+          <span className="mt-0.5">{error}</span>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            aria-label={t('common.close')}
+            className="shrink-0 rounded-lg p-1 text-danger-500 transition-colors hover:bg-danger-100"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
       <Link to="/" className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs font-bold text-ink-600 shadow-sm transition-colors hover:border-brand-300 hover:text-brand-700">
         <BackIcon size={14} />
         {t('common.backToStore')}
@@ -124,12 +147,6 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
           <p className="mt-1.5 text-sm text-ink-500">
             {mode === 'register' ? t('auth.createSubtitle') : t('auth.demo')}
           </p>
-
-          {error && (
-            <Alert tone="danger" className="mt-4">
-              {error}
-            </Alert>
-          )}
 
           <form onSubmit={submit} className="mt-5 space-y-3.5">
             {mode === 'register' && (

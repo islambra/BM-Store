@@ -6,7 +6,6 @@ import app from '../app.js'
 import { connectTest, disconnectTest, uniquePhone } from './helpers.mjs'
 
 const phone = uniquePhone
-const email = () => `auth-${Date.now()}-${Math.floor(Math.random() * 99999)}@bmstore.test`
 
 describe('authentication', () => {
   before(connectTest)
@@ -77,6 +76,39 @@ describe('authentication', () => {
     assert.equal(res.status, 201)
     assert.equal(res.body.data.user.role, 'MARKETER')
     assert.ok(res.body.data.marketer.referralCode)
+  })
+
+  it('re-registering an existing marketer phone logs them back in instead of erroring', async () => {
+    const number = phone()
+    const first = await request(app).post('/api/auth/register-marketer').send({
+      name: 'Retry Marketer',
+      phone: number,
+      password: 'Secret@1234',
+      ccp: '00123456789',
+    })
+    assert.equal(first.status, 201)
+
+    const retry = await request(app).post('/api/auth/register-marketer').send({
+      name: 'Retry Marketer',
+      phone: number,
+      password: 'Secret@1234',
+    })
+    assert.equal(retry.status, 200)
+    assert.equal(retry.body.data.user.role, 'MARKETER')
+    assert.ok(retry.body.data.marketer.referralCode)
+    assert.ok((retry.headers['set-cookie'] || []).some((c) => c.startsWith('bm_access=')))
+  })
+
+  it('tells a customer (non-marketer) that the phone is already registered', async () => {
+    const number = phone()
+    await request(app).post('/api/auth/register').send({ name: 'Customer', phone: number, password: 'Secret@1234' })
+    const res = await request(app).post('/api/auth/register-marketer').send({
+      name: 'Would Be Marketer',
+      phone: number,
+      password: 'Secret@1234',
+    })
+    assert.equal(res.status, 409)
+    assert.match(res.body.message, /phone number already exists/i)
   })
 
   it('rejects /me without a session', async () => {

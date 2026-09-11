@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Eye, Trash2 } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -51,13 +52,13 @@ export default function MarketersSection() {
   return (
     <>
       {notice && <ErrorNote message={notice} />}
-      <Table headers={[t('admin.name'), t('admin.email'), t('admin.referralCode'), t('admin.visits'), t('admin.marketingStatus')]}>
+      <Table headers={[t('admin.name'), t('admin.phone'), t('admin.referralCode'), t('admin.visits'), t('admin.marketingStatus')]}>
         {marketers.map((m) => (
           <tr key={m.id} className="hover:bg-canvas">
             <td className="px-4 py-3">
               <p className="font-semibold text-ink-900">{m.profile?.publicName ?? m.name}</p>
             </td>
-            <td className="px-4 py-3 text-ink-500">{m.email}</td>
+            <td className="px-4 py-3 text-ink-500" dir="ltr">{m.phone ?? '—'}</td>
             <td className="px-4 py-3 font-mono text-xs uppercase text-brand-700">{m.profile?.referralCode ?? '—'}</td>
             <td className="px-4 py-3 text-ink-500">{m.stats?.visits ?? 0}</td>
             <td className="px-4 py-3">
@@ -71,6 +72,9 @@ export default function MarketersSection() {
             </td>
             <td className="px-4 py-3 text-end">
               <div className="flex items-center justify-end gap-2">
+                <Link to={`/admin/marketers/${m.id}`} className="icon-btn text-ink-400 hover:bg-brand-50 hover:text-brand-600" aria-label={t('admin.viewDetails')}>
+                  <Eye size={17} />
+                </Link>
                 {m.profile && (
                   <button
                     type="button"

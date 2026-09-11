@@ -26,6 +26,7 @@ import NotFoundPage from './pages/NotFoundPage'
 import MarketerPage from './pages/MarketerPage'
 import MarketerAuthPage from './pages/MarketerAuthPage'
 import AdminPage from './pages/AdminPage'
+import AdminMarketerDetailsPage from './pages/admin/AdminMarketerDetailsPage'
 
 export default function App() {
   return (
@@ -83,6 +84,14 @@ export default function App() {
                     element={
                       <RequireRole roles={['ADMIN']}>
                         <AdminPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/admin/marketers/:id"
+                    element={
+                      <RequireRole roles={['ADMIN']}>
+                        <AdminMarketerDetailsPage />
                       </RequireRole>
                     }
                   />

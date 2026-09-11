@@ -5,7 +5,7 @@ import { uploadVideoFile } from '../controllers/video.controller.js'
 
 const router = Router()
 
-router.post('/', requireAuth, requireRole('ADMIN'), uploadImage)
+router.post('/', requireAuth, requireRole('ADMIN', 'MARKETER'), uploadImage)
 router.post('/video', requireAuth, requireRole('ADMIN'), uploadVideoFile)
 
 export default router

@@ -3,8 +3,9 @@
 Base path: `/api`. Every response uses `{ success: boolean, data?, message? }`.
 
 Roles: `USER`, `MARKETER`, `ADMIN`. Marketers are individuals who share a referral
-link (`?ref=CODE`) and earn a 10% commission on confirmed orders attributed to
-them. All catalog content (products, categories, banners) is managed by admin —
+link (`?ref=CODE`), earn a 10% commission on the product subtotal of orders
+attributed to them, and get paid out through an admin-recorded payout workflow.
+All catalog content (products, categories, banners) is managed by admin —
 marketers have no store or product CRUD.
 
 ## Health
@@ -13,21 +14,22 @@ marketers have no store or product CRUD.
 | ------ | ---------- | ---- | -------------- |
 | GET    | `/health`  | –    | Liveness probe |
 
-## Auth (rate-limited: 30 req / 15 min)
+## Auth (rate-limited: 30 req / 15 min, enforced in production only)
 
 | Method | Path                  | Auth          | Body / note                          | Returns |
 | ------ | --------------------- | ------------- | ------------------------------------ | ------- |
-| POST   | `/auth/register`      | –             | `{name, email, password, phone?}`    | `{user}` (201) |
-| POST   | `/auth/login`         | –             | `{email, password}`                  | `{user}` + cookies |
+| POST   | `/auth/register`      | –             | `{name, phone, password, referralId?, email?}`; `referralId` links the new account to an active referral (marketer attribution) | `{user}` (201) |
+| POST   | `/auth/login`         | –             | `{phone, password}`                  | `{user}` + cookies |
 | POST   | `/auth/logout`        | cookie        | –                                    | – |
 | POST   | `/auth/refresh`       | refresh cookie| rotates access + refresh token pair  | `{user}` |
 | GET    | `/auth/me`            | access cookie | –                                    | `{user}` |
 | PATCH  | `/auth/me`            | access cookie | `{name?, email?, phone?, avatar?}`    | `{user}` (email conflict → 409) |
 | PATCH  | `/auth/password`      | access cookie | `{currentPassword, newPassword}` (min 8 chars) | – |
 | POST   | `/auth/become-marketer` | access cookie (USER) | makes the user a MARKETER and issues their referral code | `{user, marketer}` (201, or 200 if already marketer) |
+| POST   | `/auth/register-marketer` | –          | `{name, phone, password, email?, bio?, avatar?, ccp?, ccpKey?, baridiMob?}` (own account) | `{user, marketer}` (201; 200 if the phone already belongs to a MARKETER — logs them back in) |
 
 `user` is always `{id, name, email, role, avatar, phone, createdAt}`.
-`marketer` is `{referralCode, referralLink, publicName, status}`.
+`marketer` is `{referralCode, referralLink, publicName, status, profileId}`.
 
 ## Public catalog
 
@@ -88,28 +90,47 @@ special offers (requires `oldPrice > price > 0`).
 
 The server recomputes all prices/totals and stores product price snapshots on
 order items; client-supplied prices are ignored. A flat `DELIVERY_FEE` is added
-to every order (from `config/shop.js`).
-If `referralId` is given, the order is attributed to the owning marketer and a
-10% commission is stored until the order is confirmed. Reward discounts apply
-per line only to `isRewardEligible` products for logged-in users (see
-`models/Reward.js`).
+to every order (from `config/shop.js`). Reward discounts apply per line only to
+`isRewardEligible` products for logged-in users (see `models/Reward.js`).
+
+**Referral attribution.** At order creation the server resolves the referral to
+attribute: `referralId` in the body wins, otherwise a valid active referral bound
+to the logged-in customer is used. The referral must be `active` and not expired
+(7 days). Orders store the owning marketer, referral and code permanently — once
+an order is created with a valid referral it belongs to that marketer even if the
+referral later expires. A `Commission` is created at `PENDING` (10% of the product
+subtotal, no delivery fee). When the admin marks the order `delivered` the
+commission becomes `AVAILABLE` (and the marketer's lifetime total earnings is
+incremented); when the order is `rejected` or `cancelled` while still pending, the
+commission becomes `CANCELLED`.
 
 ## Marketer (auth + role MARKETER)
 
-| Method | Path                 | Note                                                 | Returns |
-| ------ | -------------------- | ---------------------------------------------------- | ------- |
-| GET    | `/marketer/me`       | profile + lifetime stats, referral link, base URL    | `{profile, stats, baseUrl}` |
-| PATCH  | `/marketer/me`       | `{publicName?, bio?, avatar?, payoutDetails:{ccp?, baridiMob?}}` | `{profile}` (`updated` doc) |
-| GET    | `/marketer/earnings` | commissions sorted newest-first, order populated (orderRef, total) | `{commissions}` |
+| Method | Path                    | Note                                                         | Returns |
+| ------ | ----------------------- | ------------------------------------------------------------ | ------- |
+| GET    | `/marketer/dashboard`   | profile + stats + referral link + recent orders & payouts    | `{profile, stats, referralLink, baseUrl, recentOrders, recentPayouts}` |
+| GET    | `/marketer/me`          | profile + lifetime stats, referral link, base URL            | `{profile, stats, baseUrl}` |
+| PATCH  | `/marketer/me`          | `{name?, email?, phone?, publicName?, bio?, avatar?, payoutDetails:{ccp?, ccpKey?, baridiMob?}}` | `{profile}` (`updated` doc) |
+| GET    | `/marketer/orders`      | `?page&limit&status`; each order includes its commission snapshot | `{orders, page, limit, total, pages}` |
+| GET    | `/marketer/earnings`    | commissions (order populated) + bucketed totals              | `{commissions, buckets}` |
+| GET    | `/marketer/payments`    | payouts for this marketer                                    | `{payouts}` |
+| POST   | `/marketer/payments/:id/confirm-received` | owner (or admin) confirms a `sent` payout as received | `{payout}` |
+| POST   | `/marketer/payments/:id/report-not-received` | owner (or admin) flags a `sent` payout as `disputed` | `{payout}` |
 
-`profile` is `{id, publicName, bio, avatar, referralCode, referralLink, status, payoutDetails, totalEarnings, createdAt}`.
-`stats` is `{visits, attributedOrders, commission:{pending, approved, paid, cancelled, total}}`.
+`profile` is `{id, publicName, bio, avatar, referralCode, referralLink, status, payoutDetails, totalEarnings, createdAt, user:{id, name, email, phone, avatar}}`.
+`stats` is `{visits, customers, orders, deliveredOrders, pendingEarnings, availableBalance, payoutRequested, paymentSent, totalPaid, disputed, cancelled, totalEarnings}`. Money is integer DZD, computed server-side only.
 
 ## Referral tracking (public)
 
 | Method | Path               | Note                                                        | Returns |
 | ------ | ------------------ | ----------------------------------------------------------- | ------- |
-| POST   | `/marketing/track` | `{referralCode, productId?, path?}`; 404 on unknown/suspended code or product | `{referralId}` (201) |
+| POST   | `/marketing/track` | `{referralCode, visitorId?, productId?, path?}`; `optionalAuth`; 404 on unknown/suspended code or missing product; 400 on self-referral | `{referralId, expiresAt}` (201) |
+
+The tracker stamps an anonymous `visitor` identity (from `visitorId`, else the
+`bm_v` cookie, else a generated id returned via cookie). A referral is valid for
+7 days. Last valid referral wins for the same visitor/customer, and an existing
+active referral for the same marketer + identity is returned instead of creating
+a duplicate (idempotent).
 
 ## Rewards
 
@@ -126,7 +147,12 @@ see `models/Reward.js` `getRewardDiscount`.)
 | Method | Path                       | Note                                        | Returns |
 | ------ | -------------------------- | ------------------------------------------- | ------- |
 | GET    | `/admin/users`             | `?role&q&page&limit`; each user includes `orderCount` and `totalSpent` | `{users, page, limit, total, pages}` |
-| GET    | `/admin/marketers`         | marketers + profile + visits + commission   | `{marketers}` |
+| GET    | `/admin/marketers`         | marketers + profile + computed stats (incl. `availableBalance`, phone) | `{marketers}` |
+| GET    | `/admin/marketers/:id`     | profile + stats + `commissionsCount` + payouts + referral link | `{profile, stats, commissionsCount, payouts, referralLink}` |
+| GET    | `/admin/marketers/:id/orders`      | `?page&limit&status`; referred orders w/ commission | `{orders, page, limit, total, pages}` |
+| GET    | `/admin/marketers/:id/commissions` | commissions (order populated)             | `{commissions}` |
+| GET    | `/admin/marketers/:id/referrals`   | referral visits for the marketer          | `{referrals}` |
+| GET    | `/admin/marketers/:id/payouts`     | payouts for the marketer                  | `{payouts}` |
 | PATCH  | `/admin/marketers/:id/status` | `{status: active\|suspended}`            | `{marketing}` |
 | DELETE | `/admin/marketers/:id`     | deletes user + profile + referrals + commissions + payouts | `{id}` |
 | GET    | `/admin/orders`            |                                             | `{orders}` |
@@ -144,14 +170,15 @@ see `models/Reward.js` `getRewardDiscount`.)
 | POST   | `/admin/banners`           | requires only `image` (plus optional `link`, `order`, `active`); max 5 active | `{banner}` (201) |
 | PATCH  | `/admin/banners/:id`       | `{active:true}` blocked when at max         | `{banner}` |
 | DELETE | `/admin/banners/:id`       |                                             | – |
-| POST   | `/admin/payouts`           | `{marketerId, amount, period, method(CCP\|BaridiMob), reference?}` | `{payout}` (201) |
-| GET    | `/admin/payouts`           | `?marketer&period`                          | `{payouts}` |
+| POST   | `/admin/payouts`           | `{marketerId, amount, method(CCP\|BaridiMob), reference?, notes?}`; amount ≤ marketer's `availableBalance`, paid FIFO over `AVAILABLE` commissions, them → `PAYMENT_SENT` | `{payout}` (201) |
+| GET    | `/admin/payouts`           | `?marketer&status` (sent\|received\|disputed\|cancelled); payouts populated with marketer | `{payouts}` |
+| PATCH  | `/admin/payouts/:id`       | `{action: 'cancel'}` — allowed from `sent`/`disputed`; commissions restored to `AVAILABLE` | `{payout}` |
 | GET    | `/admin/posts`             | all posts (draft + published), product populated | `{posts}` |
 | POST   | `/admin/posts`             | `{textEn?, textAr?, mediaType, images?, video?, productId, status?}`; product required & validated, images capped at 5, video posts clear images | `{post}` (201) |
 | PATCH  | `/admin/posts/:id`         | partial update; same validation as create   | `{post}` |
 | DELETE | `/admin/posts/:id`         |                                             | – |
 | PATCH  | `/admin/posts/:id/publish` | toggles `draft` ⇄ `published`               | `{post}` |
-| POST   | `/admin/upload`            | image upload (gridfs), max 5 MB              | `{url}` (201) |
+| POST   | `/admin/upload`            | image upload (gridfs), max 5 MB. Auth: ADMIN or MARKETER (marketers upload their avatar) | `{url}` (201) |
 | POST   | `/admin/upload/video`      | video upload (gridfs), max 50 MB (mp4/webm/ogg/mov) | `{url}` (201) |
 
 Error statuses: `400` validation, `401` unauthenticated, `403` wrong role /

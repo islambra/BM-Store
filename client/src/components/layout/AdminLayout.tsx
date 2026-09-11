@@ -1,27 +1,9 @@
-import { useEffect } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Store } from 'lucide-react'
 import Logo from '../common/Logo'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import { useLanguage } from '../../context/LanguageContext'
-import { trackReferral } from '../../services/api'
-
-function ReferralTracker() {
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('ref')
-    if (code && !sessionStorage.getItem('bm-ref-tracked')) {
-      sessionStorage.setItem('bm-ref-tracked', '1')
-      void trackReferral({ referralCode: code, path: window.location.pathname })
-        .then(({ referralId }) => {
-          if (referralId) sessionStorage.setItem('bm-referral-id', referralId)
-        })
-        .catch(() => {
-          /* tracking is best-effort */
-        })
-    }
-  }, [])
-  return null
-}
+import ReferralTracker from '../referral/ReferralTracker'
 
 export default function AdminLayout() {
   const { t, lang } = useLanguage()

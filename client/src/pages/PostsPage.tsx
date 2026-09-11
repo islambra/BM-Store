@@ -32,22 +32,24 @@ export default function PostsPage() {
     <div className="container-app py-6 sm:py-10" role="feed" aria-label={t('posts.title')}>
       {/* Loading */}
       {loading && currentPosts.length === 0 ? (
-        <div className="mx-auto w-full max-w-2xl space-y-5">
+        <div className="mx-auto w-full max-w-2xl space-y-5 lg:max-w-4xl">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="animate-pulse overflow-hidden rounded-2xl border border-line bg-surface">
-              <div className="flex items-center gap-3 px-5 py-4">
-                <div className="h-10 w-10 rounded-full bg-ink-900/5" />
+            <div key={i} className="animate-pulse overflow-hidden rounded-2xl border border-line bg-surface p-4 lg:p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-full bg-ink-900/5" />
                 <div className="flex-1 space-y-2">
                   <div className="h-3 w-1/4 rounded bg-ink-900/5" />
                   <div className="h-2.5 w-1/5 rounded bg-ink-900/5" />
                 </div>
               </div>
-              <div className="aspect-video bg-ink-900/5" />
-              <div className="space-y-3 p-5">
-                <div className="h-3 w-5/6 rounded bg-ink-900/5" />
-                <div className="h-3 w-3/4 rounded bg-ink-900/5" />
-                <div className="h-14 rounded-xl bg-ink-900/5" />
-                <div className="h-10 rounded-xl bg-ink-900/5" />
+              <div className="mt-3 flex flex-col gap-4 lg:flex-row">
+                <div className="h-60 rounded-xl bg-ink-900/5 sm:h-72 lg:h-[272px] lg:w-[42%] lg:shrink-0" />
+                <div className="flex-1 space-y-3">
+                  <div className="h-3 w-5/6 rounded bg-ink-900/5" />
+                  <div className="h-3 w-3/4 rounded bg-ink-900/5" />
+                  <div className="h-16 rounded-xl bg-ink-900/5" />
+                  <div className="h-10 rounded-xl bg-ink-900/5" />
+                </div>
               </div>
             </div>
           ))}
@@ -60,8 +62,8 @@ export default function PostsPage() {
         <EmptyState icon={MessageSquare} title={t('posts.empty')} />
       ) : (
         <>
-          {/* Feed */}
-          <div className="mx-auto w-full max-w-2xl space-y-6">
+          {/* Feed — centered, compact cards (wider on desktop for horizontal layout) */}
+          <div className="mx-auto w-full max-w-2xl space-y-5 lg:max-w-4xl lg:space-y-6">
             {currentPosts.map((post) => (
               <PostCard key={post.id} post={post} />
             ))}

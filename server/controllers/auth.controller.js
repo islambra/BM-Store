@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import User from '../models/User.js'
 import MarketerProfile from '../models/MarketerProfile.js'
+import Referral from '../models/Referral.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 import {
   setAuthCookies,
@@ -18,7 +19,6 @@ import { generateReferralCode, referralLink } from '../utils/referral.js'
 const safeUser = (u) => ({
   id: u._id.toString(),
   name: u.name,
-  email: u.email,
   role: u.role,
   avatar: u.avatar || null,
   phone: u.phone || null,
@@ -27,10 +27,30 @@ const safeUser = (u) => ({
 
 const normalizePhone = (value) => String(value ?? '').trim().replace(/[^+\d\s-]/g, '').replace(/[\s-]+/g, '')
 
-export const register = asyncHandler(async (req, res) => {
-  const { name, email, password, phone } = req.body
+async function linkReferralToUser(referralId, userId) {
+  if (!referralId) return null
+  const ref = await Referral.findById(referralId)
+  if (!ref || !ref.active) return null
+  if (!ref.expiresAt || ref.expiresAt.getTime() <= Date.now()) return null
 
-  if (!name?.trim() || !phone || !password) {
+  ref.customer = userId
+  ref.converted = true
+  ref.convertedAt = new Date()
+  await ref.save()
+
+  if (ref.visitor) {
+    await Referral.updateMany(
+      { visitor: ref.visitor, active: true, expiresAt: { $gt: new Date() }, _id: { $ne: ref._id } },
+      { $set: { active: false } }
+    )
+  }
+  return ref
+}
+
+export const register = asyncHandler(async (req, res) => {
+  const { name, phone, password, referralId } = req.body
+
+  if (!name?.trim() || !phone?.trim() || !password) {
     return sendError(res, 'Name, phone number and password are required', 400)
   }
   if (typeof password !== 'string' || password.length < 8) {
@@ -38,37 +58,30 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   const phoneKey = normalizePhone(phone)
+  if (!phoneKey) return sendError(res, 'Valid phone number is required', 400)
   const clash = await User.findOne({ phone: phoneKey }).lean()
   if (clash) return sendError(res, 'An account with this phone number already exists', 409)
-
-  let emailClean
-  if (email?.trim()) {
-    emailClean = String(email).toLowerCase().trim()
-    const emailClash = await User.findOne({ email: emailClean }).lean()
-    if (emailClash) return sendError(res, 'An account with this email already exists', 409)
-  }
 
   const passwordHash = await bcrypt.hash(password, 10)
   const user = await User.create({
     name: name.trim(),
     phone: phoneKey,
-    email: emailClean || undefined,
     passwordHash,
     role: 'USER',
   })
 
   setAuthCookies(res, user)
+  await linkReferralToUser(referralId, user._id)
   return sendSuccess(res, { user: safeUser(user) }, 'Account created', 201)
 })
 
 export const login = asyncHandler(async (req, res) => {
-  const identifier = String(req.body.phone ?? req.body.email ?? req.body.identifier ?? '').trim()
+  const identifier = String(req.body.phone ?? req.body.identifier ?? '').trim()
   const { password } = req.body
   if (!identifier || !password) return sendError(res, 'Phone number and password are required', 400)
 
-  const key = identifier.toLowerCase()
-  const query = { $or: [{ phone: normalizePhone(identifier) }, { email: key }] }
-  const user = await User.findOne(query).select('+passwordHash').lean(true)
+  const phoneKey = normalizePhone(identifier)
+  const user = await User.findOne({ phone: phoneKey }).select('+passwordHash').lean(true)
   if (!user || !user.passwordHash) return sendError(res, 'Invalid phone or password', 401)
 
   const ok = await bcrypt.compare(password, user.passwordHash)
@@ -112,17 +125,16 @@ export const updateMe = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id)
   if (!user) return sendError(res, 'Account not found', 401)
 
-  const { name, email, phone, avatar } = req.body ?? {}
+  const { name, phone, avatar } = req.body ?? {}
   if (name !== undefined) user.name = String(name).trim()
-  if (phone !== undefined) user.phone = String(phone).trim() || undefined
-  if (avatar !== undefined) user.avatar = String(avatar).trim() || undefined
-  if (email !== undefined) {
-    const nextEmail = String(email).toLowerCase().trim()
-    if (!nextEmail) return sendError(res, 'Email is required', 400)
-    const clash = await User.findOne({ email: nextEmail, _id: { $ne: user._id } }).lean()
-    if (clash) return sendError(res, 'An account with this email already exists', 409)
-    user.email = nextEmail
+  if (phone !== undefined) {
+    const phoneKey = normalizePhone(phone)
+    if (!phoneKey) return sendError(res, 'Valid phone number is required', 400)
+    const clash = await User.findOne({ phone: phoneKey, _id: { $ne: user._id } }).lean()
+    if (clash) return sendError(res, 'An account with this phone number already exists', 409)
+    user.phone = phoneKey
   }
+  if (avatar !== undefined) user.avatar = String(avatar).trim() || undefined
 
   await user.save()
   return sendSuccess(res, { user: safeUser(user) }, 'Profile updated')
@@ -198,9 +210,9 @@ export const becomeMarketer = asyncHandler(async (req, res) => {
 })
 
 export const registerMarketer = asyncHandler(async (req, res) => {
-  const { name, phone, password, baridiMob, ccp, ccpKey } = req.body ?? {}
+  const { name, phone, password, bio, avatar, baridiMob, ccp, ccpKey } = req.body ?? {}
 
-  if (!name?.trim() || !phone || !password) {
+  if (!name?.trim() || !phone?.trim() || !password) {
     return sendError(res, 'Full name, phone number and password are required', 400)
   }
   if (typeof password !== 'string' || password.length < 8) {
@@ -208,11 +220,55 @@ export const registerMarketer = asyncHandler(async (req, res) => {
   }
 
   const phoneKey = normalizePhone(phone)
-  const clash = await User.findOne({ phone: phoneKey }).lean()
-  if (clash) return sendError(res, 'An account with this phone number already exists', 409)
+  if (!phoneKey) {
+    return sendError(res, 'Valid phone number is required', 400)
+  }
+
+  const existing = await User.findOne({ phone: phoneKey }).lean()
+  if (existing) {
+    if (existing.role === 'MARKETER') {
+      let profile = await MarketerProfile.findOne({ user: existing._id }).lean()
+      if (!profile) {
+        let code = generateReferralCode()
+        while (await MarketerProfile.exists({ referralCode: code })) code = generateReferralCode()
+        profile = await MarketerProfile.create({
+          user: existing._id,
+          publicName: existing.name,
+          referralCode: code,
+          avatar: String(avatar ?? '').trim() || undefined,
+          bio: String(bio ?? '').trim() || undefined,
+          payoutDetails: {
+            ccp: String(ccp ?? '').trim() || undefined,
+            baridiMob: String(baridiMob ?? '').trim() || undefined,
+            ccpKey: String(ccpKey ?? '').trim() || undefined,
+          },
+        })
+      }
+      setAuthCookies(res, existing)
+      return sendSuccess(
+        res,
+        {
+          user: safeUser(existing),
+          marketer: {
+            referralCode: profile.referralCode,
+            referralLink: referralLink(profile.referralCode),
+            publicName: profile.publicName,
+            status: profile.status,
+          },
+        },
+        'Welcome back to the marketer program'
+      )
+    }
+    return sendError(res, 'An account with this phone number already exists', 409)
+  }
 
   const passwordHash = await bcrypt.hash(password, 10)
-  const user = await User.create({ name: name.trim(), phone: phoneKey, passwordHash, role: 'MARKETER' })
+  const user = await User.create({
+    name: name.trim(),
+    phone: phoneKey,
+    passwordHash,
+    role: 'MARKETER',
+  })
 
   let code = generateReferralCode()
   while (await MarketerProfile.exists({ referralCode: code })) code = generateReferralCode()
@@ -221,6 +277,8 @@ export const registerMarketer = asyncHandler(async (req, res) => {
     user: user._id,
     publicName: user.name,
     referralCode: code,
+    avatar: String(avatar ?? '').trim() || undefined,
+    bio: String(bio ?? '').trim() || undefined,
     payoutDetails: {
       ccp: String(ccp ?? '').trim() || undefined,
       baridiMob: String(baridiMob ?? '').trim() || undefined,

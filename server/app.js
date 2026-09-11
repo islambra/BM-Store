@@ -80,7 +80,14 @@ app.use((_req, res) => sendError(res, 'Route not found', 404))
 
 app.use((err, _req, res, _next) => {
   if (err?.code === 11000) {
-    return sendError(res, 'A record with this value already exists', 409)
+    const field = Object.keys(err?.keyPattern ?? {})[0]
+    const message =
+      field === 'phone'
+        ? 'An account with this phone number already exists'
+        : field === 'referralCode'
+          ? 'That referral code is already in use'
+          : 'A record with this value already exists'
+    return sendError(res, message, 409)
   }
   console.error('[Server error]', err.stack ?? err)
   res.status(err.statusCode || 500).json({

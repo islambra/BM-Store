@@ -14,34 +14,13 @@ import ConfirmDialog from '../../components/admin/ConfirmDialog'
 import AdminDashboardLayout from '../../components/admin/AdminDashboardLayout'
 import { Users, Search as SearchIcon } from 'lucide-react'
 
-interface AdminMarketer {
-  id: string
-  name: string
-  email: string
-  avatar: string | null
-  createdAt: string
-  profile: {
-    _id: string
-    user: string
-    referralCode: string
-    status: string
-    publicName: string
-    totalEarnings: number
-    payoutDetails: { ccp?: string; baridiMob?: string }
-  } | null
-  stats: {
-    visits: number
-    commission: { pending?: number; approved?: number; paid?: number; cancelled?: number }
-  }
-}
-
 export default function AdminMarketersPage() {
   const { t, lang } = useLanguage()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [allMarketers, setAllMarketers] = useState<AdminMarketer[]>([])
-  const [deleting, setDeleting] = useState<AdminMarketer | null>(null)
+  const [allMarketers, setAllMarketers] = useState<api.AdminMarketer[]>([])
+  const [deleting, setDeleting] = useState<api.AdminMarketer | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteNotice, setDeleteNotice] = useState('')
 
@@ -66,12 +45,12 @@ export default function AdminMarketersPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const filteredMarketers = allMarketers.filter((m: AdminMarketer) => {
+  const filteredMarketers = allMarketers.filter((m: api.AdminMarketer) => {
     if (!debouncedSearch) return true
     const q = debouncedSearch.toLowerCase()
     return (
       m.name.toLowerCase().includes(q) ||
-      m.email.toLowerCase().includes(q) ||
+      m.phone?.toLowerCase().includes(q) ||
       m.profile?.referralCode?.toLowerCase().includes(q)
     )
   })
@@ -79,17 +58,11 @@ export default function AdminMarketersPage() {
   const paginatedMarketers = filteredMarketers.slice((page - 1) * 10, page * 10)
   const totalPagesFiltered = Math.ceil(filteredMarketers.length / 10)
 
-  const availableBalance = (m: AdminMarketer) => {
-    const c = m.stats?.commission || {}
-    return (c.pending || 0) + (c.approved || 0)
-  }
+  const availableBalance = (m: api.AdminMarketer) => m.stats?.availableBalance ?? 0
 
-  const paidAmount = (m: AdminMarketer) => {
-    const c = m.stats?.commission || {}
-    return c.paid || 0
-  }
+  const paidAmount = (m: api.AdminMarketer) => m.stats?.totalPaid ?? 0
 
-  const columns = useMemo<Column<AdminMarketer>[]>(() => [
+  const columns = useMemo<Column<api.AdminMarketer>[]>(() => [
     {
       key: 'avatar',
       header: '',
@@ -116,9 +89,9 @@ export default function AdminMarketersPage() {
       sortable: true,
     },
     {
-      key: 'email',
-      header: t('admin.email'),
-      render: (m) => <span className="text-ink-500">{m.email}</span>,
+      key: 'phone',
+      header: t('admin.phone'),
+      render: (m) => <span className="text-ink-500">{m.phone ?? '—'}</span>,
       sortable: true,
     },
     {
@@ -143,9 +116,7 @@ export default function AdminMarketersPage() {
       key: 'referralOrders',
       header: t('admin.referralOrders'),
       render: (m) => {
-        const c = m.stats?.commission || {}
-        const total = (c.pending || 0) + (c.approved || 0) + (c.paid || 0) + (c.cancelled || 0)
-        return <span className="font-medium text-ink-900">{total}</span>
+        return <span className="font-medium text-ink-900">{m.stats?.orders ?? 0}</span>
       },
       className: 'text-center',
       headerClassName: 'text-center',
@@ -154,8 +125,7 @@ export default function AdminMarketersPage() {
       key: 'deliveredOrders',
       header: t('admin.deliveredOrders'),
       render: (m) => {
-        const c = m.stats?.commission || {}
-        return <span className="font-medium text-ink-900">{c.approved || 0}</span>
+        return <span className="font-medium text-ink-900">{m.stats?.deliveredOrders ?? 0}</span>
       },
       className: 'text-center',
       headerClassName: 'text-center',
@@ -210,7 +180,6 @@ export default function AdminMarketersPage() {
             <button
               type="button"
               onClick={() => {
-                // TODO: navigate to marketer details
               }}
               className="icon-btn text-ink-400 hover:bg-ink-900/5 hover:text-ink-600"
               aria-label={t('admin.viewDetails')}

@@ -149,3 +149,66 @@ cd server
 npm test             # node --test — 51 tests (48+50 pass over two runs,
                      # 3 then 1 network-cancelled, 0 code failures)
 ```
+
+---
+
+## 4. Marketer Program (second phase — shipped)
+
+> Date: 2026-09-10. Backend fully verified (91/91 server tests); client built
+> and unit-tested (5/5). See `docs/API.md` for the updated endpoints.
+
+### Backend
+- **Referral model extended.** `Referral` now records an anonymous `visitor`,
+  `active` and `expiresAt` (7-day validity, `REFERRAL_VALID_MS`). Ties a
+  referral to a visitor and/or a verified customer.
+- **Attribution rules (tested).**
+  - A referral must be `active` and unexpired at order creation to attribute.
+  - Last valid referral wins for the same visitor/customer; one active referral
+    per marketer+identity is enforced (duplicate visits return the same id).
+  - Once an order is created with a valid referral, attribution is permanent —
+    later expiry never strips it.
+  - Suspending a marketer blocks new attribution but never takes their history.
+  - Self-referral is rejected (400).
+  - Referrals survive product visits (`productId`) and general visits (`/`).
+- **Commission lifecycle (tested).** Created `PENDING` at order creation (10%
+  of the product subtotal only), `AVAILABLE` when the order is marked delivered
+  (increments the marketer's lifetime `totalEarnings`), `CANCELLED` if the order
+  is cancelled/rejected while pending. Unique sparse index on `{order}` prevents
+  double-crediting; repeated delivery attempts are idempotent.
+- **Payout workflow (tested).** Admin records a payout against the marketer's
+  `availableBalance` (FIFO over `AVAILABLE` commissions, which become
+  `PAYMENT_SENT`). Marketer confirms receipt → `RECEIVED`; marketer can dispute →
+  `DISPUTED`; admin can cancel a `sent`/`disputed` payout, restoring the
+  commissions to `AVAILABLE`. Ownership checks prevent cross-marketer actions.
+- **New backend endpoints.** `/marketing/track` (now `optionalAuth` + visitor
+  cookie `bm_v` + idempotent), `/marketer/dashboard`, `/marketer/orders`,
+  `/marketer/earnings`, `/marketer/payments`,
+  `/marketer/payments/:id/confirm-received` + `report-not-received`,
+  `/admin/marketers/:id` (+ `/orders`, `/commissions`, `/referrals`, `/payouts`),
+  `PATCH /admin/payouts/:id`, `POST /admin/uploads` extended to MARKETER
+  (avatar). `register` accepts `referralId`; `register-marketer` accepts
+  `email/bio/avatar`. Rate limiting now applies in production only (tests).
+
+### Client
+- **Marketer dashboard** at `/marketer` (sidebar desktop + pills mobile) with
+  Overview (stats + balances + recent orders/payouts), Referral Links (general
+  link + per-product link generator with search), Orders (paginated, with
+  commission status), Earnings (bucketed totals + commission log), Payments
+  (confirm/dispute with dialogs) and Profile (name/email/phone/avatar/bio +
+  CCS/CCP/BARIDI payout details).
+- **Referral plumbing.** `services/referral.ts` persists the visitor id and the
+  last `?ref` referral in localStorage; the shared `ReferralTracker` records
+  visits in `Layout` and `AdminLayout`; checkout submits the stored referral;
+  registration passes `referralId` so real-world visits convert through the
+  account → order path.
+- **Admin.** Payouts tab (record against `availableBalance`, status filters,
+  cancel-with-restore), per-marketer details page at `/admin/marketers/:id`
+  (stats, payout details, orders, commissions, referrals, payouts).
+- **i18n.** All new copy keyed EN + AR (`marketer.*`, `admin.payouts.*`,
+  `admin.marketer.*`).
+
+### Verification (this session)
+- Server `npm test` — **91/91 pass** (16 suites incl. `referral + commission
+  lifecycle`, `payout workflow`, `marketer marketing + referrals`, `marketer
+  authorization`).
+- Client `npm run build` — clean; `npm test -- --run` — 5/5 pass.

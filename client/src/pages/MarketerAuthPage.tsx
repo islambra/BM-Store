@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Phone, Lock, User, ArrowRight, ArrowLeft, Megaphone, Eye, EyeOff, LoaderCircle, CreditCard, Hash } from 'lucide-react'
+import { Phone, Lock, User, ArrowRight, ArrowLeft, Megaphone, Eye, EyeOff, LoaderCircle, CreditCard, Hash, X } from 'lucide-react'
 import logo from '../assets/logo.jpg'
 import { useLanguage } from '../context/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { getErrorMessage } from '../services/api'
-import { Alert, Field, Input } from '../components/common/FormControls'
+import { localizeError } from '../utils/errors'
+import { Field, Input } from '../components/common/FormControls'
 
 export type MarketerAuthMode = 'signup' | 'login'
 
@@ -28,6 +28,12 @@ export default function MarketerAuthPage({ mode }: { mode: MarketerAuthMode }) {
 
   const isSignup = mode === 'signup'
 
+  useEffect(() => {
+    if (error) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [error])
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -41,10 +47,6 @@ export default function MarketerAuthPage({ mode }: { mode: MarketerAuthMode }) {
         return
       }
     }
-    if (password.length < 6) {
-      setError(t('auth.passwordShort'))
-      return
-    }
     setBusy(true)
     try {
       if (isSignup) {
@@ -54,7 +56,7 @@ export default function MarketerAuthPage({ mode }: { mode: MarketerAuthMode }) {
       }
       navigate('/marketer', { replace: true })
     } catch (err) {
-      setError(getErrorMessage(err))
+      setError(localizeError(err, t))
     } finally {
       setBusy(false)
     }
@@ -78,7 +80,24 @@ export default function MarketerAuthPage({ mode }: { mode: MarketerAuthMode }) {
   ]
 
   return (
-    <div className="container-app flex items-center justify-center py-8 lg:py-12">
+    <div className="container-app py-8 lg:py-12">
+      {error && (
+        <div
+          role="alert"
+          className="mx-auto mb-4 flex w-full max-w-3xl items-start justify-between gap-3 rounded-2xl border border-danger-100 bg-danger-50 p-4 text-sm font-medium text-danger-700"
+        >
+          <span className="mt-0.5">{error}</span>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            aria-label={t('common.close')}
+            className="shrink-0 rounded-lg p-1 text-danger-500 transition-colors hover:bg-danger-100"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      <div className="flex items-center justify-center">
       <div className="grid w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-line bg-surface shadow-lift lg:grid-cols-[1.05fr_1fr]">
         {/* Brand panel */}
         <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-900 via-brand-800 to-brand-600 p-7 text-white lg:flex">
@@ -125,12 +144,6 @@ export default function MarketerAuthPage({ mode }: { mode: MarketerAuthMode }) {
           <p className="mt-1.5 text-sm text-ink-500">
             {isSignup ? t('marketer.signupDesc') : t('marketer.loginDesc')}
           </p>
-
-          {error && (
-            <Alert tone="danger" className="mt-4">
-              {error}
-            </Alert>
-          )}
 
           <form onSubmit={submit} className="mt-5 space-y-3.5">
             {isSignup && (
@@ -215,7 +228,8 @@ export default function MarketerAuthPage({ mode }: { mode: MarketerAuthMode }) {
               ← {t('marketer.backToStore')}
             </Link>
           </div>
-        </div>
+      </div>
+      </div>
       </div>
     </div>
   )

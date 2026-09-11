@@ -1,29 +1,11 @@
-import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Header from './Header'
 import Footer from './Footer'
 import MobileNav from './MobileNav'
-import { trackReferral } from '../../services/api'
+import ReferralTracker from '../referral/ReferralTracker'
 
 const AUTH_PATHS = ['/login', '/register', '/marketer/signup', '/marketer/login']
 const FOOTERLESS_PATHS = ['/cart', '/wishlist']
-
-function ReferralTracker() {
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('ref')
-    if (code && !sessionStorage.getItem('bm-ref-tracked')) {
-      sessionStorage.setItem('bm-ref-tracked', '1')
-      void trackReferral({ referralCode: code, path: window.location.pathname })
-        .then(({ referralId }) => {
-          if (referralId) sessionStorage.setItem('bm-referral-id', referralId)
-        })
-        .catch(() => {
-          /* tracking is best-effort */
-        })
-    }
-  }, [])
-  return null
-}
 
 export default function Layout() {
   const { pathname } = useLocation()

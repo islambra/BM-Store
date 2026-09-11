@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import { before, after, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
@@ -13,9 +13,9 @@ describe('posts (media section)', () => {
   after(disconnectTest)
 
   async function adminAgent() {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
     return agent
   }
 
@@ -25,7 +25,7 @@ describe('posts (media section)', () => {
 
     const res = await agent.post('/api/admin/posts').send({
       textEn: 'Discover our new product',
-      textAr: 'اكتشف منتجنا الجديد',
+      textAr: 'Ø§ÙƒØªØ´Ù Ù…Ù†ØªØ¬Ù†Ø§ Ø§Ù„Ø¬Ø¯ÙŠØ¯',
       mediaType: 'images',
       images: ['/uploads/a.jpg', '/uploads/b.jpg'],
       productId: String(product._id),

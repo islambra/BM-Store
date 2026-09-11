@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
@@ -7,6 +7,7 @@ import { connectTest, disconnectTest, createAdmin, createUser, createMarketer, c
 import User from '../models/User.js'
 import Product from '../models/Product.js'
 import Commission from '../models/Commission.js'
+import Referral from '../models/Referral.js'
 
 const phone = uniquePhone
 
@@ -41,7 +42,7 @@ describe('orders', () => {
         wilaya: '16',
         wilayaName: 'Alger',
         commune: 'Bab Ezzouar',
-        address: 'Cité 5 Juillet, Bat B',
+        address: 'CitÃ© 5 Juillet, Bat B',
         note: 'Call before delivery',
       },
     })
@@ -160,9 +161,9 @@ describe('admin order management + product CRUD', () => {
   after(disconnectTest)
 
   it('lets admin create, update and delete products', async () => {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const admin = request.agent(app)
-    await admin.post('/api/auth/login').send({ email, password })
+    await admin.post('/api/auth/login').send({ phone, password })
 
     const created = await admin.post('/api/admin/products').send({
       name: 'Admin Product',
@@ -191,17 +192,17 @@ describe('admin order management + product CRUD', () => {
   })
 
   it('rejects product without required fields', async () => {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const admin = request.agent(app)
-    await admin.post('/api/auth/login').send({ email, password })
+    await admin.post('/api/auth/login').send({ phone, password })
     const res = await admin.post('/api/admin/products').send({ name: '', price: 0 })
     assert.equal(res.status, 400)
   })
 
   it('lists and updates any order', async () => {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const admin = request.agent(app)
-    await admin.post('/api/auth/login').send({ email, password })
+    await admin.post('/api/auth/login').send({ phone, password })
 
     const product = await createProduct({ name: 'Ordered', price: 100, stock: 5 })
     const order = await admin.post('/api/orders').send({
@@ -227,9 +228,9 @@ describe('admin order management + product CRUD', () => {
   })
 
   it('enforces the order state machine', async () => {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const admin = request.agent(app)
-    await admin.post('/api/auth/login').send({ email, password })
+    await admin.post('/api/auth/login').send({ phone, password })
 
     const product = await createProduct({ name: 'Flow', price: 100, stock: 5 })
     const order = await admin.post('/api/orders').send({
@@ -262,10 +263,10 @@ describe('admin marketer management', () => {
   before(connectTest)
   after(disconnectTest)
 
-  it('lists marketers and records payouts', async () => {
-    const { email, password } = await createAdmin()
+  it('lists marketers and records payouts against available commissions', async () => {
+    const { phone: adminPhone, password } = await createAdmin()
     const admin = request.agent(app)
-    await admin.post('/api/auth/login').send({ email, password })
+    await admin.post('/api/auth/login').send({ phone: adminPhone, password })
 
     const { user, profile } = await createMarketer()
 
@@ -273,22 +274,63 @@ describe('admin marketer management', () => {
     assert.equal(list.status, 200)
     assert.ok(list.body.data.marketers.find((m) => m.id === String(user._id)))
 
+    const referral = await Referral.create({
+      marketer: user._id,
+      profile: profile._id,
+      referralCode: profile.referralCode,
+      active: true,
+      expiresAt: new Date(Date.now() + 86400000),
+      visitor: 'payout-visitor',
+    })
+
+    const customerPhone = uniquePhone()
+    await request(app).post('/api/auth/register').send({
+      name: 'Referred Customer',
+      phone: customerPhone,
+      password: 'Secret@1234',
+      referralId: referral._id,
+    })
+    const customer = request.agent(app)
+    await customer.post('/api/auth/login').send({ phone: customerPhone, password: 'Secret@1234' })
+
+    const product = await createProduct({ name: 'Payout Product', price: 1000, stock: 10 })
+    const order = await customer.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 2 }],
+      customer: { fullName: 'Referred Customer', phone: '+213 555 12 34 56', wilaya: '16', commune: 'X', address: 'Y' },
+    })
+    assert.equal(order.status, 201)
+    const orderId = order.body.data.order._id
+    assert.equal(order.body.data.order.referralAttributed, true)
+    assert.equal(order.body.data.order.commissionAmount, 200)
+
+    await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'confirmed' })
+    await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'processing' })
+    await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'shipped' })
+    const delivered = await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'delivered' })
+    assert.equal(delivered.status, 200)
+    assert.equal((await Commission.countDocuments({ order: orderId, status: 'AVAILABLE' })), 1)
+
+    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
+    assert.equal(detail.status, 200)
+    assert.equal(detail.body.data.stats.availableBalance, 200)
+
     const payout = await admin.post('/api/admin/payouts').send({
       marketerId: user._id,
-      amount: 1500,
-      period: '2026-09',
+      amount: 200,
       method: 'CCP',
       reference: 'REF-001',
     })
     assert.equal(payout.status, 201)
-    assert.equal(payout.body.data.amount, 1500)
+    assert.equal(payout.body.data.amount, 200)
     assert.equal(payout.body.data.method, 'CCP')
+    assert.equal(payout.body.data.status, 'sent')
+    assert.equal(payout.body.data.commissions.length, 1)
   })
 
   it('suspends and deletes a marketer', async () => {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const admin = request.agent(app)
-    await admin.post('/api/auth/login').send({ email, password })
+    await admin.post('/api/auth/login').send({ phone, password })
 
     const { user, profile } = await createMarketer()
 
@@ -302,9 +344,9 @@ describe('admin marketer management', () => {
   })
 
   it('refuses to delete a non-marketer or self', async () => {
-    const { email, password, user: adminUser } = await createAdmin()
+    const { phone, password, user: adminUser } = await createAdmin()
     const admin = request.agent(app)
-    await admin.post('/api/auth/login').send({ email, password })
+    await admin.post('/api/auth/login').send({ phone, password })
 
     const self = await admin.delete(`/api/admin/marketers/${adminUser._id}`)
     assert.equal(self.status, 400)
@@ -320,9 +362,9 @@ describe('marketer authorization', () => {
   after(disconnectTest)
 
   it('blocks MARKETER from mutating products', async () => {
-    const { email, password } = await createUser({ name: 'M', role: 'MARKETER' })
+    const { phone, password } = await createUser({ name: 'M', role: 'MARKETER' })
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
 
     const create = await agent.post('/api/admin/products').send({ name: 'X', price: 1, category: 'spices' })
     assert.equal(create.status, 403)

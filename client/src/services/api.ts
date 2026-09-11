@@ -37,7 +37,6 @@ export function getErrorMessage(err: unknown): string {
 export interface User {
   id: string
   name: string
-  email: string
   role: 'USER' | 'MARKETER' | 'ADMIN'
   avatar: string | null
   phone: string | null
@@ -88,7 +87,7 @@ export function getMe() {
   return get<AuthPayload>('/auth/me')
 }
 
-export function updateMe(body: { name?: string; email?: string; phone?: string; avatar?: string }) {
+export function updateMe(body: { name?: string; phone?: string; avatar?: string }) {
   return patch<AuthPayload>('/auth/me', body)
 }
 
@@ -100,14 +99,16 @@ export function login(phone: string, password: string) {
   return post<AuthPayload>('/auth/login', { phone, password })
 }
 
-export function register(name: string, phone: string, password: string) {
-  return post<AuthPayload>('/auth/register', { name, phone, password })
+export function register(name: string, phone: string, password: string, opts?: { referralId?: string }) {
+  return post<AuthPayload>('/auth/register', { name, phone, password, referralId: opts?.referralId })
 }
 
 export interface RegisterMarketerInput {
   name: string
   phone: string
   password: string
+  bio?: string
+  avatar?: string
   baridiMob?: string
   ccp?: string
   ccpKey?: string
@@ -285,6 +286,21 @@ export function getMyOrders() {
 
 // ---- marketer ------------------------------------------------------------
 
+export interface MarketerStats {
+  visits: number
+  customers: number
+  orders: number
+  deliveredOrders: number
+  pendingEarnings: number
+  availableBalance: number
+  payoutRequested: number
+  paymentSent: number
+  totalPaid: number
+  disputed: number
+  cancelled: number
+  totalEarnings: number
+}
+
 export interface MarketerProfilePayload {
   profile: {
     id: string
@@ -297,13 +313,51 @@ export interface MarketerProfilePayload {
     payoutDetails: { ccp?: string; ccpKey?: string; baridiMob?: string }
     totalEarnings: number
     createdAt: string
+    user?: { id: string; name: string; phone?: string; avatar?: string | null }
   }
-  stats: {
-    visits: number
-    attributedOrders: number
-    commission: { pending: number; approved: number; paid: number; cancelled: number; total: number }
-  }
+  stats: MarketerStats
   baseUrl: string
+}
+
+export interface MarketerOrderRecord {
+  id: string
+  orderRef: string
+  status: string
+  subtotal: number
+  total: number
+  createdAt: string
+  commission: {
+    _id: string
+    orderId?: string
+    amount: number
+    status: string
+    availableAt?: string | null
+    createdAt: string
+  } | null
+}
+
+export interface MarketerPayoutRecord {
+  _id: string
+  amount: number
+  method: 'CCP' | 'BaridiMob'
+  reference?: string
+  status: 'sent' | 'received' | 'disputed' | 'cancelled'
+  notes?: string
+  commissions?: string[]
+  createdAt: string
+  sentAt?: string
+  confirmedAt?: string
+  disputedAt?: string
+  cancelledAt?: string
+}
+
+export interface MarketerDashboardPayload {
+  profile: MarketerProfilePayload['profile']
+  stats: MarketerStats
+  referralLink: string
+  baseUrl: string
+  recentOrders: MarketerOrderRecord[]
+  recentPayouts: MarketerPayoutRecord[]
 }
 
 export function getMarketerMe() {
@@ -311,22 +365,61 @@ export function getMarketerMe() {
 }
 
 export function updateMarketerMe(body: {
+  name?: string
+  phone?: string
   publicName?: string
   bio?: string
   avatar?: string
   payoutDetails?: { ccp?: string; ccpKey?: string; baridiMob?: string }
 }) {
-  return patch<unknown>('/marketer/me', body)
+  return patch<MarketerProfilePayload>('/marketer/me', body)
+}
+
+export interface CommissionRecord {
+  _id: string
+  orderId?: string
+  order?: { _id: string; orderRef: string; total: number; createdAt: string } | null
+  rate: number
+  amount: number
+  status: string
+  createdAt: string
+  availableAt?: string | null
+  paidAt?: string | null
+}
+
+export function getMarketerDashboard() {
+  return get<MarketerDashboardPayload>('/marketer/dashboard')
+}
+
+export function getMarketerOrders(params?: { page?: number; limit?: number; status?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.status) qs.set('status', params.status)
+  const q = qs.toString()
+  return get<Page & { orders: MarketerOrderRecord[] }>(`/marketer/orders${q ? `?${q}` : ''}`)
 }
 
 export function getMarketerEarnings() {
-  return get<{ commissions: Record<string, unknown>[] }>('/marketer/earnings')
+  return get<{ commissions: CommissionRecord[]; buckets: MarketerStats }>('/marketer/earnings')
+}
+
+export function getMarketerPayments() {
+  return get<{ payouts: MarketerPayoutRecord[] }>('/marketer/payments')
+}
+
+export function confirmPayoutReceived(id: string) {
+  return post<{ payout: MarketerPayoutRecord }>(`/marketer/payments/${id}/confirm-received`)
+}
+
+export function reportPayoutNotReceived(id: string) {
+  return post<{ payout: MarketerPayoutRecord }>(`/marketer/payments/${id}/report-not-received`)
 }
 
 // ---- referral tracking (public) ------------------------------------------
 
-export function trackReferral(body: { referralCode: string; path?: string }) {
-  return post<{ referralId: string }>('/marketing/track', body)
+export function trackReferral(body: { referralCode: string; path?: string; visitorId?: string; productId?: string }) {
+  return post<{ referralId: string; expiresAt?: string }>('/marketing/track', body)
 }
 
 // ---- admin ---------------------------------------------------------------
@@ -334,7 +427,7 @@ export function trackReferral(body: { referralCode: string; path?: string }) {
 export interface AdminUser {
   _id: string
   name: string
-  email: string
+  phone?: string
   role: string
   avatar?: string | null
   createdAt: string
@@ -345,7 +438,7 @@ export interface AdminUser {
 export interface AdminMarketer {
   id: string
   name: string
-  email: string
+  phone?: string
   avatar: string | null
   createdAt: string
   profile: {
@@ -357,10 +450,7 @@ export interface AdminMarketer {
     totalEarnings: number
     payoutDetails: { ccp?: string; ccpKey?: string; baridiMob?: string }
   } | null
-  stats: {
-    visits: number
-    commission: { pending?: number; approved?: number; paid?: number; cancelled?: number }
-  }
+  stats: MarketerStats | null
 }
 
 export function getAdminUsers() {
@@ -373,6 +463,43 @@ export function deleteAdminUser(id: string) {
 
 export function getAdminMarketers() {
   return get<{ marketers: AdminMarketer[] }>('/admin/marketers')
+}
+
+export function getAdminMarketerDetail(id: string) {
+  return get<{
+    profile: MarketerProfilePayload['profile']
+    stats: MarketerStats
+    commissionsCount: number
+    payouts: MarketerPayoutRecord[]
+    referralLink: string
+  }>(`/admin/marketers/${id}`)
+}
+
+export function getAdminMarketerOrders(id: string) {
+  return get<Page & { orders: MarketerOrderRecord[] }>(`/admin/marketers/${id}/orders`)
+}
+
+export function getAdminMarketerCommissions(id: string) {
+  return get<{ commissions: CommissionRecord[] }>(`/admin/marketers/${id}/commissions`)
+}
+
+export function getAdminMarketerReferrals(id: string) {
+  return get<{
+    referrals: {
+      _id: string
+      referralCode: string
+      landingPath: string
+      created: boolean
+      converted: boolean
+      convertedAt?: string | null
+      customer?: { _id: string; name: string } | null
+      createdAt: string
+    }[]
+  }>(`/admin/marketers/${id}/referrals`)
+}
+
+export function getAdminMarketerPayouts(id: string) {
+  return get<{ payouts: MarketerPayoutRecord[] }>(`/admin/marketers/${id}/payouts`)
 }
 
 export function deleteMarketer(id: string) {
@@ -602,12 +729,22 @@ export function deleteComment(commentId: string) {
   return remove<null>(`/comments/${commentId}`)
 }
 
-export function recordPayout(body: { marketerId: string; amount: number; period: string; method: 'CCP' | 'BaridiMob'; reference?: string }) {
-  return post<Record<string, unknown>>('/admin/payouts', body)
+export function recordPayout(body: { marketerId: string; amount: number; method: 'CCP' | 'BaridiMob'; reference?: string; notes?: string }) {
+  return post<MarketerPayoutRecord>('/admin/payouts', body)
 }
 
-export function getPayouts() {
-  return get<{ payouts: Record<string, unknown>[] }>('/admin/payouts')
+export function getPayouts(params?: { marketer?: string; status?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.marketer) qs.set('marketer', params.marketer)
+  if (params?.status) qs.set('status', params.status)
+  const q = qs.toString()
+  return get<{ payouts: (MarketerPayoutRecord & { marketer?: { _id: string; name: string; phone?: string } })[] }>(
+    `/admin/payouts${q ? `?${q}` : ''}`
+  )
+}
+
+export function updatePayout(id: string, action: 'cancel') {
+  return patch<MarketerPayoutRecord>(`/admin/payouts/${id}`, { action })
 }
 
 // ---- orders (admin) ------------------------------------------------------

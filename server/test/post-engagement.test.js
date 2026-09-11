@@ -19,7 +19,7 @@ describe('post engagement (likes, comments, share support)', () => {
   async function publishedPost() {
     const admin = await createAdmin()
     const adminAgent = request.agent(app)
-    await adminAgent.post('/api/auth/login').send({ email: admin.email, password: admin.password })
+    await adminAgent.post('/api/auth/login').send({ phone: admin.phone, password: admin.password })
     const product = await createProduct()
     const res = await adminAgent.post('/api/admin/posts').send({
       textEn: 'Hello post',
@@ -34,7 +34,7 @@ describe('post engagement (likes, comments, share support)', () => {
   async function userAgent() {
     const u = await createUser()
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email: u.email, password: u.password })
+    await agent.post('/api/auth/login').send({ phone: u.phone, password: u.password })
     return agent
   }
 
@@ -131,7 +131,7 @@ describe('post engagement (likes, comments, share support)', () => {
     const a = await userAgent()
     const admin = await createAdmin()
     const adminAgent = request.agent(app)
-    await adminAgent.post('/api/auth/login').send({ email: admin.email, password: admin.password })
+    await adminAgent.post('/api/auth/login').send({ phone: admin.phone, password: admin.password })
 
     const created = await a.post(`/api/posts/${id}/comments`).send({ text: 'Delete me' })
     const commentId = created.body.data._id
@@ -170,7 +170,7 @@ describe('post engagement (likes, comments, share support)', () => {
   it('deleting a post removes its likes and comments', async () => {
     const admin = await createAdmin()
     const adminAgent = request.agent(app)
-    await adminAgent.post('/api/auth/login').send({ email: admin.email, password: admin.password })
+    await adminAgent.post('/api/auth/login').send({ phone: admin.phone, password: admin.password })
     const product = await createProduct()
     const created = await adminAgent.post('/api/admin/posts').send({
       mediaType: 'images',

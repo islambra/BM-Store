@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
@@ -7,9 +7,9 @@ import { connectTest, disconnectTest, createAdmin, createProduct } from './helpe
 import Product from '../models/Product.js'
 
 async function adminAgent() {
-  const { email, password } = await createAdmin()
+  const { phone, password } = await createAdmin()
   const agent = request.agent(app)
-  await agent.post('/api/auth/login').send({ email, password })
+  await agent.post('/api/auth/login').send({ phone, password })
   return agent
 }
 
@@ -112,19 +112,19 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
     const agent = await adminAgent()
     const res = await agent.post('/api/admin/products').send({
       name: 'Multilingual Product',
-      nameAr: 'منتج متعدد اللغات',
+      nameAr: 'Ù…Ù†ØªØ¬ Ù…ØªØ¹Ø¯Ø¯ Ø§Ù„Ù„ØºØ§Øª',
       nameFr: 'Produit multilingue',
       description: 'English description',
-      descriptionAr: 'وصف بالعربية',
-      descriptionFr: 'Description en français',
+      descriptionAr: 'ÙˆØµÙ Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©',
+      descriptionFr: 'Description en franÃ§ais',
       price: 1500,
       category: 'spices',
       categoryName: 'Spices',
     })
     assert.equal(res.status, 201)
-    assert.equal(res.body.data.nameAr, 'منتج متعدد اللغات')
+    assert.equal(res.body.data.nameAr, 'Ù…Ù†ØªØ¬ Ù…ØªØ¹Ø¯Ø¯ Ø§Ù„Ù„ØºØ§Øª')
     assert.equal(res.body.data.nameFr, 'Produit multilingue')
-    assert.equal(res.body.data.descriptionFr, 'Description en français')
+    assert.equal(res.body.data.descriptionFr, 'Description en franÃ§ais')
   })
 
   it('enforces a maximum of 5 product images', async () => {

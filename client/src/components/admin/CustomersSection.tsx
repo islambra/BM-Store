@@ -43,11 +43,11 @@ export default function CustomersSection() {
   return (
     <>
       {notice && <ErrorNote message={notice} />}
-      <Table headers={[t('admin.name'), t('admin.email'), t('admin.role'), t('admin.ordersCount'), t('admin.totalSpent'), t('admin.joined')]}>
+      <Table headers={[t('admin.name'), t('admin.phone'), t('admin.role'), t('admin.ordersCount'), t('admin.totalSpent'), t('admin.joined')]}>
         {(data?.users ?? []).map((u) => (
           <tr key={String(u._id)} className="hover:bg-canvas">
             <td className="px-4 py-3 font-semibold text-ink-900">{u.name}</td>
-            <td className="px-4 py-3 text-ink-500">{u.email}</td>
+            <td className="px-4 py-3 text-ink-500" dir="ltr">{u.phone ?? '—'}</td>
             <td className="px-4 py-3">
               <Badge tone="muted">{t(roleLabel[u.role] ?? u.role)}</Badge>
             </td>

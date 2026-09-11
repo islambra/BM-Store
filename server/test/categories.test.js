@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import { before, after, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
@@ -17,8 +17,8 @@ describe('categories', () => {
   after(disconnectTest)
 
   async function adminHeaders() {
-    const { email, password } = await createAdmin()
-    const login = await request(app).post('/api/auth/login').send({ email, password })
+    const { phone, password } = await createAdmin()
+    const login = await request(app).post('/api/auth/login').send({ phone, password })
     return { Authorization: `Bearer ${login.headers['set-cookie'][0].split(';')[0].split('=')[1]}` }
   }
 

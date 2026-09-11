@@ -141,7 +141,7 @@ export default function UserMenu({ variant }: { variant: Variant }) {
           >
             <div className="border-b border-line px-3 pb-2.5 pt-1.5">
               <p className="truncate text-sm font-bold text-ink-900">{user.name}</p>
-              <p className="truncate text-xs text-ink-400">{user.email}</p>
+              <p className="truncate text-xs text-ink-400" dir="ltr">{user.phone}</p>
             </div>
             <div className="pt-1.5">
               {items.map((item) => {
@@ -234,7 +234,7 @@ export default function UserMenu({ variant }: { variant: Variant }) {
             <div className="flex items-center justify-between px-1 pb-2">
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-ink-900">{user.name}</p>
-                <p className="truncate text-xs text-ink-400">{user.email}</p>
+                <p className="truncate text-xs text-ink-400" dir="ltr">{user.phone}</p>
               </div>
               <button type="button" onClick={() => setOpen(false)} aria-label={t('common.close')} className="icon-btn shrink-0 text-ink-400">
                 <X size={18} />

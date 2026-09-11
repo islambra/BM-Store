@@ -77,7 +77,7 @@ export default function AdminHeader({ title, subtitle }: AdminHeaderProps) {
               <div className="absolute right-0 mt-2 w-56 rounded-xl border border-line bg-surface shadow-lg py-1.5 animate-in fade-in-0 zoom-in-95">
                 <div className="px-3 py-2 border-b border-line">
                   <p className="text-sm font-semibold text-ink-900">{user?.name}</p>
-                  {user?.email && <p className="text-xs text-ink-500 truncate">{user?.email}</p>}
+                  {user?.phone && <p className="text-xs text-ink-500 truncate">{user?.phone}</p>}
                   <span className="inline-flex mt-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-brand-100 text-brand-700 capitalize">
                     {user?.role?.toLowerCase()}
                   </span>

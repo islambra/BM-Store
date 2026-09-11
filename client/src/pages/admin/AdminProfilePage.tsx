@@ -34,7 +34,7 @@ export default function AdminProfilePage() {
 
   const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'notifications'>('profile')
 
-  const [form, setForm] = useState({ name: user?.name ?? '', email: user?.email ?? '', phone: user?.phone ?? '' })
+  const [form, setForm] = useState({ name: user?.name ?? '', phone: user?.phone ?? '' })
   const [profileBusy, setProfileBusy] = useState(false)
   const [profileNotice, setProfileNotice] = useState('')
   const [profileError, setProfileError] = useState('')
@@ -46,7 +46,7 @@ export default function AdminProfilePage() {
 
   useEffect(() => {
     if (!user) return
-    setForm({ name: user.name, email: user.email, phone: user.phone ?? '' })
+    setForm({ name: user.name, phone: user.phone ?? '' })
   }, [user])
 
   if (!user) return null
@@ -56,7 +56,7 @@ export default function AdminProfilePage() {
     setProfileNotice('')
     setProfileError('')
     try {
-      await api.updateMe({ name: form.name, email: form.email, phone: form.phone })
+      await api.updateMe({ name: form.name, phone: form.phone })
       setProfileNotice(t('admin.profileSaved'))
     } catch (err) {
       setProfileError(getErrorMessage(err))
@@ -140,9 +140,6 @@ export default function AdminProfilePage() {
                 <form onSubmit={(e) => { e.preventDefault(); saveProfile(); }} className="mt-6 space-y-4 sm:grid sm:grid-cols-2 sm:gap-4">
                   <Field label={t('admin.name')} required>
                     <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-                  </Field>
-                  <Field label={t('admin.email')} required>
-                    <Input dir="ltr" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
                   </Field>
                   <Field label={t('checkout.phone')}>
                     <Input dir="ltr" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />

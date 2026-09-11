@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
@@ -10,41 +10,41 @@ describe('role protection', () => {
   after(disconnectTest)
 
   it('blocks USER from admin routes', async () => {
-    const { email, password } = await createUser()
+    const { phone, password } = await createUser()
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
     const res = await agent.get('/api/admin/users')
     assert.equal(res.status, 403)
   })
 
   it('blocks USER from marketer routes', async () => {
-    const { email, password } = await createUser()
+    const { phone, password } = await createUser()
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
     const res = await agent.get('/api/marketer/me')
     assert.equal(res.status, 403)
   })
 
   it('block MARKETER from admin routes', async () => {
-    const { email, password } = await createUser({ name: 'Marketer-Agent', role: 'MARKETER' })
+    const { phone, password } = await createUser({ name: 'Marketer-Agent', role: 'MARKETER' })
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
     const res = await agent.get('/api/admin/users')
     assert.equal(res.status, 403)
   })
 
   it('blocks USER from admin product creation', async () => {
-    const { email, password } = await createUser()
+    const { phone, password } = await createUser()
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
     const res = await agent.post('/api/admin/products').send({ name: 'X', price: 10, category: 'spices' })
     assert.equal(res.status, 403)
   })
 
   it('allows MARKETER into marketer routes after become-marketer', async () => {
-    const { email, password } = await createUser({ name: 'Future Marketer' })
+    const { phone, password } = await createUser({ name: 'Future Marketer' })
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
 
     const upgrade = await agent.post('/api/auth/become-marketer')
     assert.equal(upgrade.status, 201)
@@ -57,9 +57,9 @@ describe('role protection', () => {
   })
 
   it('allows ADMIN into admin routes', async () => {
-    const { email, password } = await createAdmin()
+    const { phone, password } = await createAdmin()
     const agent = request.agent(app)
-    await agent.post('/api/auth/login').send({ email, password })
+    await agent.post('/api/auth/login').send({ phone, password })
     const res = await agent.get('/api/admin/users')
     assert.equal(res.status, 200)
     assert.ok(Array.isArray(res.body.data.users))
