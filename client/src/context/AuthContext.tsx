@@ -11,6 +11,7 @@ interface AuthContextValue {
   registerMarketer: (input: RegisterMarketerInput) => Promise<User>
   logout: () => Promise<void>
   becomeMarketer: () => Promise<User>
+  refresh: () => Promise<User | null>
   isMarketer: boolean
   isAdmin: boolean
 }
@@ -71,6 +72,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user
   }, [])
 
+  const refresh = useCallback(async () => {
+    try {
+      const { user } = await api.getMe()
+      setUser(user)
+      return user
+    } catch {
+      setUser(null)
+      return null
+    }
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -80,10 +92,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       registerMarketer,
       logout,
       becomeMarketer,
+      refresh,
       isMarketer: !!user && (user.role === 'MARKETER' || user.role === 'ADMIN'),
       isAdmin: !!user && user.role === 'ADMIN',
     }),
-    [user, loading, login, register, registerMarketer, logout, becomeMarketer]
+    [user, loading, login, register, registerMarketer, logout, becomeMarketer, refresh]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

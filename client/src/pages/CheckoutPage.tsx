@@ -43,8 +43,6 @@ export default function CheckoutPage() {
   const { user } = useAuth()
   const ArrowIcon = lang === 'ar' ? ArrowLeft : ArrowRight
 
-  const [fullName, setFullName] = useState(user?.name ?? '')
-  const [phone, setPhone] = useState(user?.phone ?? '')
   const [wilaya, setWilaya] = useState('')
   const [commune, setCommune] = useState('')
   const [address, setAddress] = useState('')
@@ -53,12 +51,16 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
+  // Name + phone always come from the user's profile — no manual entry needed.
+  const profileName = user?.name.trim() ?? ''
+  const profilePhone = user?.phone?.trim() ?? ''
+
   const delivery = cartTotal > 0 ? DELIVERY_FEE : 0
   const total = cartTotal + delivery
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!fullName.trim() || !phone.trim() || !wilaya || !commune.trim() || !address.trim()) {
+    if (!profileName || !profilePhone || !wilaya || !commune.trim() || !address.trim()) {
       setError(true)
       return
     }
@@ -67,8 +69,8 @@ export default function CheckoutPage() {
 
     const wilayaEntry = wilayas.find((w) => w.code === wilaya)
     const customer = {
-      fullName: fullName.trim(),
-      phone: phone.trim(),
+      fullName: profileName,
+      phone: profilePhone,
       wilaya,
       wilayaName: wilayaEntry ? getWilayaName(wilayaEntry, lang) : wilaya,
       commune: commune.trim(),
@@ -165,7 +167,7 @@ export default function CheckoutPage() {
             {t('checkout.review')}
           </div>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link to="/dashboard" className="btn-primary">
+            <Link to="/dashboard/orders" className="btn-primary">
               {t('checkout.trackOrders')}
             </Link>
             <Link to="/" className="btn-ghost">
@@ -208,32 +210,22 @@ export default function CheckoutPage() {
           )}
 
           <div className="mt-6 space-y-5">
-            <Field id="fullName" label={t('checkout.fullName')} required>
-              <Input
-                id="fullName"
-                icon={User}
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
-                placeholder={t('checkout.fullName')}
-              />
-            </Field>
-
-            <Field id="phone" label={t('checkout.phone')} required>
-              <Input
-                id="phone"
-                icon={Phone}
-                required
-                type="tel"
-                inputMode="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                autoComplete="tel"
-                placeholder="05 XX XX XX XX"
-                dir="ltr"
-              />
-            </Field>
+            {/* Ordering as — taken from profile, not typed manually */}
+            <div className="flex items-center gap-3 rounded-xl border border-line bg-canvas/70 px-4 py-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-base font-bold text-white">
+                {profileName.charAt(0).toUpperCase() || <User size={16} />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-ink-900">{profileName}</p>
+                <p className="truncate text-xs tabular-nums text-ink-500" dir="ltr">{profilePhone}</p>
+              </div>
+              <Link
+                to="/dashboard/profile"
+                className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-50"
+              >
+                {t('common.edit')}
+              </Link>
+            </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <Field id="wilaya" label={t('checkout.wilaya')} required>

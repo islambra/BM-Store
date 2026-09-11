@@ -5,7 +5,7 @@ export function getAccountRoute(role?: string): string {
   if (!role) return '/login'
   if (role === 'ADMIN') return '/admin'
   if (role === 'MARKETER') return '/marketer'
-  return '/dashboard'
+  return '/dashboard/profile'
 }
 
 export function getAccountLabel(role: string | undefined, t: (key: string) => string): string {

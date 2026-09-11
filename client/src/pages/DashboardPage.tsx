@@ -8,7 +8,7 @@ import EmptyState from '../components/common/EmptyState'
 import OrderStatusBadge from '../components/common/OrderStatusBadge'
 import BecomeMarketerPrompt from '../components/common/BecomeMarketerPrompt'
 import { formatPrice } from '../components/common/Price'
-import { getMyOrders } from '../services/api'
+import { getMyOrders, type MyOrderRecord } from '../services/api'
 import { ORDERS_STORAGE_KEY } from '../config/shop'
 import { useBecomeMarketer } from '../hooks/useBecomeMarketer'
 import type { Order } from '../types'
@@ -122,7 +122,7 @@ function OrdersPanel() {
   const { t, lang } = useLanguage()
   const { user } = useAuth()
   const [local, setLocal] = useState<Order[]>([])
-  const [apiOrders, setApiOrders] = useState<Record<string, unknown>[] | null>(null)
+  const [apiOrders, setApiOrders] = useState<MyOrderRecord[] | null>(null)
 
   useEffect(() => {
     setLocal(loadLocalOrders())

@@ -280,8 +280,43 @@ export function createOrder(body: CreateOrderInput) {
   return post<Record<string, unknown>>('/orders', body)
 }
 
+export interface MyOrderRecord {
+  _id: string
+  orderRef: string
+  items: { productId: string; name: string; qty: number; price: number; image?: string }[]
+  customer: {
+    fullName: string
+    phone: string
+    wilaya: string
+    wilayaName?: string
+    commune: string
+    address: string
+    note?: string
+  }
+  subtotal: number
+  delivery: number
+  rewardDiscount?: number
+  total: number
+  status: string
+  createdAt: string
+}
+
 export function getMyOrders() {
-  return get<{ orders: Record<string, unknown>[] }>('/orders/me')
+  return get<{ orders: MyOrderRecord[] }>('/orders/me')
+}
+
+export function updateMyOrder(
+  id: string,
+  body: {
+    items?: { productId: string; qty: number }[]
+    customer?: { wilaya?: string; wilayaName?: string; commune?: string; address?: string; note?: string }
+  },
+) {
+  return patch<{ order: MyOrderRecord }>(`/orders/${id}`, body)
+}
+
+export function deleteMyOrder(id: string) {
+  return remove<null>(`/orders/${id}`)
 }
 
 // ---- marketer ------------------------------------------------------------
@@ -752,7 +787,7 @@ export function updatePayout(id: string, action: 'cancel') {
 export interface AdminOrderRecord {
   _id: string
   orderRef: string
-  items: { productId: string; name: string; qty: number; price: number }[]
+  items: { productId: string; name: string; qty: number; price: number; image?: string }[]
   customer: {
     fullName: string
     phone: string
@@ -768,6 +803,10 @@ export interface AdminOrderRecord {
   total: number
   status: string
   createdAt: string
+  referralAttributed?: boolean
+  referralCode?: string
+  commissionAmount?: number
+  marketer?: { _id: string; name: string; phone?: string } | null
 }
 
 export default api

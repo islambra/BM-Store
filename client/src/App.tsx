@@ -18,7 +18,11 @@ import ProductPage from './pages/ProductPage'
 import SearchPage from './pages/SearchPage'
 import CartPage from './pages/CartPage'
 import WishlistPage from './pages/WishlistPage'
-import DashboardPage from './pages/DashboardPage'
+import DashboardRedirect from './pages/client/DashboardRedirect'
+import ClientDashboardLayout from './components/client/ClientDashboardLayout'
+import ClientProfilePage from './pages/client/ClientProfilePage'
+import ClientOrdersPage from './pages/client/ClientOrdersPage'
+import ClientOrderDetailsPage from './pages/client/ClientOrderDetailsPage'
 import AuthPage from './pages/AuthPage'
 import CheckoutPage from './pages/CheckoutPage'
 import InfoPage from './pages/InfoPage'
@@ -54,7 +58,7 @@ export default function App() {
                     path="/dashboard"
                     element={
                       <RequireRole roles={['USER', 'MARKETER']}>
-                        <DashboardPage />
+                        <DashboardRedirect />
                       </RequireRole>
                     }
                   />
@@ -92,6 +96,32 @@ export default function App() {
                     element={
                       <RequireRole roles={['ADMIN']}>
                         <AdminMarketerDetailsPage />
+                      </RequireRole>
+                    }
+                  />
+                </Route>
+                <Route element={<ClientDashboardLayout />}>
+                  <Route
+                    path="/dashboard/profile"
+                    element={
+                      <RequireRole roles={['USER']}>
+                        <ClientProfilePage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/orders"
+                    element={
+                      <RequireRole roles={['USER']}>
+                        <ClientOrdersPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/orders/:id"
+                    element={
+                      <RequireRole roles={['USER']}>
+                        <ClientOrderDetailsPage />
                       </RequireRole>
                     }
                   />

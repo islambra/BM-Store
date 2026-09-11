@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, LayoutDashboard, LogOut, Megaphone, ShieldCheck, Store, User, X } from 'lucide-react'
+import { ChevronDown, LayoutDashboard, LogOut, ShieldCheck, Store, User, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
 import { getAccountLabel, getAccountRoute } from '../../utils/account'
 import LogoutModal from '../common/LogoutModal'
-import BecomeMarketerPrompt from '../common/BecomeMarketerPrompt'
-import { useBecomeMarketer } from '../../hooks/useBecomeMarketer'
 
 type Variant = 'desktop' | 'mobile'
 
@@ -24,7 +22,6 @@ export default function UserMenu({ variant }: { variant: Variant }) {
   const navigate = useNavigate()
   const location = useLocation()
   const wrapRef = useRef<HTMLDivElement>(null)
-  const become = useBecomeMarketer()
 
   const [open, setOpen] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
@@ -100,19 +97,11 @@ export default function UserMenu({ variant }: { variant: Variant }) {
     setLogoutOpen(true)
   }
 
-  const requestBecome = () => {
-    setOpen(false)
-    become.open()
-  }
-
   const items: MenuItem[] =
     user.role === 'ADMIN'
       ? [{ label: getAccountLabel(user.role, t), icon: ShieldCheck, to: '/admin' }]
       : user.role === 'USER'
-        ? [
-            { label: getAccountLabel(user.role, t), icon: LayoutDashboard, to: '/dashboard' },
-            { label: t('account.signUpMarketer'), icon: Megaphone, onClick: requestBecome },
-          ]
+        ? [{ label: getAccountLabel(user.role, t), icon: LayoutDashboard, to: '/dashboard/profile' }]
         : [{ label: getAccountLabel(user.role, t), icon: Store, to: '/marketer' }]
 
   const triggerLabel = getAccountLabel(user.role, t)
@@ -186,12 +175,6 @@ export default function UserMenu({ variant }: { variant: Variant }) {
           busy={loggingOut}
           onCancel={() => setLogoutOpen(false)}
           onConfirm={() => void handleLogout()}
-        />
-        <BecomeMarketerPrompt
-          open={become.promptOpen}
-          busy={become.busy}
-          onCancel={() => become.setPromptOpen(false)}
-          onConfirm={() => void become.confirmLogoutAndContinue()}
         />
       </div>
     )
@@ -278,12 +261,6 @@ export default function UserMenu({ variant }: { variant: Variant }) {
         busy={loggingOut}
         onCancel={() => setLogoutOpen(false)}
         onConfirm={() => void handleLogout()}
-      />
-      <BecomeMarketerPrompt
-        open={become.promptOpen}
-        busy={become.busy}
-        onCancel={() => become.setPromptOpen(false)}
-        onConfirm={() => void become.confirmLogoutAndContinue()}
       />
     </>
   )

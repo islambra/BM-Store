@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ClipboardList, Search } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ClipboardList, Megaphone, Search } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -11,11 +11,51 @@ import OrderStatusBadge from '../common/OrderStatusBadge'
 import { formatPrice } from '../common/Price'
 import { ErrorNote, Loader } from './adminShared'
 
+interface StatusAction {
+  target: string
+  labelKey: string
+  titleKey: string
+  descKey: string
+  confirmKey: string
+  danger?: boolean
+}
+
+/* Next valid workflow step(s) for each status — mirrors the server state machine. */
+function actionsFor(status: string): StatusAction[] {
+  switch (status) {
+    case 'pending-review':
+      return [
+        { target: 'confirmed', labelKey: 'admin.confirmOrder', titleKey: 'admin.confirmTitle', descKey: 'admin.confirmDesc', confirmKey: 'admin.confirmOrder' },
+        { target: 'cancelled', labelKey: 'admin.cancelOrder', titleKey: 'admin.cancelTitle', descKey: 'admin.cancelDesc', confirmKey: 'admin.cancelOrder', danger: true },
+      ]
+    case 'customer-contacted':
+      return [
+        { target: 'confirmed', labelKey: 'admin.confirmOrder', titleKey: 'admin.confirmTitle', descKey: 'admin.confirmDesc', confirmKey: 'admin.confirmOrder' },
+        { target: 'rejected', labelKey: 'admin.rejectOrder', titleKey: 'admin.rejectTitle', descKey: 'admin.rejectDesc', confirmKey: 'admin.rejectOrder', danger: true },
+      ]
+    case 'confirmed':
+      return [
+        { target: 'processing', labelKey: 'admin.startProcessing', titleKey: 'admin.processTitle', descKey: 'admin.processDesc', confirmKey: 'admin.startProcessing' },
+      ]
+    case 'processing':
+      return [
+        { target: 'shipped', labelKey: 'admin.markShipped', titleKey: 'admin.shipTitle', descKey: 'admin.shipDesc', confirmKey: 'admin.markShipped' },
+      ]
+    case 'shipped':
+      return [
+        { target: 'delivered', labelKey: 'admin.markDelivered', titleKey: 'admin.deliverTitle', descKey: 'admin.deliverDesc', confirmKey: 'admin.markDelivered' },
+      ]
+    default:
+      return []
+  }
+}
+
 export default function OrdersSection() {
   const { t, lang } = useLanguage()
   const { data, loading, error, reload } = useAsync(() => api.getAdminOrders())
   const [query, setQuery] = useState('')
-  const [pending, setPending] = useState<{ order: api.AdminOrderRecord; action: 'confirm' | 'cancel' } | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [pending, setPending] = useState<{ order: api.AdminOrderRecord; action: StatusAction } | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -47,7 +87,7 @@ export default function OrdersSection() {
     setBusy(true)
     setNotice('')
     try {
-      await api.updateAdminOrderStatus(String(pending.order._id), pending.action === 'confirm' ? 'confirmed' : 'cancelled')
+      await api.updateAdminOrderStatus(String(pending.order._id), pending.action.target)
       setPending(null)
       void reload()
     } catch (err) {
@@ -69,63 +109,135 @@ export default function OrdersSection() {
         </div>
       ) : (
         <div className="space-y-4">
-          {orders.map((o) => (
-            <div key={String(o._id)} className="rounded-2xl border border-line bg-surface p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-bold text-ink-900">{o.orderRef}</span>
-                  <OrderStatusBadge status={o.status} />
+          {orders.map((o) => {
+            const actions = actionsFor(o.status)
+            const isOpen = expanded === String(o._id)
+            return (
+              <div key={String(o._id)} className="rounded-2xl border border-line bg-surface p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold tabular-nums text-ink-900" dir="ltr">{o.orderRef}</span>
+                    <OrderStatusBadge status={o.status} />
+                    {o.referralAttributed && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                        <Megaphone size={12} />
+                        {t('admin.marketer')}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-ink-400">
+                    {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US')}
+                  </span>
                 </div>
-                <span className="text-xs text-ink-400">
-                  {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US')}
-                </span>
+                <ul className="mt-3 space-y-1.5">
+                  {o.items.map((item) => (
+                    <li key={item.productId} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate text-ink-700">
+                        {item.name} <span className="text-ink-400">× {item.qty}</span>
+                      </span>
+                      <span className="shrink-0 font-semibold tabular-nums text-ink-900">{formatPrice(item.price * item.qty, lang)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+                  <div className="min-w-0 text-xs text-ink-500">
+                    <p className="font-semibold text-ink-700">{o.customer.fullName}</p>
+                    <p dir="ltr" className="mt-0.5 tabular-nums">
+                      {o.customer.phone}
+                    </p>
+                    <p className="mt-0.5">
+                      {o.customer.wilayaName || o.customer.wilaya} · {o.customer.commune} · {o.customer.address}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-extrabold tabular-nums text-ink-900">{formatPrice(o.total, lang)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : String(o._id))}
+                      aria-expanded={isOpen}
+                      className="btn-secondary btn-sm inline-flex items-center gap-1"
+                    >
+                      {t(isOpen ? 'admin.hideDetails' : 'admin.viewDetails')}
+                      <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {o.status === 'delivered' ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-xl bg-success-50 px-3.5 py-2 text-[13px] font-bold text-success-700">
+                        <CheckCircle2 size={15} />
+                        {t('order.delivered')}
+                      </span>
+                    ) : (
+                      actions.map((a) => (
+                        <button
+                          key={a.target}
+                          type="button"
+                          onClick={() => setPending({ order: o, action: a })}
+                          className={a.danger ? 'btn-secondary btn-sm text-danger-700' : 'btn-primary btn-sm'}
+                        >
+                          {t(a.labelKey)}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+                {isOpen && (
+                  <div className="mt-3 space-y-3 rounded-xl bg-canvas/70 px-4 py-3.5 text-sm">
+                    <dl className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-ink-500">{t('client.subtotal')}</dt>
+                        <dd className="font-semibold tabular-nums text-ink-900">{formatPrice(o.subtotal, lang)}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-ink-500">{t('client.delivery')}</dt>
+                        <dd className="font-semibold tabular-nums text-ink-900">{formatPrice(o.delivery, lang)}</dd>
+                      </div>
+                      {(o.rewardDiscount ?? 0) > 0 && (
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-ink-500">{t('admin.rewardDiscount')}</dt>
+                          <dd className="font-semibold tabular-nums text-ink-900">−{formatPrice(o.rewardDiscount ?? 0, lang)}</dd>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="font-bold text-ink-900">{t('client.total')}</dt>
+                        <dd className="font-extrabold tabular-nums text-brand-700">{formatPrice(o.total, lang)}</dd>
+                      </div>
+                    </dl>
+                    {o.customer.note && (
+                      <p className="text-[13px] text-ink-600">
+                        <span className="font-bold text-ink-900">{t('admin.orderNote')}: </span>
+                        {o.customer.note}
+                      </p>
+                    )}
+                    {o.referralAttributed ? (
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-[13px]">
+                        <span className="inline-flex items-center gap-1.5 font-bold text-brand-800">
+                          <Megaphone size={13} />
+                          {t('admin.marketer')}: {o.marketer?.name ?? o.referralCode ?? '—'}
+                        </span>
+                        {o.marketer?.phone && (
+                          <span className="tabular-nums text-ink-600" dir="ltr">{o.marketer.phone}</span>
+                        )}
+                        {(o.commissionAmount ?? 0) > 0 && (
+                          <span className="tabular-nums text-ink-600">
+                            {t('admin.commission')}: {formatPrice(o.commissionAmount ?? 0, lang)}
+                          </span>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
-              <ul className="mt-3 space-y-1.5">
-                {o.items.map((item) => (
-                  <li key={item.productId} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-ink-700">
-                      {item.name} <span className="text-ink-400">× {item.qty}</span>
-                    </span>
-                    <span className="shrink-0 font-semibold text-ink-900">{formatPrice(item.price * item.qty, lang)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-                <div className="min-w-0 text-xs text-ink-500">
-                  <p className="font-semibold text-ink-700">{o.customer.fullName}</p>
-                  <p dir="ltr" className="mt-0.5">
-                    {o.customer.phone}
-                  </p>
-                  <p className="mt-0.5">
-                    {o.customer.wilayaName || o.customer.wilaya} · {o.customer.commune} · {o.customer.address}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-sm font-extrabold text-ink-900">{formatPrice(o.total, lang)}</span>
-                  {o.status === 'pending-review' && (
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setPending({ order: o, action: 'confirm' })} className="btn-primary btn-sm">
-                        {t('admin.confirm')}
-                      </button>
-                      <button type="button" onClick={() => setPending({ order: o, action: 'cancel' })} className="btn-secondary btn-sm text-danger-700">
-                        {t('admin.cancelOrder')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
       <ConfirmDialog
         open={Boolean(pending)}
-        title={pending?.action === 'confirm' ? t('admin.confirmTitle') : t('admin.cancelTitle')}
-        description={pending?.action === 'confirm' ? t('admin.confirmDesc') : t('admin.cancelDesc')}
-        confirmLabel={pending?.action === 'confirm' ? t('admin.confirm') : t('admin.cancelOrder')}
+        title={pending ? t(pending.action.titleKey) : ''}
+        description={pending ? t(pending.action.descKey) : ''}
+        confirmLabel={pending ? t(pending.action.confirmKey) : ''}
         cancelLabel={t('common.cancel')}
         busy={busy}
-        danger={pending?.action !== 'confirm'}
+        danger={pending?.action.danger}
         onConfirm={() => void runAction()}
         onCancel={() => setPending(null)}
       />
