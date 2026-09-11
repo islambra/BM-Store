@@ -1,6 +1,7 @@
 import Category from '../models/Category.js'
 import Product from '../models/Product.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
+import { translateArabicToEnglish } from '../services/translationService.js'
 
 const pickFields = (body) => {
   const fields = ['slug', 'name', 'nameAr', 'nameFr', 'image', 'icon', 'order', 'active']
@@ -48,7 +49,20 @@ async function uniqueSlug(name, exceptId) {
 
 export const adminCreate = asyncHandler(async (req, res) => {
   const data = pickFields(req.body)
-  if (!data.name) return sendError(res, 'name is required', 400)
+  const arabicName = String(data.nameAr ?? data.name ?? '').trim()
+  if (!arabicName) return sendError(res, 'Category name (Arabic) is required', 400)
+
+  let englishName
+  try {
+    englishName = await translateArabicToEnglish(arabicName)
+  } catch (err) {
+    console.error('[Category] Translation failed during creation:', err.message)
+    return sendError(res, 'Could not translate content. Please try again.', 502)
+  }
+
+  data.name = englishName || arabicName
+  data.nameAr = arabicName
+  delete data.nameFr
 
   if (data.slug) {
     data.slug = String(data.slug).toLowerCase().trim()
@@ -68,6 +82,22 @@ export const adminUpdate = asyncHandler(async (req, res) => {
 
   const current = await Category.findById(req.params.id)
   if (!current) return sendError(res, 'Category not found', 404)
+
+  if (data.nameAr !== undefined && String(data.nameAr).trim() !== current.nameAr) {
+    const trimmed = String(data.nameAr).trim()
+    if (trimmed) {
+      try {
+        const englishName = await translateArabicToEnglish(trimmed)
+        data.name = englishName || trimmed
+        data.nameAr = trimmed
+      } catch (err) {
+        console.error('[Category] Translation failed during update:', err.message)
+        return sendError(res, 'Could not translate content. Please try again.', 502)
+      }
+    }
+  }
+
+  delete data.nameFr
 
   if (data.slug && data.slug !== current.slug) {
     const clash = await Category.exists({ slug: String(data.slug).toLowerCase(), _id: { $ne: current._id } })

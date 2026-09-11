@@ -5,7 +5,7 @@ import logo from '../assets/logo.jpg'
 import { useLanguage } from '../context/LanguageContext'
 import { useAuth } from '../context/AuthContext'
 import { localizeError } from '../utils/errors'
-import { getStoredReferral } from '../services/referral'
+import { getStoredReferral, getVisitorId } from '../services/referral'
 import { Field, Input } from '../components/common/FormControls'
 
 export type AuthMode = 'login' | 'register'
@@ -54,7 +54,7 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
     setBusy(true)
     try {
       if (mode === 'register') {
-        await register(name, phone, password, { referralId: getStoredReferral()?.id })
+        await register(name, phone, password, { referralId: getStoredReferral()?.id, visitorId: getVisitorId() })
       } else {
         await login(phone, password)
       }

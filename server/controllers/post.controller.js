@@ -4,6 +4,7 @@ import Comment from '../models/Comment.js'
 import Reaction from '../models/Reaction.js'
 import mongoose from 'mongoose'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
+import { translateArabicToEnglish } from '../services/translationService.js'
 
 const pickFields = (body) => {
   const fields = ['textEn', 'textAr', 'mediaType', 'images', 'video', 'productId', 'status']
@@ -237,6 +238,16 @@ export const adminCreatePost = asyncHandler(async (req, res) => {
     }
   }
 
+  if (data.textAr && !data.textEn) {
+    try {
+      const translated = await translateArabicToEnglish(String(data.textAr).trim())
+      data.textEn = translated || data.textAr
+    } catch (err) {
+      console.error('[Post] Translation failed during creation:', err.message)
+      return sendError(res, 'Could not translate content. Please try again.', 502)
+    }
+  }
+
   const doc = await Post.create(data)
   const populated = await doc.populate('productId', 'name nameAr slug image price oldPrice isSpecialOffer discount')
   return sendSuccess(res, populated, 'Post created', 201)
@@ -264,6 +275,16 @@ export const adminUpdatePost = asyncHandler(async (req, res) => {
     data.video = null
     if (data.images && data.images.length > MAX_IMAGES) {
       data.images = data.images.slice(0, MAX_IMAGES)
+    }
+  }
+
+  if (data.textAr !== undefined && data.textAr !== current.textAr) {
+    try {
+      const translated = await translateArabicToEnglish(String(data.textAr).trim())
+      data.textEn = translated || data.textAr
+    } catch (err) {
+      console.error('[Post] Translation failed during update:', err.message)
+      return sendError(res, 'Could not translate content. Please try again.', 502)
     }
   }
 

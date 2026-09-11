@@ -13,9 +13,7 @@ import { ErrorNote, Loader } from './adminShared'
 
 function emptyForm() {
   return {
-    name: '',
     nameAr: '',
-    description: '',
     descriptionAr: '',
     price: '',
     oldPrice: '',
@@ -81,9 +79,7 @@ export default function ProductsSection() {
   const openEdit = (p: api.ProductRecord) => {
     setEditing(p)
     setForm({
-      name: p.name,
       nameAr: p.nameAr ?? '',
-      description: p.description ?? '',
       descriptionAr: p.descriptionAr ?? '',
       price: String(p.price),
       oldPrice: p.oldPrice ? String(p.oldPrice) : '',
@@ -106,7 +102,7 @@ export default function ProductsSection() {
     const price = Number(form.price)
     const oldPrice = Number(form.oldPrice)
     const images = (form.images ?? []).filter(Boolean).slice(0, 5)
-    if (!form.name.trim() || !form.category || !Number.isFinite(price) || price <= 0) {
+    if (!form.nameAr.trim() || !form.category || !Number.isFinite(price) || price <= 0) {
       setFormError(t('common.requiredFields'))
       return
     }
@@ -118,9 +114,7 @@ export default function ProductsSection() {
     setFormBusy(true)
     setFormError('')
     const body = {
-      name: form.name.trim(),
-      nameAr: form.nameAr.trim() || undefined,
-      description: form.description.trim() || undefined,
+      nameAr: form.nameAr.trim(),
       descriptionAr: form.descriptionAr.trim() || undefined,
       price,
       oldPrice: form.isSpecialOffer && oldPrice > 0 ? oldPrice : undefined,
@@ -177,7 +171,7 @@ export default function ProductsSection() {
                   <td className="px-3 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <img src={p.images?.[0] ?? p.image} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
-                      <p className="max-w-[220px] truncate font-semibold text-ink-900">{p.name}</p>
+                      <p className="max-w-[220px] truncate font-semibold text-ink-900">{p.nameAr ?? p.name}</p>
                     </div>
                   </td>
                   <td className="px-3 py-3 text-ink-500">{p.categoryName ?? p.category}</td>
@@ -270,10 +264,7 @@ export default function ProductsSection() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label={t('admin.product.name')} required>
-                  <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder={t('admin.product.namePh')} />
-                </Field>
-                <Field label={t('admin.product.nameAr')}>
+                <Field label={t('admin.product.nameAr')} required>
                   <Input dir="rtl" value={form.nameAr} onChange={(e) => set('nameAr', e.target.value)} placeholder={t('admin.product.namePhAr')} />
                 </Field>
                 <Field label={t('admin.categoryName')} required>
@@ -281,7 +272,7 @@ export default function ProductsSection() {
                     <option value="">{t('common.select')}</option>
                     {(categories.data ?? []).map((c) => (
                       <option key={String(c._id)} value={c.slug}>
-                        {c.name}
+                        {c.nameAr ?? c.name}
                       </option>
                     ))}
                   </Select>
@@ -302,14 +293,9 @@ export default function ProductsSection() {
                 )}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label={t('admin.product.description')}>
-                  <Textarea rows={2} value={form.description} onChange={(e) => set('description', e.target.value)} />
-                </Field>
-                <Field label={t('admin.product.descriptionAr')}>
-                  <Textarea dir="rtl" rows={2} value={form.descriptionAr} onChange={(e) => set('descriptionAr', e.target.value)} />
-                </Field>
-              </div>
+              <Field label={t('admin.product.descriptionAr')}>
+                <Textarea dir="rtl" rows={2} value={form.descriptionAr} onChange={(e) => set('descriptionAr', e.target.value)} />
+              </Field>
 
               {form.isSpecialOffer && (() => {
                 const price = Number(form.price)
@@ -362,7 +348,7 @@ export default function ProductsSection() {
                 disabled={formBusy}
                 className="btn-primary sm:w-auto"
               >
-                {editing ? t('admin.editProduct') : t('admin.newProduct')}
+                {formBusy ? t('common.saving') : editing ? t('admin.editProduct') : t('admin.newProduct')}
               </button>
             </div>
           </div>

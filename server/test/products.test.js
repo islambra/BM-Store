@@ -108,23 +108,36 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
     assert.equal(off.body.data.oldPrice, undefined)
   })
 
-  it('accepts multilingual names and descriptions', async () => {
+  it('stores Latin-script content as-is without calling the translation API', async () => {
     const agent = await adminAgent()
     const res = await agent.post('/api/admin/products').send({
       name: 'Multilingual Product',
-      nameAr: 'Ù…Ù†ØªØ¬ Ù…ØªØ¹Ø¯Ø¯ Ø§Ù„Ù„ØºØ§Øª',
-      nameFr: 'Produit multilingue',
+      nameAr: 'Multilingual Product',
       description: 'English description',
-      descriptionAr: 'ÙˆØµÙ Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©',
-      descriptionFr: 'Description en franÃ§ais',
+      descriptionAr: 'English description',
       price: 1500,
       category: 'spices',
       categoryName: 'Spices',
     })
     assert.equal(res.status, 201)
-    assert.equal(res.body.data.nameAr, 'Ù…Ù†ØªØ¬ Ù…ØªØ¹Ø¯Ø¯ Ø§Ù„Ù„ØºØ§Øª')
-    assert.equal(res.body.data.nameFr, 'Produit multilingue')
-    assert.equal(res.body.data.descriptionFr, 'Description en franÃ§ais')
+    assert.equal(res.body.data.name, 'Multilingual Product')
+    assert.equal(res.body.data.description, 'English description')
+    assert.equal(res.body.data.nameFr, undefined)
+    assert.equal(res.body.data.descriptionFr, undefined)
+  })
+
+  it('rejects Arabic content with a meaningful error when translation is not configured', async () => {
+    const agent = await adminAgent()
+    const res = await agent.post('/api/admin/products').send({
+      nameAr: 'منتج متعدد اللغات',
+      descriptionAr: 'وصف بالعربية',
+      price: 1500,
+      category: 'spices',
+      categoryName: 'Spices',
+    })
+    assert.equal(res.status, 502)
+    assert.match(res.body.message, /translate/i)
+    assert.equal(res.body.data, undefined)
   })
 
   it('enforces a maximum of 5 product images', async () => {

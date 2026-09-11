@@ -49,9 +49,7 @@ export default function ClientDashboardLayout() {
       {/* Top header */}
       <header className="sticky top-0 z-40 border-b border-line bg-surface/90 backdrop-blur">
         <div className="container-app flex h-16 items-center justify-between gap-3">
-          <Link to="/" aria-label="BM Store">
-            <Logo />
-          </Link>
+          <Logo />
           <div className="flex items-center gap-1.5">
             <Link
               to="/"

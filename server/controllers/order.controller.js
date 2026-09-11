@@ -21,20 +21,28 @@ const isValidStatus = (s) => ORDER_STATUSES.includes(s)
 
 /**
  * Resolves the active referral for an order. The referral must be valid at the
- * moment the order is created. Once attributed, the order permanently belongs
- * to the marketer, even if the referral window expires or the marketer is later
- * suspended.
+ * moment the order is created and must belong to this customer's identity
+ * (visitor id or linked account). A suspended marketer must not receive new
+ * attribution. Once attributed, the order permanently belongs to the marketer,
+ * even if the referral window expires or the marketer is later suspended.
  */
-async function resolveActiveReferral(req, referralId) {
+async function resolveActiveReferral(req, referralId, visitorId) {
   if (!req.user?._id && !referralId) return null
   const now = new Date()
   let ref = null
 
-  if (referralId) {
-    const candidate = await Referral.findOne({ _id: referralId, active: true, expiresAt: { $gt: now } })
+  if (referralId && req.user?._id) {
+    // A client-supplied referral is only accepted when it belongs to this
+    // visitor/customer — cross-visitor referrals cannot be attached.
+    const owned = await Referral.findOne({
+      _id: referralId,
+      active: true,
+      expiresAt: { $gt: now },
+      $or: [{ customer: req.user._id }, { visitor: visitorId || '__none__' }],
+    })
       .sort({ createdAt: -1 })
       .lean()
-    if (candidate) ref = candidate
+    if (owned) ref = owned
   }
 
   if (!ref && req.user?._id) {
@@ -42,6 +50,13 @@ async function resolveActiveReferral(req, referralId) {
       .sort({ createdAt: -1 })
       .lean()
   }
+
+  if (!ref) return null
+
+  // Suspended marketers never gain new customers on orders created while they
+  // are suspended (existing attributed orders/earnings are untouched).
+  const profile = await MarketerProfile.findOne({ user: ref.marketer }).lean()
+  if (!profile || profile.status !== 'active') return null
 
   return ref
 }
@@ -82,7 +97,7 @@ async function priceItems(items) {
 }
 
 export const createOrder = asyncHandler(async (req, res) => {
-  const { items, customer, referralId: requestedReferralId, clientKey: rawClientKey } = req.body ?? {}
+  const { items, customer, referralId: requestedReferralId, clientKey: rawClientKey, visitorId: rawVisitorId } = req.body ?? {}
 
   if (!Array.isArray(items) || items.length === 0) {
     return sendError(res, 'Order must contain at least one item', 400)
@@ -90,6 +105,7 @@ export const createOrder = asyncHandler(async (req, res) => {
 
   const userId = req.user?._id
   const clientKey = typeof rawClientKey === 'string' ? rawClientKey.trim().slice(0, 80) : ''
+  const visitorId = typeof rawVisitorId === 'string' ? rawVisitorId.trim().slice(0, 64) : ''
 
   // Idempotency: a retried / double-clicked checkout reuses the same clientKey
   // and gets the original order back — no second personal order number.
@@ -121,7 +137,7 @@ export const createOrder = asyncHandler(async (req, res) => {
   let referredAt = null
   let commissionAmount = 0
 
-  const resolvedRef = await resolveActiveReferral(req, requestedReferralId)
+  const resolvedRef = await resolveActiveReferral(req, requestedReferralId, visitorId)
 
   if (resolvedRef) {
     const profile = await MarketerProfile.findOne({ user: resolvedRef.marketer }).lean()
@@ -308,12 +324,30 @@ export const deleteMyOrder = asyncHandler(async (req, res) => {
 
 async function releaseCommission(order, toStatus, extraFields = {}) {
   if (!order.commissionAmount || !order.referredBy) return false
-  const updated = await Commission.findOneAndUpdate(
+  const set = { status: toStatus, ...extraFields }
+  let updated = await Commission.findOneAndUpdate(
     { order: order._id, status: 'PENDING' },
-    { $set: { status: toStatus, ...extraFields } },
+    { $set: set },
     { new: true }
   )
-  if (!updated) return false
+  if (!updated) {
+    // Commission record missing (order created before it was persisted, or a
+    // legacy order) — materialize it with the target status. The sparse unique
+    // {order} index makes this idempotent: a concurrent write wins with 11000.
+    try {
+      updated = await Commission.create({
+        marketer: order.marketer,
+        order: order._id,
+        orderId: order.orderRef,
+        rate: COMMISSION_RATE,
+        amount: order.commissionAmount,
+        ...set,
+      })
+    } catch (e) {
+      if (e.code !== 11000) throw e
+      return true
+    }
+  }
 
   if (toStatus === 'AVAILABLE') {
     const profile = await MarketerProfile.findById(order.referredBy)

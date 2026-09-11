@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import Product from '../models/Product.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
+import { translateArabicFieldsToEnglish } from '../services/translationService.js'
 
 const sortMap = {
   priceAsc: { price: 1 },
@@ -181,14 +182,35 @@ export const adminListProducts = asyncHandler(async (req, res) => {
 
 export const adminCreateProduct = asyncHandler(async (req, res) => {
   const body = req.body ?? {}
-  if (!String(body.name ?? '').trim() || !Number.isFinite(Number(body.price)) || !String(body.category ?? '').trim()) {
-    return sendError(res, 'Name, price and category are required', 400)
+  const arabicName = String(body.nameAr ?? body.name ?? '').trim()
+  if (!arabicName || !Number.isFinite(Number(body.price)) || !String(body.category ?? '').trim()) {
+    return sendError(res, 'Name (Arabic), price and category are required', 400)
   }
 
   const invalidOffer = validateOffer(body)
   if (invalidOffer) return sendError(res, invalidOffer, 400)
 
+  const fieldsToTranslate = { nameAr: arabicName }
+  if (body.descriptionAr) fieldsToTranslate.descriptionAr = String(body.descriptionAr).trim()
+
+  let translations
+  try {
+    translations = await translateArabicFieldsToEnglish(fieldsToTranslate)
+  } catch (err) {
+    console.error('[Product] Translation failed during creation:', err.message)
+    return sendError(res, 'Could not translate content. Please try again.', 502)
+  }
+
   const data = pickProductFields(body)
+  data.name = translations.nameAr || arabicName
+  data.nameAr = arabicName
+  if (translations.descriptionAr) {
+    data.description = translations.descriptionAr
+    data.descriptionAr = fieldsToTranslate.descriptionAr
+  }
+  delete data.nameFr
+  delete data.descriptionFr
+
   if (data.oldPrice === undefined || data.oldPrice === null) delete data.oldPrice
   if (data.stock === undefined) data.stock = 100
   data.slug = await uniqueSlug(data.name)
@@ -207,13 +229,35 @@ export const adminUpdateProduct = asyncHandler(async (req, res) => {
   if (invalidOffer) return sendError(res, invalidOffer, 400)
 
   const data = pickProductFields(req.body ?? {}, product)
+
+  const fieldsToTranslate = {}
+  if (data.nameAr !== undefined && data.nameAr !== product.nameAr) fieldsToTranslate.nameAr = String(data.nameAr).trim()
+  if (data.descriptionAr !== undefined && data.descriptionAr !== product.descriptionAr) {
+    const trimmed = String(data.descriptionAr).trim()
+    if (trimmed) fieldsToTranslate.descriptionAr = trimmed
+  }
+
+  if (Object.keys(fieldsToTranslate).length > 0) {
+    try {
+      const translations = await translateArabicFieldsToEnglish(fieldsToTranslate)
+      if (translations.nameAr) data.name = translations.nameAr
+      if (translations.descriptionAr) data.description = translations.descriptionAr
+    } catch (err) {
+      console.error('[Product] Translation failed during update:', err.message)
+      return sendError(res, 'Could not translate content. Please try again.', 502)
+    }
+  }
+
+  delete data.nameFr
+  delete data.descriptionFr
+
   const unsetOldPrice = data.oldPrice === null
   if (unsetOldPrice) {
     await Product.updateOne({ _id: product._id }, { $unset: { oldPrice: '' } })
     product.oldPrice = undefined
   }
   if (unsetOldPrice || data.oldPrice === undefined) delete data.oldPrice
-  if (data.name && req.body.name !== product.name) {
+  if (data.name && data.name !== product.name) {
     data.slug = await uniqueSlug(data.name, product._id)
   }
   Object.assign(product, data)

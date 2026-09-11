@@ -165,28 +165,29 @@ export const getMarketerPayouts = asyncHandler(async (req, res) => {
   return sendSuccess(res, { payouts })
 })
 
-const isOwnerOrAdmin = (req, payout) =>
-  String(payout.marketer) === String(req.user._id) || req.user.role === 'ADMIN'
+const isOwner = (req, payout) => String(payout.marketer) === String(req.user._id)
 
 export const confirmPayoutReceived = asyncHandler(async (req, res) => {
-  const payout = await Payout.findById(req.params.id)
-  if (!payout) return sendError(res, 'Payout not found', 404)
-  if (!isOwnerOrAdmin(req, payout)) {
-    return sendError(res, 'You do not have permission to perform this action', 403)
+  // Owner-only, single atomic transition: sent → received. A concurrent confirm
+  // (or a status already advanced) fails cleanly instead of double-confirming.
+  const payout = await Payout.findOneAndUpdate(
+    { _id: req.params.id, marketer: req.user._id, status: 'sent' },
+    { $set: { status: 'received', confirmedAt: new Date() } },
+    { new: true }
+  )
+  if (!payout) {
+    const existing = await Payout.findById(req.params.id).select('marketer status').lean()
+    if (!existing) return sendError(res, 'Payout not found', 404)
+    if (!isOwner(req, existing)) {
+      return sendError(res, 'You do not have permission to perform this action', 403)
+    }
+    return sendError(res, `Cannot confirm a payout in status "${existing.status}"`, 400)
   }
-
-  if (payout.status !== 'sent') {
-    return sendError(res, `Cannot confirm a payout in status "${payout.status}"`, 400)
-  }
-
-  payout.status = 'received'
-  payout.confirmedAt = new Date()
-  await payout.save()
 
   if (payout.commissions?.length) {
     await Commission.updateMany(
       { _id: { $in: payout.commissions }, status: 'PAYMENT_SENT' },
-      { $set: { status: 'RECEIVED', paidAt: new Date() } }
+      { $set: { status: 'RECEIVED', paidAt: payout.confirmedAt } }
     )
   }
 
@@ -194,19 +195,20 @@ export const confirmPayoutReceived = asyncHandler(async (req, res) => {
 })
 
 export const reportPayoutNotReceived = asyncHandler(async (req, res) => {
-  const payout = await Payout.findById(req.params.id)
-  if (!payout) return sendError(res, 'Payout not found', 404)
-  if (!isOwnerOrAdmin(req, payout)) {
-    return sendError(res, 'You do not have permission to perform this action', 403)
+  // Owner-only, single atomic transition: sent → disputed.
+  const payout = await Payout.findOneAndUpdate(
+    { _id: req.params.id, marketer: req.user._id, status: 'sent' },
+    { $set: { status: 'disputed', disputedAt: new Date() } },
+    { new: true }
+  )
+  if (!payout) {
+    const existing = await Payout.findById(req.params.id).select('marketer status').lean()
+    if (!existing) return sendError(res, 'Payout not found', 404)
+    if (!isOwner(req, existing)) {
+      return sendError(res, 'You do not have permission to perform this action', 403)
+    }
+    return sendError(res, `Cannot report a payout in status "${existing.status}"`, 400)
   }
-
-  if (payout.status !== 'sent') {
-    return sendError(res, `Cannot report a payout in status "${payout.status}"`, 400)
-  }
-
-  payout.status = 'disputed'
-  payout.disputedAt = new Date()
-  await payout.save()
 
   if (payout.commissions?.length) {
     await Commission.updateMany(

@@ -25,7 +25,7 @@ import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
 import { Alert, Field, Input, Textarea, Select } from '../components/common/FormControls'
 import { createOrder, getMyOrders } from '../services/api'
-import { getStoredReferral } from '../services/referral'
+import { getStoredReferral, getVisitorId } from '../services/referral'
 import type { Order, OrderStatus } from '../types'
 
 function loadOrders(): Order[] {
@@ -135,6 +135,7 @@ export default function CheckoutPage() {
       await createOrder({
         items: order.items.map(({ productId, qty }) => ({ productId, qty })),
         referralId,
+        visitorId: getVisitorId(),
         clientKey,
         customer,
       })

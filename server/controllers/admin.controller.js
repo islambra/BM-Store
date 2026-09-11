@@ -210,24 +210,44 @@ export const recordPayout = asyncHandler(async (req, res) => {
     .select('_id amount availableAt')
     .lean()
 
-  const selected = []
-  let running = 0
-  for (const c of commissions) {
-    if (running >= amt) break
-    selected.push(c)
-    running = Math.round((running + (c.amount || 0)) * 100) / 100
-  }
-
-  if (running < amt) {
-    return sendError(res, 'Amount exceeds the available balance', 400)
-  }
-
-  const selectedIds = selected.map((c) => c._id)
+  // Claim exactly `amt` out of AVAILABLE commissions, oldest first. Each claim
+  // is an atomic conditional update, so two concurrent payouts can never
+  // double-claim a commission. A commission is only claimed when its full
+  // amount still fits in the remaining payout budget — commissions are
+  // per-order records, so the paid-out total always equals the sum of the
+  // commissions it references (no over-selection, no partial splits).
   const now = new Date()
-  await Commission.updateMany(
-    { _id: { $in: selectedIds }, status: 'AVAILABLE' },
-    { $set: { status: 'PAYMENT_SENT', paidAt: now } }
-  )
+  const claimed = []
+  let remaining = amt
+  for (const c of commissions) {
+    if (remaining <= 0) break
+    const cAmount = Math.round((c.amount || 0) * 100) / 100
+    if (cAmount > remaining) continue
+    const res = await Commission.findOneAndUpdate(
+      { _id: c._id, marketer: marketerId, status: 'AVAILABLE' },
+      { $set: { status: 'PAYMENT_SENT', paidAt: now } },
+      { new: true }
+    )
+    if (res) {
+      claimed.push(c._id)
+      remaining = Math.round((remaining - cAmount) * 100) / 100
+    }
+  }
+
+  if (remaining > 0) {
+    // Roll back any partial claim so no money is marked sent without a payout.
+    if (claimed.length) {
+      await Commission.updateMany(
+        { _id: { $in: claimed }, status: 'PAYMENT_SENT' },
+        { $set: { status: 'AVAILABLE', paidAt: null } }
+      )
+    }
+    const exactHit = commissions.some((c) => Math.round((c.amount || 0) * 100) / 100 === amt)
+    if (!exactHit) {
+      return sendError(res, 'Payout amount must exactly match one or more available commissions', 400)
+    }
+    return sendError(res, 'Unable to claim commissions; please retry', 409)
+  }
 
   const payout = await Payout.create({
     marketer: marketerId,
@@ -235,7 +255,7 @@ export const recordPayout = asyncHandler(async (req, res) => {
     method,
     reference: reference || undefined,
     notes: notes || undefined,
-    commissions: selectedIds,
+    commissions: claimed,
     recordedBy: req.user._id,
     status: 'sent',
     sentAt: now,
@@ -263,7 +283,7 @@ export const updatePayoutStatus = asyncHandler(async (req, res) => {
   if (payout.commissions?.length) {
     await Commission.updateMany(
       { _id: { $in: payout.commissions }, status: { $in: ['PAYMENT_SENT', 'DISPUTED'] } },
-      { $set: { status: 'AVAILABLE' } }
+      { $set: { status: 'AVAILABLE', paidAt: null } }
     )
   }
 

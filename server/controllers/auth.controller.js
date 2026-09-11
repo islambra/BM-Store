@@ -27,10 +27,15 @@ const safeUser = (u) => ({
 
 const normalizePhone = (value) => String(value ?? '').trim().replace(/[^+\d\s-]/g, '').replace(/[\s-]+/g, '')
 
-async function linkReferralToUser(referralId, userId) {
+async function linkReferralToUser(referralId, userId, visitorId) {
   if (!referralId) return null
-  const ref = await Referral.findById(referralId)
-  if (!ref || !ref.active) return null
+  const query = { _id: referralId, active: true }
+  // When the registering browser identifies its visitor id, the referral must
+  // belong to that visitor (or already be linked to this account) — someone
+  // else's referral cannot be attached to a new account.
+  if (visitorId) query.$or = [{ visitor: visitorId }, { customer: userId }]
+  const ref = await Referral.findOne(query)
+  if (!ref) return null
   if (!ref.expiresAt || ref.expiresAt.getTime() <= Date.now()) return null
 
   ref.customer = userId
@@ -48,7 +53,7 @@ async function linkReferralToUser(referralId, userId) {
 }
 
 export const register = asyncHandler(async (req, res) => {
-  const { name, phone, password, referralId } = req.body
+  const { name, phone, password, referralId, visitorId } = req.body
 
   if (!name?.trim() || !phone?.trim() || !password) {
     return sendError(res, 'Name, phone number and password are required', 400)
@@ -71,7 +76,7 @@ export const register = asyncHandler(async (req, res) => {
   })
 
   setAuthCookies(res, user)
-  await linkReferralToUser(referralId, user._id)
+  await linkReferralToUser(referralId, user._id, visitorId)
   return sendSuccess(res, { user: safeUser(user) }, 'Account created', 201)
 })
 

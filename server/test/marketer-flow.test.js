@@ -263,6 +263,113 @@ describe('referral + commission lifecycle', () => {
     assert.equal(order.body.data.order.referralAttributed, false)
     assert.equal(await Commission.countDocuments({ marketer: referral.marketer }), 0)
   })
+
+  it('blocks new order attribution once the marketer is suspended', async () => {
+    const { user, profile } = await createMarketer()
+    const referral = await Referral.create({
+      marketer: user._id,
+      profile: profile._id,
+      referralCode: profile.referralCode,
+      active: true,
+      expiresAt: new Date(Date.now() + 86400000),
+      visitor: 'suspend-order-visitor',
+    })
+    const customer = await createLinkedCustomer(referral._id)
+    const admin = await adminAgent()
+    await admin.patch(`/api/admin/marketers/${profile._id}/status`).send({ status: 'suspended' })
+
+    const product = await createProduct({ name: 'Suspended Now', price: 1000, stock: 10 })
+    const order = await customer.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 1 }],
+      customer: deliveryInfo(),
+    })
+    assert.equal(order.status, 201)
+    assert.equal(order.body.data.order.referralAttributed, false)
+    assert.equal(order.body.data.order.commissionAmount, 0)
+    assert.equal(await Commission.countDocuments({ marketer: user._id }), 0)
+  })
+
+  it('ignores a referral id that does not belong to the ordering visitor', async () => {
+    const other = await createMarketer()
+    const otherRef = await Referral.create({
+      marketer: other.user._id,
+      profile: other.profile._id,
+      referralCode: other.profile.referralCode,
+      active: true,
+      expiresAt: new Date(Date.now() + 86400000),
+      visitor: 'other-visitor',
+    })
+
+    const number = phone()
+    await request(app).post('/api/auth/register').send({ name: 'Mine', phone: number, password: 'Secret@1234' })
+    const mine = request.agent(app)
+    await mine.post('/api/auth/login').send({ phone: number, password: 'Secret@1234' })
+
+    const product = await createProduct({ name: 'Ownership', price: 1000, stock: 10 })
+    const stolen = await mine.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 1 }],
+      customer: deliveryInfo(),
+      referralId: String(otherRef._id),
+      visitorId: 'my-visitor',
+    })
+    assert.equal(stolen.status, 201)
+    assert.equal(stolen.body.data.order.referralAttributed, false)
+    assert.equal(stolen.body.data.order.commissionAmount, 0)
+  })
+
+  it('attributes an order when the referral belongs to the ordering visitor', async () => {
+    const { user, profile } = await createMarketer()
+    const referral = await Referral.create({
+      marketer: user._id,
+      profile: profile._id,
+      referralCode: profile.referralCode,
+      active: true,
+      expiresAt: new Date(Date.now() + 86400000),
+      visitor: 'owner-passes-visitor',
+    })
+
+    const number = phone()
+    await request(app).post('/api/auth/register').send({ name: 'Owner Card', phone: number, password: 'Secret@1234' })
+    const mine = request.agent(app)
+    await mine.post('/api/auth/login').send({ phone: number, password: 'Secret@1234' })
+
+    const product = await createProduct({ name: 'Owner Product', price: 1000, stock: 10 })
+    const order = await mine.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 1 }],
+      customer: deliveryInfo(),
+      referralId: String(referral._id),
+      visitorId: 'owner-passes-visitor',
+    })
+    assert.equal(order.status, 201)
+    assert.equal(order.body.data.order.referralAttributed, true)
+    assert.equal(String(order.body.data.order.marketer), String(user._id))
+  })
+
+  it('reports no total earnings while an attributed order is still pending', async () => {
+    const { user, profile } = await createMarketer()
+    const referral = await Referral.create({
+      marketer: user._id,
+      profile: profile._id,
+      referralCode: profile.referralCode,
+      active: true,
+      expiresAt: new Date(Date.now() + 86400000),
+      visitor: 'pending-earnings-visitor',
+    })
+    const customer = await createLinkedCustomer(referral._id)
+    const product = await createProduct({ name: 'Pending Earnings', price: 1000, stock: 10 })
+    const order = await customer.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 1 }],
+      customer: deliveryInfo(),
+    })
+    assert.equal(order.status, 201)
+
+    const admin = await adminAgent()
+    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
+    assert.equal(detail.status, 200)
+    assert.equal(detail.body.data.stats.totalEarnings, 0)
+    assert.equal(detail.body.data.stats.availableBalance, 0)
+    assert.equal(detail.body.data.stats.pendingEarnings, 100)
+  })
 })
 
 describe('payout workflow', () => {
@@ -361,5 +468,68 @@ describe('payout workflow', () => {
     const orders = await admin.get(`/api/admin/marketers/${user._id}/orders`)
     assert.equal(orders.status, 200)
     assert.equal(orders.body.data.orders[0].commission.status, 'AVAILABLE')
+  })
+
+  it('refuses a payout amount that cannot exactly match available commissions', async () => {
+    const { admin, user } = await createMarketer().then(async ({ user, profile }) => {
+      const referral = await Referral.create({
+        marketer: user._id,
+        profile: profile._id,
+        referralCode: profile.referralCode,
+        active: true,
+        expiresAt: new Date(Date.now() + 86400000),
+        visitor: 'exact-fit-visitor',
+      })
+      const customer = await createLinkedCustomer(referral._id)
+      const admin = await adminAgent()
+      const placeAndDeliver = async () => {
+        const product = await createProduct({ name: `ExactFit-${Math.random()}`, price: 3000, stock: 10 })
+        const order = await customer.post('/api/orders').send({
+          items: [{ productId: product._id, qty: 1 }],
+          customer: deliveryInfo(),
+        })
+        for (const s of ['confirmed', 'processing', 'shipped', 'delivered']) {
+          await admin.patch(`/api/admin/orders/${order.body.data.order._id}/status`).send({ status: s })
+        }
+      }
+      await placeAndDeliver()
+      await placeAndDeliver()
+      return { admin, user }
+    })
+
+    const stats = await admin.get(`/api/admin/marketers/${user._id}`)
+    assert.equal(stats.body.data.stats.availableBalance, 600)
+
+    const partial = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 500, method: 'CCP' })
+    assert.equal(partial.status, 400)
+
+    const after = await admin.get(`/api/admin/marketers/${user._id}`)
+    assert.equal(after.body.data.stats.availableBalance, 600)
+    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'PAYMENT_SENT' }), 0)
+
+    const full = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 600, method: 'CCP' })
+    assert.equal(full.status, 201)
+    assert.equal(full.body.data.amount, 600)
+    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'PAYMENT_SENT' }), 2)
+  })
+
+  it('admin cannot confirm a payout; a payout can only be confirmed once', async () => {
+    const { admin, user } = await primeMarketerAndDeliver('double-confirm-visitor')
+
+    const payout = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 200, method: 'CCP' })
+    assert.equal(payout.status, 201)
+    const payoutId = payout.body.data._id
+
+    const asAdmin = await admin.post(`/api/marketer/payments/${payoutId}/confirm-received`)
+    assert.equal(asAdmin.status, 403)
+
+    const agent = await marketerAgent(user)
+    const first = await agent.post(`/api/marketer/payments/${payoutId}/confirm-received`)
+    assert.equal(first.status, 200)
+    assert.equal(first.body.data.payout.status, 'received')
+
+    const second = await agent.post(`/api/marketer/payments/${payoutId}/confirm-received`)
+    assert.equal(second.status, 400)
+    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'RECEIVED' }), 1)
   })
 })

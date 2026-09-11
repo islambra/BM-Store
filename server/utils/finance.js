@@ -38,7 +38,9 @@ const bucket = (commissions) => {
       default:
         break
     }
-    if (c.status !== 'CANCELLED') out.totalEarnings += amount
+    // Earnings are "earned" only once delivered — PENDING (pre-delivery) and
+    // CANCELLED are never part of total earnings.
+    if (c.status !== 'PENDING' && c.status !== 'CANCELLED') out.totalEarnings += amount
   }
   for (const key of Object.keys(out)) out[key] = Math.round(out[key] * 100) / 100
   return out

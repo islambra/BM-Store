@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CreditCard, Phone, ShieldCheck, Smartphone, UserRound, Wallet } from 'lucide-react'
+import { CreditCard, KeyRound, Phone, ShieldCheck, Smartphone, UserRound, Wallet } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -23,6 +23,9 @@ export default function ProfileSection() {
   }>({ name: '', phone: '', publicName: '', bio: '', avatar: '', ccp: '', ccpKey: '', baridiMob: '' })
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwNotice, setPwNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
 
   if (loading) return <Loader />
   if (error) return <ErrorNote message={error} />
@@ -63,6 +66,35 @@ export default function ProfileSection() {
       setNotice({ tone: 'danger', text: getErrorMessage(err) })
     } finally {
       setBusy(false)
+    }
+  }
+
+  const changePassword = async () => {
+    setPwBusy(true)
+    setPwNotice(null)
+    if (!pw.current) {
+      setPwNotice({ tone: 'danger', text: t('marketer.currentPassword') })
+      setPwBusy(false)
+      return
+    }
+    if (pw.next.length < 8) {
+      setPwNotice({ tone: 'danger', text: t('marketer.passwordTooShort') })
+      setPwBusy(false)
+      return
+    }
+    if (pw.next !== pw.confirm) {
+      setPwNotice({ tone: 'danger', text: t('marketer.passwordsMismatch') })
+      setPwBusy(false)
+      return
+    }
+    try {
+      await api.changePassword({ currentPassword: pw.current, newPassword: pw.next })
+      setPwNotice({ tone: 'success', text: t('marketer.passwordChanged') })
+      setPw({ current: '', next: '', confirm: '' })
+    } catch (err) {
+      setPwNotice({ tone: 'danger', text: getErrorMessage(err) })
+    } finally {
+      setPwBusy(false)
     }
   }
 
@@ -121,6 +153,29 @@ export default function ProfileSection() {
           </Field>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-ink-400">{t('marketer.payoutMonthly')}</p>
+      </div>
+
+      <div className="rounded-2xl border border-line bg-surface p-6">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-ink-900">
+          <KeyRound size={16} className="text-brand-600" />
+          {t('marketer.changePassword')}
+        </h3>
+        {pwNotice && <div className="mt-3"><Alert tone={pwNotice.tone}>{pwNotice.text}</Alert></div>}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label={t('marketer.currentPassword')}>
+            <Input type="password" dir="ltr" value={pw.current} onChange={(e) => setPw((s) => ({ ...s, current: e.target.value }))} />
+          </Field>
+          <div />
+          <Field label={t('marketer.newPassword')}>
+            <Input type="password" dir="ltr" value={pw.next} onChange={(e) => setPw((s) => ({ ...s, next: e.target.value }))} />
+          </Field>
+          <Field label={t('marketer.confirmNewPassword')}>
+            <Input type="password" dir="ltr" value={pw.confirm} onChange={(e) => setPw((s) => ({ ...s, confirm: e.target.value }))} />
+          </Field>
+        </div>
+        <button type="button" onClick={() => void changePassword()} disabled={pwBusy} className="btn-secondary mt-4">
+          {t('marketer.changePassword')}
+        </button>
       </div>
 
       <button type="button" onClick={() => void save()} disabled={busy} className="btn-primary">

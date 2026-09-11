@@ -5,7 +5,7 @@ import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
 import { getErrorMessage } from '../../services/api'
 import { Field, Textarea } from '../common/FormControls'
-import ConfirmDialog from './ConfirmDialog'
+import ConfirmDialog from '../common/ConfirmDialog'
 import { ErrorNote, Loader } from './adminShared'
 import type { PostRecord, ProductRecord } from '../../services/api'
 
@@ -155,6 +155,8 @@ export default function PostsSection() {
         open={!!deleteTarget}
         title={t('admin.post.deleteTitle')}
         description={t('admin.post.deleteDesc')}
+        confirmLabel={t('common.remove')}
+        cancelLabel={t('common.cancel')}
         onConfirm={() => deleteTarget && void del(deleteTarget._id)}
         onCancel={() => setDeleteTarget(null)}
       />
@@ -178,7 +180,6 @@ function PostFormModal({
   onSaved: () => void
 }) {
   const { t } = useLanguage()
-  const [textEn, setTextEn] = useState(post?.textEn ?? '')
   const [textAr, setTextAr] = useState(post?.textAr ?? '')
   const [mediaType, setMediaType] = useState<'images' | 'video'>(post?.mediaType ?? 'images')
   const [images, setImages] = useState<string[]>(post?.images ?? [])
@@ -200,7 +201,6 @@ function PostFormModal({
     setError('')
     try {
       const body: api.CreatePostInput = {
-        textEn: textEn || undefined,
         textAr: textAr || undefined,
         mediaType,
         images: mediaType === 'images' ? images : [],
@@ -240,12 +240,8 @@ function PostFormModal({
         {notice && <p className="mt-3 text-sm font-medium text-success-600">{notice}</p>}
 
         <div className="mt-5 space-y-4">
-          <Field label={t('admin.post.textEn')}>
-            <Textarea value={textEn} onChange={(e) => setTextEn(e.target.value)} rows={3} placeholder="English text..." />
-          </Field>
-
-          <Field label={t('admin.post.textAr')}>
-            <Textarea value={textAr} onChange={(e) => setTextAr(e.target.value)} rows={3} placeholder="النص بالعربية..." className="text-end" dir="rtl" />
+          <Field label={t('admin.post.textAr')} required>
+            <Textarea value={textAr} onChange={(e) => setTextAr(e.target.value)} rows={3} placeholder={t('admin.post.textArPh')} className="text-end" dir="rtl" />
           </Field>
 
           <Field label={t('admin.post.mediaType')}>
@@ -288,7 +284,7 @@ function PostFormModal({
           </button>
           <button type="button" onClick={() => void save()} disabled={busy} className="btn-primary inline-flex items-center gap-2">
             {busy && <LoaderCircle size={16} className="animate-spin" />}
-            {t('common.save')}
+            {busy ? t('common.saving') : t('common.save')}
           </button>
         </div>
       </div>

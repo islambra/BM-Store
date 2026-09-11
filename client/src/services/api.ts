@@ -99,8 +99,8 @@ export function login(phone: string, password: string) {
   return post<AuthPayload>('/auth/login', { phone, password })
 }
 
-export function register(name: string, phone: string, password: string, opts?: { referralId?: string }) {
-  return post<AuthPayload>('/auth/register', { name, phone, password, referralId: opts?.referralId })
+export function register(name: string, phone: string, password: string, opts?: { referralId?: string; visitorId?: string }) {
+  return post<AuthPayload>('/auth/register', { name, phone, password, referralId: opts?.referralId, visitorId: opts?.visitorId })
 }
 
 export interface RegisterMarketerInput {
@@ -264,6 +264,8 @@ export function getProductBySlug(slug: string) {
 export interface CreateOrderInput {
   items: { productId: string; qty: number }[]
   referralId?: string
+  /** Browser visitor id — lets the server verify the referral belongs to this visitor. */
+  visitorId?: string
   /** Stable idempotency key for one checkout attempt (retries reuse it). */
   clientKey?: string
   customer: {
