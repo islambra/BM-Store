@@ -22,7 +22,6 @@ const productSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true, index: true },
     isFeatured: { type: Boolean, default: false, index: true },
     isSpecialOffer: { type: Boolean, default: false, index: true },
-    isRewardEligible: { type: Boolean, default: false },
     confirmedSales: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
   },

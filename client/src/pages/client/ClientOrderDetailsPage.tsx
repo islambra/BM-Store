@@ -210,6 +210,22 @@ export default function ClientOrderDetailsPage() {
                 #{order.orderRef}
               </h1>
               <OrderStatusBadge status={order.status} />
+              {order.customerOrderNumber != null && (
+                <span className="inline-flex items-center rounded-full bg-canvas px-2.5 py-1 text-[11px] font-bold tabular-nums text-ink-700">
+                  {t('client.myOrderNumber')} #{order.customerOrderNumber}
+                </span>
+              )}
+              {(order.discountPercent ?? 0) > 0 ? (
+                <span className="inline-flex items-center rounded-full bg-success-50 px-2.5 py-1 text-[11px] font-bold tabular-nums text-success-700">
+                  {t('client.discount')} {order.discountPercent}%
+                </span>
+              ) : (
+                (order.discountAmount ?? order.rewardDiscount ?? 0) > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-success-50 px-2.5 py-1 text-[11px] font-bold text-success-700">
+                    {t('client.discount')}
+                  </span>
+                )
+              )}
               {editable && (
                 <span className="ms-auto flex items-center gap-1.5">
                   <button
@@ -266,6 +282,24 @@ export default function ClientOrderDetailsPage() {
                 <dt>{t('client.subtotal')}</dt>
                 <dd className="font-semibold tabular-nums">{formatPrice(order.subtotal, lang)}</dd>
               </div>
+              {(order.discountPercent ?? 0) > 0 && (
+                <div className="flex items-center justify-between text-ink-500">
+                  <dt>
+                    {t('client.loyaltyDiscount')} ({order.discountPercent}%)
+                  </dt>
+                  <dd className="font-semibold tabular-nums text-success-700">
+                    −{formatPrice(order.discountAmount ?? 0, lang)}
+                  </dd>
+                </div>
+              )}
+              {(order.discountPercent ?? 0) === 0 && (order.rewardDiscount ?? 0) > 0 && (
+                <div className="flex items-center justify-between text-ink-500">
+                  <dt>{t('client.discount')}</dt>
+                  <dd className="font-semibold tabular-nums text-success-700">
+                    −{formatPrice(order.rewardDiscount ?? 0, lang)}
+                  </dd>
+                </div>
+              )}
               <div className="flex items-center justify-between text-ink-500">
                 <dt>{t('client.delivery')}</dt>
                 <dd className="font-semibold tabular-nums">{formatPrice(order.delivery, lang)}</dd>

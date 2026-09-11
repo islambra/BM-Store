@@ -192,7 +192,6 @@ export interface ProductRecord {
   isActive: boolean
   isFeatured: boolean
   isSpecialOffer?: boolean
-  isRewardEligible: boolean
   confirmedSales?: number
 }
 
@@ -265,6 +264,8 @@ export function getProductBySlug(slug: string) {
 export interface CreateOrderInput {
   items: { productId: string; qty: number }[]
   referralId?: string
+  /** Stable idempotency key for one checkout attempt (retries reuse it). */
+  clientKey?: string
   customer: {
     fullName: string
     phone: string
@@ -283,6 +284,14 @@ export function createOrder(body: CreateOrderInput) {
 export interface MyOrderRecord {
   _id: string
   orderRef: string
+  /** Customer's personal order number (1, 2, ...). Absent on legacy orders. */
+  customerOrderNumber?: number
+  /** Loyalty discount percent applied (5 normal, 7 every 10th). */
+  discountPercent?: number
+  /** Loyalty discount amount in DZD. */
+  discountAmount?: number
+  /** Legacy per-product reward discount (pre-discount-system orders only). */
+  rewardDiscount?: number
   items: { productId: string; name: string; qty: number; price: number; image?: string }[]
   customer: {
     fullName: string
@@ -295,14 +304,13 @@ export interface MyOrderRecord {
   }
   subtotal: number
   delivery: number
-  rewardDiscount?: number
   total: number
   status: string
   createdAt: string
 }
 
 export function getMyOrders() {
-  return get<{ orders: MyOrderRecord[] }>('/orders/me')
+  return get<{ orders: MyOrderRecord[]; nextCustomerOrderNumber: number; nextDiscountPercent: number }>('/orders/me')
 }
 
 export function updateMyOrder(
@@ -358,6 +366,7 @@ export interface MarketerOrderRecord {
   id: string
   orderRef: string
   status: string
+  items?: { name: string; qty: number }[]
   subtotal: number
   total: number
   createdAt: string
@@ -576,7 +585,7 @@ export function deleteAdminProduct(id: string) {
   return remove<null>(`/admin/products/${id}`)
 }
 
-export function toggleAdminProduct(id: string, body: { isActive?: boolean; isFeatured?: boolean; isSpecialOffer?: boolean; isRewardEligible?: boolean }) {
+export function toggleAdminProduct(id: string, body: { isActive?: boolean; isFeatured?: boolean; isSpecialOffer?: boolean }) {
   return patch<ProductRecord>(`/admin/products/${id}/toggle`, body)
 }
 
@@ -730,10 +739,6 @@ export function getPublishedPostsHome() {
   return get<PostRecord[]>('/posts/home')
 }
 
-export function getPostById(id: string) {
-  return get<PostRecord>(`/posts/${id}`)
-}
-
 export function likePost(id: string) {
   return post<LikeResult>(`/posts/${id}/like`)
 }
@@ -787,6 +792,11 @@ export function updatePayout(id: string, action: 'cancel') {
 export interface AdminOrderRecord {
   _id: string
   orderRef: string
+  customerOrderNumber?: number
+  discountPercent?: number
+  discountAmount?: number
+  /** Legacy per-product reward discount (pre-discount-system orders only). */
+  rewardDiscount?: number
   items: { productId: string; name: string; qty: number; price: number; image?: string }[]
   customer: {
     fullName: string
@@ -799,7 +809,6 @@ export interface AdminOrderRecord {
   }
   subtotal: number
   delivery: number
-  rewardDiscount?: number
   total: number
   status: string
   createdAt: string

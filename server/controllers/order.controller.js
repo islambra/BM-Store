@@ -4,7 +4,12 @@ import Product from '../models/Product.js'
 import Commission from '../models/Commission.js'
 import MarketerProfile from '../models/MarketerProfile.js'
 import Referral from '../models/Referral.js'
-import Reward, { getRewardDiscount } from '../models/Reward.js'
+import {
+  allocateCustomerOrderNumber,
+  calcCustomerDiscountAmount,
+  getCustomerDiscountPercent,
+  peekNextCustomerDiscount,
+} from '../utils/customerDiscount.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 
 export const DELIVERY_FEE = 350
@@ -41,45 +46,28 @@ async function resolveActiveReferral(req, referralId) {
   return ref
 }
 
-export const createOrder = asyncHandler(async (req, res) => {
-  const { items, customer, referralId: requestedReferralId } = req.body ?? {}
-
-  if (!Array.isArray(items) || items.length === 0) {
-    return sendError(res, 'Order must contain at least one item', 400)
-  }
-
-  const userId = req.user?._id
-
-  const rewardMap = new Map()
-  if (userId) {
-    const rewardDocs = await Reward.find({ user: userId }).lean()
-    for (const r of rewardDocs) rewardMap.set(String(r.product), r.purchaseCount)
-  }
-
+/**
+ * Prices order items exclusively from the database. Client-supplied prices,
+ * discounts, totals and order numbers are never trusted.
+ * Special-offer products already carry their offer price in `product.price`,
+ * so the customer order discount below applies once, at order level —
+ * never stacked per product.
+ */
+async function priceItems(items) {
   const cleanItems = []
-  let totalRewardDiscount = 0
-
   for (const item of items) {
     const qty = Number(item?.qty)
     if (!Number.isInteger(qty) || qty < 1) {
-      return sendError(res, 'Invalid quantity in order', 400)
+      return { error: { message: 'Invalid quantity in order', status: 400 } }
     }
     if (!item?.productId) {
-      return sendError(res, 'Product ID is required for each item', 400)
+      return { error: { message: 'Product ID is required for each item', status: 400 } }
     }
 
     const product = await Product.findById(item.productId).lean()
-    if (!product) return sendError(res, `Product not found: ${item.productId}`, 404)
-    if (!product.isActive) return sendError(res, `Product is not available: ${product.name}`, 400)
-    if (product.stock < qty) return sendError(res, `Insufficient stock for: ${product.name}`, 400)
-
-    let rewardDiscount = 0
-    if (userId && product.isRewardEligible) {
-      const count = rewardMap.get(String(product._id)) || 0
-      const rate = getRewardDiscount(count)
-      rewardDiscount = Math.round((product.price * rate) / 100) * qty
-      totalRewardDiscount += rewardDiscount
-    }
+    if (!product) return { error: { message: `Product not found: ${item.productId}`, status: 404 } }
+    if (!product.isActive) return { error: { message: `Product is not available: ${product.name}`, status: 400 } }
+    if (product.stock < qty) return { error: { message: `Insufficient stock for: ${product.name}`, status: 400 } }
 
     cleanItems.push({
       productId: product._id,
@@ -87,9 +75,32 @@ export const createOrder = asyncHandler(async (req, res) => {
       qty,
       price: product.price,
       image: product.image || undefined,
-      rewardDiscount,
     })
   }
+  const subtotal = cleanItems.reduce((sum, it) => sum + it.price * it.qty, 0)
+  return { cleanItems, subtotal }
+}
+
+export const createOrder = asyncHandler(async (req, res) => {
+  const { items, customer, referralId: requestedReferralId, clientKey: rawClientKey } = req.body ?? {}
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return sendError(res, 'Order must contain at least one item', 400)
+  }
+
+  const userId = req.user?._id
+  const clientKey = typeof rawClientKey === 'string' ? rawClientKey.trim().slice(0, 80) : ''
+
+  // Idempotency: a retried / double-clicked checkout reuses the same clientKey
+  // and gets the original order back — no second personal order number.
+  if (userId && clientKey) {
+    const existing = await Order.findOne({ user: userId, clientKey }).lean()
+    if (existing) return sendSuccess(res, { order: existing, deduped: true }, 'Order request received', 200)
+  }
+
+  const priced = await priceItems(items)
+  if (priced.error) return sendError(res, priced.error.message, priced.error.status)
+  const { cleanItems, subtotal } = priced
 
   const delivery = customer ?? {}
   const required = ['fullName', 'phone', 'wilaya', 'commune', 'address']
@@ -99,9 +110,9 @@ export const createOrder = asyncHandler(async (req, res) => {
     }
   }
 
-  const subtotal = cleanItems.reduce((sum, it) => sum + it.price * it.qty, 0)
   const shipping = DELIVERY_FEE
-  const total = subtotal + shipping - totalRewardDiscount
+  // NOTE: customerOrderNumber / discountPercent / discountAmount are assigned
+  // below, server-side only. Anything with these names in req.body is ignored.
 
   let referredBy = null
   let marketerId = null
@@ -127,32 +138,57 @@ export const createOrder = asyncHandler(async (req, res) => {
   let orderRef = randomRef()
   while (await Order.exists({ orderRef })) orderRef = randomRef()
 
-  const order = await Order.create({
-    orderRef,
-    user: userId,
-    items: cleanItems,
-    customer: {
-      fullName: String(delivery.fullName).trim(),
-      phone: String(delivery.phone).trim(),
-      wilaya: String(delivery.wilaya).trim(),
-      wilayaName: delivery.wilayaName ? String(delivery.wilayaName).trim() : undefined,
-      commune: String(delivery.commune).trim(),
-      address: String(delivery.address).trim(),
-      note: delivery.note ? String(delivery.note).trim() : undefined,
-    },
-    subtotal,
-    delivery: shipping,
-    rewardDiscount: totalRewardDiscount,
-    total,
-    status: 'pending-review',
-    referredBy,
-    marketer: marketerId,
-    referralId: attributedReferralId,
-    referralCode,
-    referredAt,
-    referralAttributed: Boolean(referredBy),
-    commissionAmount,
-  })
+  // Personal order number + loyalty discount (backend is the source of truth).
+  // Allocated at creation only — historical orders never change.
+  // Concurrent checkouts for the same user could compute the same number: the
+  // unique { user, customerOrderNumber } index rejects the loser (or the
+  // duplicate clientKey), which retries with the next number — or returns the
+  // already-created order when the clientKey collided (retried submission).
+  let order = null
+  for (let attempt = 0; attempt < 3 && !order; attempt += 1) {
+    const customerOrderNumber = await allocateCustomerOrderNumber(userId)
+    const discountPercent = getCustomerDiscountPercent(customerOrderNumber)
+    const discountAmount = calcCustomerDiscountAmount(subtotal, discountPercent)
+    try {
+      order = await Order.create({
+        orderRef,
+        user: userId,
+        items: cleanItems,
+        customer: {
+          fullName: String(delivery.fullName).trim(),
+          phone: String(delivery.phone).trim(),
+          wilaya: String(delivery.wilaya).trim(),
+          wilayaName: delivery.wilayaName ? String(delivery.wilayaName).trim() : undefined,
+          commune: String(delivery.commune).trim(),
+          address: String(delivery.address).trim(),
+          note: delivery.note ? String(delivery.note).trim() : undefined,
+        },
+        subtotal,
+        delivery: shipping,
+        customerOrderNumber,
+        discountPercent,
+        discountAmount,
+        total: subtotal + shipping - discountAmount,
+        status: 'pending-review',
+        referredBy,
+        marketer: marketerId,
+        referralId: attributedReferralId,
+        referralCode,
+        referredAt,
+        referralAttributed: Boolean(referredBy),
+        commissionAmount,
+        clientKey: clientKey || undefined,
+      })
+    } catch (e) {
+      if (e.code !== 11000) throw e
+      if (userId && clientKey) {
+        const raced = await Order.findOne({ user: userId, clientKey }).lean()
+        if (raced) return sendSuccess(res, { order: raced, deduped: true }, 'Order request received', 200)
+      }
+      if (attempt === 2) throw e
+      while (await Order.exists({ orderRef })) orderRef = randomRef()
+    }
+  }
 
   if (commissionAmount > 0 && marketerId) {
     try {
@@ -173,8 +209,11 @@ export const createOrder = asyncHandler(async (req, res) => {
 })
 
 export const getMyOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 }).lean()
-  return sendSuccess(res, { orders })
+  const [orders, peek] = await Promise.all([
+    Order.find({ user: req.user._id }).sort({ createdAt: -1 }).lean(),
+    peekNextCustomerDiscount(req.user._id),
+  ])
+  return sendSuccess(res, { orders, ...peek })
 })
 
 async function findEditableOrder(req) {
@@ -205,48 +244,23 @@ export const updateMyOrder = asyncHandler(async (req, res) => {
       return sendError(res, 'Order must contain at least one item', 400)
     }
 
-    const rewardMap = new Map()
-    const rewardDocs = await Reward.find({ user: req.user._id }).lean()
-    for (const r of rewardDocs) rewardMap.set(String(r.product), r.purchaseCount)
+    const priced = await priceItems(items)
+    if (priced.error) return sendError(res, priced.error.message, priced.error.status)
+    const { cleanItems, subtotal } = priced
 
-    const cleanItems = []
-    let totalRewardDiscount = 0
-    for (const item of items) {
-      const qty = Number(item?.qty)
-      if (!Number.isInteger(qty) || qty < 1) {
-        return sendError(res, 'Invalid quantity in order', 400)
-      }
-      if (!item?.productId) {
-        return sendError(res, 'Product ID is required for each item', 400)
-      }
-      const product = await Product.findById(item.productId).lean()
-      if (!product) return sendError(res, `Product not found: ${item.productId}`, 404)
-      if (!product.isActive) return sendError(res, `Product is not available: ${product.name}`, 400)
-      if (product.stock < qty) return sendError(res, `Insufficient stock for: ${product.name}`, 400)
-
-      let rewardDiscount = 0
-      if (product.isRewardEligible) {
-        const count = rewardMap.get(String(product._id)) || 0
-        const rate = getRewardDiscount(count)
-        rewardDiscount = Math.round((product.price * rate) / 100) * qty
-        totalRewardDiscount += rewardDiscount
-      }
-
-      cleanItems.push({
-        productId: product._id,
-        name: product.name,
-        qty,
-        price: product.price,
-        image: product.image || undefined,
-        rewardDiscount,
-      })
-    }
-
-    const subtotal = cleanItems.reduce((sum, it) => sum + it.price * it.qty, 0)
     order.items = cleanItems
     order.subtotal = subtotal
-    order.rewardDiscount = totalRewardDiscount
-    order.total = subtotal + order.delivery - totalRewardDiscount
+    // Personal order number + percent are immutable once allocated; only the
+    // amount follows the edited subtotal (legacy orders without a percent
+    // keep their stored total components untouched except items/subtotal).
+    if (Number.isInteger(order.customerOrderNumber) && order.customerOrderNumber > 0) {
+      order.discountPercent = getCustomerDiscountPercent(order.customerOrderNumber)
+      order.discountAmount = calcCustomerDiscountAmount(subtotal, order.discountPercent)
+      order.total = subtotal + order.delivery - order.discountAmount
+    } else {
+      order.discountAmount = 0
+      order.total = subtotal + order.delivery
+    }
 
     if (order.referredBy) {
       order.commissionAmount = Math.round(subtotal * (COMMISSION_RATE / 100) * 100) / 100
@@ -334,17 +348,6 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     for (const item of order.items) {
       if (item.productId) {
         await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.qty, confirmedSales: item.qty } })
-      }
-    }
-
-    if (order.user) {
-      const eligible = await Product.find({ _id: { $in: order.items.map((it) => it.productId).filter(Boolean) }, isRewardEligible: true }).select('_id').lean()
-      for (const product of eligible) {
-        await Reward.updateOne(
-          { user: order.user, product: product._id },
-          { $inc: { purchaseCount: 1 }, $set: { lastPurchaseAt: new Date() } },
-          { upsert: true }
-        )
       }
     }
   }

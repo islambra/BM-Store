@@ -121,7 +121,7 @@ export const getMarketerOrders = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .select('orderRef status items subtotal rewardDiscount delivery total createdAt referredBy')
+      .select('orderRef status items subtotal discountPercent discountAmount delivery total createdAt referredBy')
       .lean(),
     Order.countDocuments(query),
   ])

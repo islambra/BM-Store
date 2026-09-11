@@ -114,6 +114,8 @@ export async function attachCommissionStatus(marketerId, orders) {
     id: o._id,
     orderRef: o.orderRef,
     status: o.status,
+    // Privacy: only product names/quantities — never customer details.
+    items: Array.isArray(o.items) ? o.items.map((it) => ({ name: it.name, qty: it.qty })) : [],
     subtotal: o.subtotal,
     total: o.total,
     createdAt: o.createdAt,
@@ -133,7 +135,7 @@ export const getMarketerOrders = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .select('orderRef status items subtotal rewardDiscount delivery total createdAt referredBy marketer')
+      .select('orderRef status items subtotal discountPercent discountAmount delivery total createdAt referredBy marketer')
       .lean(),
     Order.countDocuments(query),
   ])

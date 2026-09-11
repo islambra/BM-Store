@@ -8,8 +8,16 @@ import { Input } from '../common/FormControls'
 import { CopyButton } from './marketerShared'
 import { ErrorNote, Loader } from '../admin/adminShared'
 
-function productLinkApi(): string {
-  return (import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api').replace(/\/api\/?$/, '')
+/**
+ * Storefront base URL for shareable product referral links.
+ * Prefers the server-provided base URL (APP_BASE_URL), then the current
+ * origin — never a hardcoded localhost.
+ */
+function storefrontBase(serverBase?: string): string {
+  const raw =
+    (typeof serverBase === 'string' && serverBase.trim()) ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
+  return raw.replace(/\/?$/, '')
 }
 
 export default function ReferralLinksSection() {
@@ -22,7 +30,7 @@ export default function ReferralLinksSection() {
   if (error) return <ErrorNote message={error} />
   if (!me) return null
 
-  const baseUrl = productLinkApi().replace(/\/?$/, '')
+  const baseUrl = storefrontBase(me.baseUrl)
   const generalLink = me.profile.referralLink
   const generated = selected ? `${baseUrl}/product/${selected.slug}?ref=${me.profile.referralCode}` : null
 

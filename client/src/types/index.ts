@@ -20,7 +20,6 @@ export interface Product {
   isActive: boolean
   isFeatured: boolean
   isSpecialOffer?: boolean
-  isRewardEligible: boolean
   confirmedSales?: number
 }
 
@@ -70,7 +69,6 @@ export interface OrderItem {
   qty: number
   price: number
   image?: string
-  rewardDiscount?: number
 }
 
 export interface OrderDelivery {
@@ -90,7 +88,9 @@ export interface Order {
   customer: OrderDelivery
   subtotal: number
   delivery: number
-  rewardDiscount?: number
+  customerOrderNumber?: number
+  discountPercent?: number
+  discountAmount?: number
   total: number
   status: OrderStatus
   createdAt: string

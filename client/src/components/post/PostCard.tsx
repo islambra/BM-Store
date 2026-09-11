@@ -58,7 +58,7 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
   }
 
   const share = async () => {
-    const url = `${window.location.origin}/posts/${post.id}`
+    const url = `${window.location.origin}/posts#post-${post.id}`
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({ url, title })
@@ -194,7 +194,7 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
 
       <ShareModal
         open={shareOpen}
-        url={`${window.location.origin}/posts/${post.id}`}
+        url={`${window.location.origin}/posts#post-${post.id}`}
         title={title}
         onClose={() => setShareOpen(false)}
       />

@@ -50,7 +50,11 @@ describe('orders', () => {
     assert.match(res.body.data.order.orderRef, /^BM-[0-9A-F]{6}$/)
     assert.equal(res.body.data.order.subtotal, 1600)
     assert.equal(res.body.data.order.delivery, 350)
-    assert.equal(res.body.data.order.total, 1950)
+    // First personal order -> 5% loyalty discount (1600 * 5% = 80)
+    assert.equal(res.body.data.order.customerOrderNumber, 1)
+    assert.equal(res.body.data.order.discountPercent, 5)
+    assert.equal(res.body.data.order.discountAmount, 80)
+    assert.equal(res.body.data.order.total, 1870)
     assert.equal(res.body.data.order.status, 'pending-review')
   })
 
@@ -69,7 +73,10 @@ describe('orders', () => {
     })
     assert.equal(res.status, 201)
     assert.equal(res.body.data.order.delivery, 350)
-    assert.equal(res.body.data.order.total, res.body.data.order.subtotal + 350)
+    assert.equal(
+      res.body.data.order.total,
+      res.body.data.order.subtotal + 350 - res.body.data.order.discountAmount,
+    )
   })
 
   it('uses server price, ignoring client-supplied price', async () => {
@@ -196,7 +203,10 @@ describe('customer order edit + delete before contact', () => {
     assert.equal(res.body.data.order.items[0].qty, 3)
     assert.equal(res.body.data.order.items[0].price, 500)
     assert.equal(res.body.data.order.subtotal, 1500)
-    assert.equal(res.body.data.order.total, 1850)
+    // 5% of 1500 = 75 -> total 1500 + 350 - 75
+    assert.equal(res.body.data.order.discountPercent, 5)
+    assert.equal(res.body.data.order.discountAmount, 75)
+    assert.equal(res.body.data.order.total, 1775)
   })
 
   it('rejects quantity edits exceeding stock', async () => {
@@ -273,11 +283,9 @@ describe('admin order management + product CRUD', () => {
       category: 'spices',
       categoryName: 'Spices',
       stock: 20,
-      isRewardEligible: true,
     })
     assert.equal(created.status, 201)
     assert.equal(created.body.data.stock, 20)
-    assert.equal(created.body.data.isRewardEligible, true)
     const id = created.body.data._id
 
     const updated = await admin.patch(`/api/admin/products/${id}`).send({ stock: 15, isFeatured: true })

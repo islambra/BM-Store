@@ -112,16 +112,35 @@ export default function OrdersSection() {
           {orders.map((o) => {
             const actions = actionsFor(o.status)
             const isOpen = expanded === String(o._id)
+            const discount = o.discountPercent ?? 0
+            const discountValue = o.discountAmount ?? o.rewardDiscount ?? 0
             return (
               <div key={String(o._id)} className="rounded-2xl border border-line bg-surface p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-bold tabular-nums text-ink-900" dir="ltr">{o.orderRef}</span>
                     <OrderStatusBadge status={o.status} />
-                    {o.referralAttributed && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                    {o.customerOrderNumber != null && (
+                      <span className="inline-flex items-center rounded-full bg-canvas px-2.5 py-1 text-[11px] font-bold tabular-nums text-ink-700">
+                        {t('admin.customerOrder')} #{o.customerOrderNumber}
+                      </span>
+                    )}
+                    {discount > 0 && (
+                      <span className="inline-flex items-center rounded-full bg-success-50 px-2.5 py-1 text-[11px] font-bold tabular-nums text-success-700">
+                        −{discount}%
+                      </span>
+                    )}
+                    {o.referralAttributed ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700"
+                        title={o.marketer?.name ?? o.referralCode ?? ''}
+                      >
                         <Megaphone size={12} />
-                        {t('admin.marketer')}
+                        <span dir="ltr">{o.referralCode ?? t('admin.marketer')}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-canvas px-2.5 py-1 text-[11px] font-bold text-ink-400">
+                        {t('admin.direct')}
                       </span>
                     )}
                   </div>
@@ -180,49 +199,132 @@ export default function OrdersSection() {
                   </div>
                 </div>
                 {isOpen && (
-                  <div className="mt-3 space-y-3 rounded-xl bg-canvas/70 px-4 py-3.5 text-sm">
-                    <dl className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <dt className="text-ink-500">{t('client.subtotal')}</dt>
-                        <dd className="font-semibold tabular-nums text-ink-900">{formatPrice(o.subtotal, lang)}</dd>
+                  <div className="mt-3 space-y-4 rounded-xl bg-canvas/70 px-4 py-3.5 text-sm">
+                    <section>
+                      <h4 className="text-xs font-extrabold uppercase tracking-wide text-ink-400">
+                        {t('admin.customerInfo')}
+                      </h4>
+                      <div className="mt-1.5 text-[13px] text-ink-700">
+                        <p className="font-semibold text-ink-900">{o.customer.fullName}</p>
+                        <p dir="ltr" className="mt-0.5 tabular-nums">
+                          {o.customer.phone}
+                        </p>
+                        <p className="mt-0.5">
+                          {o.customer.wilayaName || o.customer.wilaya} · {o.customer.commune} · {o.customer.address}
+                        </p>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <dt className="text-ink-500">{t('client.delivery')}</dt>
-                        <dd className="font-semibold tabular-nums text-ink-900">{formatPrice(o.delivery, lang)}</dd>
-                      </div>
-                      {(o.rewardDiscount ?? 0) > 0 && (
+                    </section>
+                    <section>
+                      <h4 className="text-xs font-extrabold uppercase tracking-wide text-ink-400">
+                        {t('admin.orderInfo')}
+                      </h4>
+                      <dl className="mt-1.5 grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
                         <div className="flex items-center justify-between gap-3">
-                          <dt className="text-ink-500">{t('admin.rewardDiscount')}</dt>
-                          <dd className="font-semibold tabular-nums text-ink-900">−{formatPrice(o.rewardDiscount ?? 0, lang)}</dd>
+                          <dt className="text-ink-500">ID</dt>
+                          <dd className="font-semibold tabular-nums text-ink-900" dir="ltr">{o.orderRef}</dd>
                         </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-ink-500">{t('admin.customerOrder')}</dt>
+                          <dd className="font-semibold tabular-nums text-ink-900">
+                            {o.customerOrderNumber != null ? `#${o.customerOrderNumber}` : '—'}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-ink-500">{t('admin.orderStatus')}</dt>
+                          <dd>
+                            <OrderStatusBadge status={o.status} />
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-ink-500">{t('client.orderDate')}</dt>
+                          <dd className="font-semibold text-ink-900">
+                            {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US')}
+                          </dd>
+                        </div>
+                      </dl>
+                    </section>
+                    <section>
+                      <h4 className="text-xs font-extrabold uppercase tracking-wide text-ink-400">
+                        {t('admin.pricingSummary')}
+                      </h4>
+                      <dl className="mt-1.5 grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-ink-500">{t('client.subtotal')}</dt>
+                          <dd className="font-semibold tabular-nums text-ink-900">{formatPrice(o.subtotal, lang)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-ink-500">{t('client.delivery')}</dt>
+                          <dd className="font-semibold tabular-nums text-ink-900">{formatPrice(o.delivery, lang)}</dd>
+                        </div>
+                        {discount > 0 && (
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="text-ink-500">
+                              {t('admin.customerDiscount')} ({discount}%)
+                            </dt>
+                            <dd className="font-semibold tabular-nums text-success-700">
+                              −{formatPrice(discountValue, lang)}
+                            </dd>
+                          </div>
+                        )}
+                        {discount === 0 && discountValue > 0 && (
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="text-ink-500">{t('admin.customerDiscount')}</dt>
+                            <dd className="font-semibold tabular-nums text-success-700">
+                              −{formatPrice(discountValue, lang)}
+                            </dd>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="font-bold text-ink-900">{t('client.total')}</dt>
+                          <dd className="font-extrabold tabular-nums text-brand-700">{formatPrice(o.total, lang)}</dd>
+                        </div>
+                      </dl>
+                    </section>
+                    <section>
+                      <h4 className="text-xs font-extrabold uppercase tracking-wide text-ink-400">
+                        {t('admin.referralInfo')}
+                      </h4>
+                      {o.referralAttributed ? (
+                        <div className="mt-1.5 rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-[13px]">
+                          <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span className="inline-flex items-center gap-1.5 font-bold text-brand-800">
+                              <Megaphone size={13} />
+                              {o.marketer?.name ?? '—'}
+                            </span>
+                            {o.marketer?.phone && (
+                              <span className="tabular-nums text-ink-600" dir="ltr">{o.marketer.phone}</span>
+                            )}
+                            {o.referralCode && (
+                              <span className="font-semibold tabular-nums text-ink-600" dir="ltr">
+                                {o.referralCode}
+                              </span>
+                            )}
+                          </p>
+                          {(o.commissionAmount ?? 0) > 0 && (
+                            <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums text-ink-600">
+                              <span>
+                                {t('admin.commission')} (10%): {formatPrice(o.commissionAmount ?? 0, lang)}
+                              </span>
+                              <span className="font-bold text-ink-800">
+                                {o.status === 'delivered'
+                                  ? t('admin.commissionAvailable')
+                                  : t('admin.commissionPending')}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-1.5 text-[13px] text-ink-500">
+                          {t('admin.direct')}
+                        </p>
                       )}
-                      <div className="flex items-center justify-between gap-3">
-                        <dt className="font-bold text-ink-900">{t('client.total')}</dt>
-                        <dd className="font-extrabold tabular-nums text-brand-700">{formatPrice(o.total, lang)}</dd>
-                      </div>
-                    </dl>
+                    </section>
                     {o.customer.note && (
                       <p className="text-[13px] text-ink-600">
                         <span className="font-bold text-ink-900">{t('admin.orderNote')}: </span>
                         {o.customer.note}
                       </p>
                     )}
-                    {o.referralAttributed ? (
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-[13px]">
-                        <span className="inline-flex items-center gap-1.5 font-bold text-brand-800">
-                          <Megaphone size={13} />
-                          {t('admin.marketer')}: {o.marketer?.name ?? o.referralCode ?? '—'}
-                        </span>
-                        {o.marketer?.phone && (
-                          <span className="tabular-nums text-ink-600" dir="ltr">{o.marketer.phone}</span>
-                        )}
-                        {(o.commissionAmount ?? 0) > 0 && (
-                          <span className="tabular-nums text-ink-600">
-                            {t('admin.commission')}: {formatPrice(o.commissionAmount ?? 0, lang)}
-                          </span>
-                        )}
-                      </div>
-                    ) : null}
                   </div>
                 )}
               </div>

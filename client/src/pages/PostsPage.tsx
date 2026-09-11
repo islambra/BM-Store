@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { MessageSquare, ArrowDown, Loader2 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useAsync } from '../hooks/useAsync'
@@ -12,10 +13,21 @@ export default function PostsPage() {
   const [page, setPage] = useState(1)
   const [posts, setPosts] = useState<PostItem[]>([])
   const { data, loading, error } = useAsync(() => loadPostsPage(1))
+  const { hash } = useLocation()
 
   const currentPosts = posts.length > 0 ? posts : (data?.posts ?? [])
   const total = data?.total ?? 0
   const hasMore = currentPosts.length < total
+
+  // Deep link from homepage cards (`/posts#post-<id>`): scroll to the post
+  // once the feed has loaded. Runs after ScrollToTop so it wins.
+  useEffect(() => {
+    if (!hash || currentPosts.length === 0) return
+    const el = document.getElementById(hash.slice(1))
+    if (!el) return
+    const t = setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+    return () => clearTimeout(t)
+  }, [hash, currentPosts.length])
 
   const loadMore = async () => {
     const next = page + 1
@@ -65,7 +77,9 @@ export default function PostsPage() {
           {/* Feed — centered, compact cards (wider on desktop for horizontal layout) */}
           <div className="mx-auto w-full max-w-2xl space-y-5 lg:max-w-4xl lg:space-y-6">
             {currentPosts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              <div key={post.id} id={`post-${post.id}`} className="scroll-mt-24">
+                <PostCard post={post} />
+              </div>
             ))}
           </div>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Phone,
@@ -24,7 +24,7 @@ import { formatPrice } from '../components/common/Price'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
 import { Alert, Field, Input, Textarea, Select } from '../components/common/FormControls'
-import { createOrder } from '../services/api'
+import { createOrder, getMyOrders } from '../services/api'
 import { getStoredReferral } from '../services/referral'
 import type { Order, OrderStatus } from '../types'
 
@@ -35,6 +35,15 @@ function loadOrders(): Order[] {
   } catch {
     return []
   }
+}
+
+function newClientKey() {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  } catch {
+    /* fall through */
+  }
+  return `ck-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
 }
 
 export default function CheckoutPage() {
@@ -55,8 +64,32 @@ export default function CheckoutPage() {
   const profileName = user?.name.trim() ?? ''
   const profilePhone = user?.phone?.trim() ?? ''
 
+  // One stable idempotency key per checkout attempt: retries and double
+  // clicks reuse it, so the backend never creates a duplicate order.
+  const clientKey = useMemo(() => newClientKey(), [])
+
+  // Loyalty discount estimate (display only — the backend computes the real
+  // personal order number, percent and totals when the order is created).
+  const [nextInfo, setNextInfo] = useState<{ n: number; p: number } | null>(null)
+  useEffect(() => {
+    if (!user) return
+    let active = true
+    getMyOrders()
+      .then((res) => {
+        if (active) setNextInfo({ n: res.nextCustomerOrderNumber ?? 1, p: res.nextDiscountPercent ?? 5 })
+      })
+      .catch(() => {
+        if (active) setNextInfo(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [user])
+
   const delivery = cartTotal > 0 ? DELIVERY_FEE : 0
-  const total = cartTotal + delivery
+  const estimatePercent = nextInfo?.p ?? 5
+  const estimateDiscount = Math.round((cartTotal * estimatePercent) / 100)
+  const total = cartTotal + delivery - (cartTotal > 0 ? estimateDiscount : 0)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -102,6 +135,7 @@ export default function CheckoutPage() {
       await createOrder({
         items: order.items.map(({ productId, qty }) => ({ productId, qty })),
         referralId,
+        clientKey,
         customer,
       })
     } catch {
@@ -317,6 +351,14 @@ export default function CheckoutPage() {
                 <dt className="text-ink-500">{t('cart.subtotal')}</dt>
                 <dd className="font-semibold text-ink-900">{formatPrice(cartTotal, lang)}</dd>
               </div>
+              {cartTotal > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-ink-500">
+                    {t('client.loyaltyDiscount')} ({estimatePercent}%)
+                  </dt>
+                  <dd className="font-semibold tabular-nums text-success-700">−{formatPrice(estimateDiscount, lang)}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-ink-500">{t('cart.delivery')}</dt>
                 <dd className="font-semibold text-ink-900">{formatPrice(delivery, lang)}</dd>
@@ -326,6 +368,11 @@ export default function CheckoutPage() {
                 <dd className="text-lg font-extrabold text-ink-900">{formatPrice(total, lang)}</dd>
               </div>
             </dl>
+            {nextInfo && cartTotal > 0 && (
+              <p className="mt-3 rounded-xl bg-brand-50 px-3.5 py-2.5 text-xs font-semibold leading-relaxed text-brand-800">
+                {t('client.checkoutDiscountHint', { n: nextInfo.n, p: nextInfo.p })}
+              </p>
+            )}
             <Link to="/cart" className="btn-ghost mt-4 w-full py-3">
               <ArrowIcon size={16} />
               {t('checkout.editCart')}

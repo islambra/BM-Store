@@ -124,7 +124,6 @@ const pickProductFields = (body, current = null) => {
   if (body.lowStockThreshold !== undefined) out.lowStockThreshold = Math.max(0, Number(body.lowStockThreshold))
   if (body.isActive !== undefined) out.isActive = Boolean(body.isActive)
   if (body.isFeatured !== undefined) out.isFeatured = Boolean(body.isFeatured)
-  if (body.isRewardEligible !== undefined) out.isRewardEligible = Boolean(body.isRewardEligible)
   if (body.price !== undefined) out.price = Number(body.price)
   if (body.isSpecialOffer !== undefined) out.isSpecialOffer = Boolean(body.isSpecialOffer)
 
@@ -240,7 +239,6 @@ export const adminToggleProduct = asyncHandler(async (req, res) => {
 
   if (req.body.isActive !== undefined) product.isActive = Boolean(req.body.isActive)
   if (req.body.isFeatured !== undefined) product.isFeatured = Boolean(req.body.isFeatured)
-  if (req.body.isRewardEligible !== undefined) product.isRewardEligible = Boolean(req.body.isRewardEligible)
   if (req.body.isSpecialOffer !== undefined) {
     const wantOffer = Boolean(req.body.isSpecialOffer)
     if (wantOffer) {

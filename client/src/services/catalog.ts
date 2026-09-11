@@ -8,7 +8,6 @@ import {
   listProducts,
   getPublishedPostsHome,
   getPublishedPosts,
-  getPostById,
   type BannerRecord,
   type CategoryRecord,
   type ProductRecord,
@@ -53,7 +52,6 @@ export function toProduct(r: ProductRecord): Product {
     isActive: r.isActive ?? true,
     isFeatured: r.isFeatured ?? false,
     isSpecialOffer: r.isSpecialOffer ?? false,
-    isRewardEligible: r.isRewardEligible ?? false,
     confirmedSales: r.confirmedSales ?? 0,
   }
 }
@@ -232,9 +230,4 @@ export async function loadPostsPage(page = 1, limit = 6): Promise<{ posts: PostI
     total: res.total,
     pages: res.pages,
   }
-}
-
-export async function loadPost(id: string): Promise<PostItem | null> {
-  const record = await getPostById(id)
-  return toPost(record)
 }

@@ -69,10 +69,10 @@ to its likes and comments.
 ### Public product shape
 
 Products expose multilingual fields flat: `name`, `nameAr`, `nameFr`, `description`,
-`descriptionAr`, `descriptionFr`. `discount` is computed dynamically from
-`(oldPrice - price) / oldPrice` — exposed only for special offers (`isSpecialOffer`,
+descriptionAr`, `descriptionFr`. `discount` is computed dynamically from
+(oldPrice - price) / oldPrice` — exposed only for special offers (`isSpecialOffer`,
 which requires `oldPrice > price > 0`); normal products always return `discount: 0`
-and no `oldPrice`. Products also expose `isFeatured`, `isRewardEligible`,
+and no `oldPrice`. Products also expose `isFeatured`,
 `confirmedSales` (incremented on confirmed orders, used by best-selling sort; 0 for a
 fresh/no-purchase storefront so the fallback order is creation date) and `images`
 (max 4).
@@ -85,13 +85,29 @@ special offers (requires `oldPrice > price > 0`).
 
 | Method | Path        | Auth          | Note                                                    | Returns |
 | ------ | ----------- | ------------- | ------------------------------------------------------- | ------- |
-| POST   | `/orders`   | optionalAuth  | `{items:[{productId, qty}], referralId?, customer}`     | `{order}` (201) |
-| GET    | `/orders/me`| access cookie | orders belonging to the logged-in user                  | `{orders}` |
+| POST   | `/orders`   | access cookie | `{items:[{productId, qty}], referralId?, clientKey?, customer}` | `{order}` (201; `{order, deduped:true}` 200 on retried `clientKey`) |
+| GET    | `/orders/me`| access cookie | orders belonging to the logged-in user                  | `{orders, nextCustomerOrderNumber, nextDiscountPercent}` |
 
 The server recomputes all prices/totals and stores product price snapshots on
-order items; client-supplied prices are ignored. A flat `DELIVERY_FEE` is added
-to every order (from `config/shop.js`). Reward discounts apply per line only to
-`isRewardEligible` products for logged-in users (see `models/Reward.js`).
+order items; client-supplied prices, discounts, totals and order numbers are
+ignored. A flat `DELIVERY_FEE` is added to every order.
+
+**Customer order discount (single source of truth: `utils/customerDiscount.js`).**
+Every authenticated order gets an order-level loyalty discount from the
+customer's PERSONAL order number (`customerOrderNumber`: 1st, 2nd, ... order of
+that customer — independent per customer, not the global store number):
+5% normally, 7% on every 10th (`n % 10 === 0`). Each order permanently stores
+`customerOrderNumber`, `discountPercent`, `discountAmount`, `subtotal`,
+`delivery` (fee) and `total = subtotal + delivery - discountAmount`; historical
+orders never change. Numbers are allocated at creation (max ever allocated + 1,
+falling back to legacy order count + 1 for pre-system orders), unique per user
+via a `{user, customerOrderNumber}` unique index with retry; cancelled/rejected
+orders keep their numbers (no reuse, no gaps in history). Customer edits while
+`pending-review` keep number + percent and only recompute the amount from the
+new subtotal. An optional `clientKey` makes checkout idempotent: retries with
+the same key return the original order instead of consuming a new number.
+Special-offer products already carry their offer price in `product.price`, so
+the loyalty discount applies once at order level and never stacks per product.
 
 **Referral attribution.** At order creation the server resolves the referral to
 attribute: `referralId` in the body wins, otherwise a valid active referral bound
@@ -132,15 +148,12 @@ The tracker stamps an anonymous `visitor` identity (from `visitorId`, else the
 active referral for the same marketer + identity is returned instead of creating
 a duplicate (idempotent).
 
-## Rewards
+## Customer loyalty discount
 
-| Method | Path       | Auth   | Note                                             | Returns |
-| ------ | ---------- | ------ | ------------------------------------------------ | ------- |
-| GET    | `/rewards/me` | access cookie | Discount rules + purchase count for the user  | `{rules, count}` |
-
-(`GET /rewards/me` is planned; reward discount is currently applied server-side at
-order creation for eligible products based on the user's confirmed-purchase count —
-see `models/Reward.js` `getRewardDiscount`.)
+There is exactly one discount system: every authenticated order gets 5%, every
+10th personal order gets 7% (see **Customer order discount** under Orders).
+The old per-product reward system (`Reward` model, `isRewardEligible`,
+`purchaseCount`, per-line `rewardDiscount`) has been removed.
 
 ## Admin (auth + role ADMIN; all under `/admin`)
 
@@ -161,7 +174,7 @@ see `models/Reward.js` `getRewardDiscount`.)
 | POST   | `/admin/products`          | whitelisted fields; special offer requires `oldPrice > price`; `images` capped at 4 | `{product}` (201) |
 | PATCH  | `/admin/products/:id`      | partial update; same validation as create   | `{product}` |
 | DELETE | `/admin/products/:id`      |                                             | – |
-| PATCH  | `/admin/products/:id/toggle` | `{isActive?, isFeatured?, isSpecialOffer?, isRewardEligible?}`; enabling `isSpecialOffer` requires an existing `oldPrice > price`, disabling clears `oldPrice` | `{product}` |
+| PATCH  | `/admin/products/:id/toggle` | `{isActive?, isFeatured?, isSpecialOffer?}`; enabling `isSpecialOffer` requires an existing `oldPrice > price`, disabling clears `oldPrice` | `{product}` |
 | GET    | `/admin/categories`        |                                             | `Category[]` |
 | POST   | `/admin/categories`        | `{slug, name, ...}` (whitelisted; slug unique) | `{category}` (201) |
 | PATCH  | `/admin/categories/:id`    | partial update (e.g. `{active}`)            | `{category}` |

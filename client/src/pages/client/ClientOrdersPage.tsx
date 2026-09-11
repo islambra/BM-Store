@@ -22,6 +22,8 @@ function OrderCard({ order }: { order: MyOrderRecord }) {
   const ArrowIcon = rtl ? ArrowLeft : ArrowRight
   const first = order.items[0]
   const extra = order.items.length - 1
+  const pct = order.discountPercent ?? 0
+  const saved = order.discountAmount ?? order.rewardDiscount ?? 0
 
   return (
     <article className="rounded-2xl border border-line bg-surface p-4 shadow-sm transition-all hover:border-brand-200 hover:shadow-soft sm:p-5">
@@ -30,6 +32,22 @@ function OrderCard({ order }: { order: MyOrderRecord }) {
           #{order.orderRef}
         </h2>
         <OrderStatusBadge status={order.status} />
+        {order.customerOrderNumber != null && (
+          <span className="inline-flex items-center rounded-full bg-canvas px-2.5 py-1 text-[11px] font-bold tabular-nums text-ink-700">
+            {t('client.myOrderNumber')} #{order.customerOrderNumber}
+          </span>
+        )}
+        {pct > 0 ? (
+          <span className="inline-flex items-center rounded-full bg-success-50 px-2.5 py-1 text-[11px] font-bold tabular-nums text-success-700">
+            −{pct}%
+          </span>
+        ) : (
+          saved > 0 && (
+            <span className="inline-flex items-center rounded-full bg-success-50 px-2.5 py-1 text-[11px] font-bold text-success-700">
+              {t('client.discount')}
+            </span>
+          )
+        )}
         <span className="ms-auto inline-flex items-center gap-1 text-xs text-ink-400">
           <Calendar size={12} />
           {formatDate(order.createdAt, rtl ? 'ar-DZ' : 'en-US')}
@@ -76,7 +94,14 @@ function OrderCard({ order }: { order: MyOrderRecord }) {
             </div>
           )}
         </div>
-        <p className="shrink-0 text-sm font-extrabold tabular-nums text-ink-900">{formatPrice(order.total, lang)}</p>
+        <div className="shrink-0 text-end">
+          {saved > 0 && (
+            <p className="text-[11px] font-semibold tabular-nums text-success-700">
+              −{formatPrice(saved, lang)}
+            </p>
+          )}
+          <p className="text-sm font-extrabold tabular-nums text-ink-900">{formatPrice(order.total, lang)}</p>
+        </div>
       </div>
 
       <div className="mt-3 flex justify-end">

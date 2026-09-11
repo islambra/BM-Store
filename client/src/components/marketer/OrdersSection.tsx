@@ -60,10 +60,26 @@ export default function OrdersSection() {
 
   return (
     <div className="space-y-5">
-      <Table headers={[t('marketer.order'), t('common.date'), t('marketer.status'), t('common.total'), t('marketer.orderCommission')]}>
+      <Table headers={[t('marketer.order'), t('marketer.products'), t('common.date'), t('marketer.status'), t('common.total'), t('marketer.orderCommission')]}>
         {orders.map((o) => (
           <tr key={o.id} className="hover:bg-canvas">
-            <td className="px-4 py-3 text-sm font-bold text-ink-900">{o.orderRef}</td>
+            <td className="px-4 py-3 text-sm font-bold tabular-nums text-ink-900" dir="ltr">{o.orderRef}</td>
+            <td className="px-4 py-3 text-xs text-ink-600">
+              {(o.items ?? []).length === 0 ? (
+                <span className="text-ink-400">—</span>
+              ) : (
+                <span>
+                  {(o.items ?? []).slice(0, 2).map((it, i) => (
+                    <span key={i} className="block max-w-44 truncate">
+                      {it.name} <span className="tabular-nums text-ink-400">× {it.qty}</span>
+                    </span>
+                  ))}
+                  {(o.items ?? []).length > 2 && (
+                    <span className="text-ink-400">+{(o.items ?? []).length - 2}</span>
+                  )}
+                </span>
+              )}
+            </td>
             <td className="px-4 py-3 text-xs text-ink-400">
               {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US')}
             </td>

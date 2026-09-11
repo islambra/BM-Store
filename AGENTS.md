@@ -17,7 +17,8 @@
 - Money in integer DZD; compute totals server-side only; ignore client price in order creation.
 - No email/notifications features.
 - Admin can only `pending-review` → `confirmed`/`cancelled` (first status change); Confirm/Cancel must show a confirm dialog on the client.
-- `confirmed` status: decrement stock, create marketer Commission, bump Reward purchaseCount, and increment Product `confirmedSales`.
+- `confirmed` status: decrement stock and increment Product `confirmedSales`.
+- Customer loyalty discount is order-level only: `customerOrderNumber` (per-customer sequence) → 5%, every 10th → 7% (see `server/utils/customerDiscount.js`). No per-product reward system.
 - Public APIs are read-only-ish, admin APIs under `/api/admin/*`; all mutations behind loose auth check, role checks inside handlers (no middleware).
 
 ## Task plan (in progress — full redesign + storefront API integration)
