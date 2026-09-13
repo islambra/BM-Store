@@ -126,18 +126,22 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
     assert.equal(res.body.data.descriptionFr, undefined)
   })
 
-  it('rejects Arabic content with a meaningful error when translation is not configured', async () => {
+  it('stores Arabic content as-is when translation is not configured instead of failing', async () => {
     const agent = await adminAgent()
+    const nameAr = 'منتج متعدد اللغات'
+    const descriptionAr = 'وصف بالعربية'
     const res = await agent.post('/api/admin/products').send({
-      nameAr: 'منتج متعدد اللغات',
-      descriptionAr: 'وصف بالعربية',
+      nameAr,
+      descriptionAr,
       price: 1500,
       category: 'spices',
       categoryName: 'Spices',
     })
-    assert.equal(res.status, 502)
-    assert.match(res.body.message, /translate/i)
-    assert.equal(res.body.data, undefined)
+    assert.equal(res.status, 201)
+    assert.equal(res.body.data.nameAr, nameAr)
+    assert.equal(res.body.data.descriptionAr, descriptionAr)
+    assert.equal(res.body.data.name, nameAr)
+    assert.equal(res.body.data.description, descriptionAr)
   })
 
   it('enforces a maximum of 5 product images', async () => {

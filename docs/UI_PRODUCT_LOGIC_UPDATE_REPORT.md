@@ -81,7 +81,7 @@ points are implemented and verified.
   `connect ETIMEDOUT` in a `before` hook (network flake — that suite passed 5/5 in an
   earlier full run). Product suite is 10/10 (new tests: offers-only discount exposure,
   best-selling by `confirmedSales`, `offer=true` filter, old-price clearing, toggle
-  validation, max-4 images, multilingual).
+  validation, max-5 images, multilingual).
 - Manual checks to run in the admin when you approve a product: create Normal (no
   old-price field), create Special Offer (old price required, discount preview shows
   `-XX%`), toggle a product into/out of Special Offer.

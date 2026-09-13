@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getErrorMessage } from '../services/api'
 
-export function useAsync<T>(fn: () => Promise<T>) {
+export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -22,7 +22,8 @@ export function useAsync<T>(fn: () => Promise<T>) {
 
   useEffect(() => {
     void run()
-  }, [run])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, ...deps])
 
   return { data, loading, error, reload: run }
 }

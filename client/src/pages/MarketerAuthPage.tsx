@@ -224,8 +224,9 @@ export default function MarketerAuthPage({ mode }: { mode: MarketerAuthMode }) {
           </div>
 
           <div className="mt-3 text-center">
-            <Link to="/" className="text-sm font-semibold text-ink-500 hover:text-ink-700">
-              ← {t('marketer.backToStore')}
+            <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-700">
+              <ArrowIcon size={16} />
+              {t('marketer.backToStore')}
             </Link>
           </div>
       </div>

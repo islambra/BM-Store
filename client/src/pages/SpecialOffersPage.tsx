@@ -5,6 +5,7 @@ import { loadProductsPage } from '../services/catalog'
 import ProductCard from '../components/product/ProductCard'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
+import { Alert } from '../components/common/FormControls'
 import { ProductCardSkeleton } from '../components/common/Skeletons'
 
 export default function SpecialOffersPage() {
@@ -20,7 +21,16 @@ export default function SpecialOffersPage() {
         subtitle={t('deals.subtitle', { count: offers.data?.total ?? 0 })}
       />
 
-      {offers.loading ? (
+      {offers.error ? (
+        <div className="mt-7">
+          <Alert tone="danger">
+            <p>{offers.error}</p>
+            <button type="button" onClick={() => void offers.reload()} className="btn-ghost mt-3">
+              {t('common.retry')}
+            </button>
+          </Alert>
+        </div>
+      ) : offers.loading ? (
         <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <ProductCardSkeleton key={i} />

@@ -42,8 +42,8 @@ export async function translateText(text, targetLanguage = 'en', sourceLanguage 
   if (!containsArabic(trimmed)) return trimmed
 
   if (!isConfigured()) {
-    console.warn('[Translation] Google Cloud Translation is not configured — cannot translate Arabic content.')
-    throw new Error('Google Cloud Translation is not configured')
+    console.warn('[Translation] Google Cloud Translation is not configured — storing Arabic content as-is (no English fallback).')
+    return trimmed
   }
 
   try {
@@ -68,8 +68,8 @@ export async function translateMultipleTexts(texts, targetLanguage = 'en', sourc
   if (!hasNeedingTranslation) return filtered
 
   if (!isConfigured()) {
-    console.warn('[Translation] Google Cloud Translation is not configured — cannot translate Arabic content.')
-    throw new Error('Google Cloud Translation is not configured')
+    console.warn('[Translation] Google Cloud Translation is not configured — storing Arabic content as-is (no English fallback).')
+    return filtered
   }
 
   try {

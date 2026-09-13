@@ -4,6 +4,7 @@ import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
 import OrderStatusBadge from '../common/OrderStatusBadge'
 import { formatPrice } from '../common/Price'
+import { ErrorNote, Loader } from './adminShared'
 
 export default function OverviewSection() {
   const { t, lang } = useLanguage()
@@ -11,6 +12,28 @@ export default function OverviewSection() {
   const marketers = useAsync(() => api.getAdminMarketers())
   const products = useAsync(() => api.getAdminProducts())
   const orders = useAsync(() => api.getAdminOrders())
+
+  const loadError = users.error || marketers.error || products.error || orders.error
+  if (loadError) {
+    return (
+      <div className="space-y-3">
+        <ErrorNote message={loadError} />
+        <button
+          type="button"
+          onClick={() => {
+            void users.reload()
+            void marketers.reload()
+            void products.reload()
+            void orders.reload()
+          }}
+          className="btn-ghost"
+        >
+          {t('common.retry')}
+        </button>
+      </div>
+    )
+  }
+  if (users.loading || marketers.loading || products.loading || orders.loading) return <Loader />
 
   const adminUsers = users.data?.users ?? []
   const customers = adminUsers.filter((u) => u.role === 'USER').length

@@ -93,7 +93,7 @@ export default function Header() {
       </div>
 
       {/* Mobile scrollable nav pills */}
-      <nav className="border-t border-line lg:hidden" aria-label="Main">
+      <nav className="border-t border-line lg:hidden" aria-label={t('nav.main')}>
         <div className="container-app flex gap-2 overflow-x-auto py-2 no-scrollbar">
           {nav.map((item) => (
             <NavLink
@@ -119,7 +119,7 @@ export default function Header() {
       </nav>
 
       {/* Desktop secondary nav */}
-      <nav className="hidden border-t border-line lg:block" aria-label="Main">
+      <nav className="hidden border-t border-line lg:block" aria-label={t('nav.main')}>
         <div className="container-app flex h-11 items-center">
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             {nav.map((item) => (

@@ -13,7 +13,7 @@ export default function WishlistPage() {
   const { t } = useLanguage()
   const { wishlist, clearWishlist } = useStore()
 
-  const { data: items, loading, error } = useAsync(() => loadProductsByIds(wishlist))
+  const { data: items, loading, error } = useAsync(() => loadProductsByIds(wishlist), [wishlist])
 
   if (!loading && items?.length === 0 && !error) {
     return (

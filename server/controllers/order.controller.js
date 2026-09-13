@@ -372,19 +372,33 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     return sendError(res, `Cannot transition from "${order.status}" to "${status}"`, 400)
   }
 
-  const wasConfirmed = order.status !== 'confirmed' && status === 'confirmed'
-  const wasDelivered = order.status !== 'delivered' && status === 'delivered'
+  const previousStatus = order.status
+  const wasConfirmed = previousStatus !== 'confirmed' && status === 'confirmed'
+  const wasDelivered = previousStatus !== 'delivered' && status === 'delivered'
+
+  if (wasConfirmed) {
+    const decremented = []
+    try {
+      for (const item of order.items) {
+        if (!item.productId) continue
+        const updated = await Product.findOneAndUpdate(
+          { _id: item.productId, stock: { $gte: item.qty } },
+          { $inc: { stock: -item.qty, confirmedSales: item.qty } },
+          { projection: { _id: 1 } }
+        )
+        if (!updated) throw new Error(`OUT_OF_STOCK:${item.productId}`)
+        decremented.push({ productId: item.productId, qty: item.qty })
+      }
+    } catch (err) {
+      for (const d of decremented) {
+        await Product.updateOne({ _id: d.productId }, { $inc: { stock: d.qty, confirmedSales: -d.qty } })
+      }
+      return sendError(res, 'Not enough stock to confirm this order', 400)
+    }
+  }
 
   order.status = status
   await order.save()
-
-  if (wasConfirmed) {
-    for (const item of order.items) {
-      if (item.productId) {
-        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.qty, confirmedSales: item.qty } })
-      }
-    }
-  }
 
   if (wasDelivered) {
     await releaseCommission(order, 'AVAILABLE', { availableAt: new Date() })

@@ -86,7 +86,7 @@ export default function ShareModal({
             <h2 className="text-lg font-bold text-ink-900">{t('posts.shareTitle')}</h2>
             <p className="mt-1 text-sm text-ink-500">{t('posts.shareSubtitle')}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="icon-btn text-ink-400">
+          <button type="button" onClick={onClose} aria-label={t('common.close')} className="icon-btn text-ink-400">
             <X size={18} />
           </button>
         </div>

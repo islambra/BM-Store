@@ -4,6 +4,7 @@ import { ShoppingCart, Trash2, Minus, Plus, ArrowRight, ArrowLeft, LogIn } from 
 import { useLanguage } from '../context/LanguageContext'
 import { useStore } from '../context/StoreContext'
 import { useAuth } from '../context/AuthContext'
+import { useCatalog } from '../context/CatalogContext'
 import { localizedName } from '../utils/localize'
 import { DELIVERY_FEE } from '../config/shop'
 import EmptyState from '../components/common/EmptyState'
@@ -15,6 +16,7 @@ export default function CartPage() {
   const { t, lang } = useLanguage()
   const { cart, updateQuantity, removeFromCart, cartTotal } = useStore()
   const { user } = useAuth()
+  const { localizeCategory } = useCatalog()
   const navigate = useNavigate()
   const ArrowIcon = lang === 'ar' ? ArrowLeft : ArrowRight
   const [loginNotice, setLoginNotice] = useState(false)
@@ -89,7 +91,7 @@ export default function CartPage() {
                     <Trash2 size={17} />
                   </button>
                 </div>
-                <span className="mt-1 text-xs text-ink-400">{t('brand.storeName')}</span>
+                <span className="mt-1 text-xs text-ink-400">{localizeCategory(product.categoryName || product.category)}</span>
                 <div className="mt-auto flex items-center justify-between pt-3">
                   <div className="flex items-center rounded-xl border border-line bg-canvas">
                     <button
@@ -104,7 +106,8 @@ export default function CartPage() {
                     <button
                       type="button"
                       onClick={() => updateQuantity(product.id, quantity + 1)}
-                      className="px-2.5 py-2 text-ink-500 transition-colors hover:text-ink-900"
+                      disabled={quantity >= product.stock}
+                      className="px-2.5 py-2 text-ink-500 transition-colors hover:text-ink-900 disabled:opacity-40"
                       aria-label={t('cart.increase')}
                     >
                       <Plus size={14} />

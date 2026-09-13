@@ -64,7 +64,7 @@ export default function PostPreviewCard({ post }: { post: PostItem }) {
           <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-ink-900">{text}</span>
         ) : (
           <span className="line-clamp-2 text-[13px] text-ink-400 italic">
-            {rtl ? 'منشور من BM Store' : 'A new update from BM Store'}
+            {t('posts.newPostFallback')}
           </span>
         )}
         <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-ink-400">

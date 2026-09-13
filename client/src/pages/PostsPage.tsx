@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { MessageSquare, ArrowDown, Loader2 } from 'lucide-react'
+import { MessageSquare, ArrowDown, Loader2, AlertCircle } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useAsync } from '../hooks/useAsync'
 import { loadPostsPage } from '../services/catalog'
+import { getErrorMessage } from '../services/api'
 import type { PostItem } from '../services/catalog'
 import PostCard from '../components/post/PostCard'
 import EmptyState from '../components/common/EmptyState'
@@ -12,6 +13,8 @@ export default function PostsPage() {
   const { t } = useLanguage()
   const [page, setPage] = useState(1)
   const [posts, setPosts] = useState<PostItem[]>([])
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState('')
   const { data, loading, error } = useAsync(() => loadPostsPage(1))
   const { hash } = useLocation()
 
@@ -30,14 +33,22 @@ export default function PostsPage() {
   }, [hash, currentPosts.length])
 
   const loadMore = async () => {
-    const next = page + 1
-    const res = await loadPostsPage(next)
-    setPosts((prev) => {
-      const existing = prev.length > 0 ? prev : (data?.posts ?? [])
-      const seen = new Set(existing.map((p) => p.id))
-      return [...existing, ...res.posts.filter((p) => !seen.has(p.id))]
-    })
-    setPage(next)
+    setLoadingMore(true)
+    setLoadMoreError('')
+    try {
+      const next = page + 1
+      const res = await loadPostsPage(next)
+      setPosts((prev) => {
+        const existing = prev.length > 0 ? prev : (data?.posts ?? [])
+        const seen = new Set(existing.map((p) => p.id))
+        return [...existing, ...res.posts.filter((p) => !seen.has(p.id))]
+      })
+      setPage(next)
+    } catch (err) {
+      setLoadMoreError(getErrorMessage(err))
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   return (
@@ -85,13 +96,20 @@ export default function PostsPage() {
 
           {/* Load more */}
           <div className="mt-10 flex flex-col items-center gap-3">
+            {loadMoreError && (
+              <p className="inline-flex items-center gap-2 text-sm text-danger-600">
+                <AlertCircle size={15} />
+                {loadMoreError}
+              </p>
+            )}
             {hasMore ? (
               <button
                 type="button"
                 onClick={() => void loadMore()}
+                disabled={loadingMore}
                 className="btn-secondary inline-flex items-center gap-2 px-6"
               >
-                <ArrowDown size={16} />
+                {loadingMore ? <Loader2 size={16} className="animate-spin" /> : <ArrowDown size={16} />}
                 {t('posts.loadMore')}
               </button>
             ) : (

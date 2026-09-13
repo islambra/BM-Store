@@ -18,24 +18,15 @@ import { useLanguage } from '../context/LanguageContext'
 import { useStore } from '../context/StoreContext'
 import { useAuth } from '../context/AuthContext'
 import { localizedName } from '../utils/localize'
+import { localizeError } from '../utils/errors'
 import { wilayas, getWilayaName } from '../data/wilayas'
-import { DELIVERY_FEE, ORDERS_STORAGE_KEY } from '../config/shop'
+import { DELIVERY_FEE } from '../config/shop'
 import { formatPrice } from '../components/common/Price'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
 import { Alert, Field, Input, Textarea, Select } from '../components/common/FormControls'
 import { createOrder, getMyOrders } from '../services/api'
 import { getStoredReferral, getVisitorId } from '../services/referral'
-import type { Order, OrderStatus } from '../types'
-
-function loadOrders(): Order[] {
-  try {
-    const raw = localStorage.getItem(ORDERS_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Order[]) : []
-  } catch {
-    return []
-  }
-}
 
 function newClientKey() {
   try {
@@ -57,6 +48,7 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
@@ -98,6 +90,7 @@ export default function CheckoutPage() {
       return
     }
     setError(false)
+    setActionError('')
     setSubmitting(true)
 
     const wilayaEntry = wilayas.find((w) => w.code === wilaya)
@@ -111,36 +104,21 @@ export default function CheckoutPage() {
       note: note.trim() || undefined,
     }
 
-    const order: Order = {
-      id: `ORD-${Date.now()}`,
-      items: cart.map(({ product, quantity }) => ({
-        productId: product.id,
-        name: localizedName(product, lang),
-        qty: quantity,
-        price: product.price,
-        image: product.image,
-      })),
-      customer,
-      subtotal: cartTotal,
-      delivery,
-      total,
-      status: 'pending-review' as OrderStatus,
-      createdAt: new Date().toISOString(),
-    }
-
-    localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify([...loadOrders(), order]))
-
     try {
       const referralId = getStoredReferral()?.id ?? undefined
       await createOrder({
-        items: order.items.map(({ productId, qty }) => ({ productId, qty })),
+        items: cart.map(({ product, quantity }) => ({ productId: product.id, qty: quantity })),
         referralId,
         visitorId: getVisitorId(),
         clientKey,
         customer,
       })
-    } catch {
-      // Guest/local order remains saved; the order request is confirmed locally.
+    } catch (err) {
+      // The order was not created server-side — keep the cart intact so the
+      // customer can fix the issue and retry instead of losing their items.
+      setActionError(localizeError(err, t))
+      setSubmitting(false)
+      return
     }
 
     clearCart()
@@ -241,6 +219,12 @@ export default function CheckoutPage() {
           {error && (
             <Alert tone="danger" className="mt-4">
               {t('checkout.required')}
+            </Alert>
+          )}
+
+          {actionError && (
+            <Alert tone="danger" className="mt-4">
+              <p role="alert">{actionError}</p>
             </Alert>
           )}
 

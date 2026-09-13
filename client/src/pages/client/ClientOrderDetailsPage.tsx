@@ -471,7 +471,7 @@ function EditOrderModal({
                   type="button"
                   onClick={() => setQty(i, item.qty - 1)}
                   disabled={item.qty <= 1}
-                  aria-label="−"
+                  aria-label={t('cart.decrease')}
                   className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-ink-600 transition-colors hover:border-brand-300 disabled:opacity-40"
                 >
                   <Minus size={13} />
@@ -480,7 +480,7 @@ function EditOrderModal({
                 <button
                   type="button"
                   onClick={() => setQty(i, item.qty + 1)}
-                  aria-label="+"
+                  aria-label={t('cart.increase')}
                   className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-ink-600 transition-colors hover:border-brand-300"
                 >
                   <Plus size={13} />

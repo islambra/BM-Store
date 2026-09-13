@@ -146,7 +146,7 @@ export default function ProfileSection() {
             <Input icon={CreditCard} dir="ltr" value={state.ccp} onChange={(e) => setForm((s) => ({ ...s, ...state, ccp: e.target.value }))} placeholder="CCP" />
           </Field>
           <Field label={t('marketer.ccpKey')}>
-            <Input dir="ltr" value={state.ccpKey} onChange={(e) => setForm((s) => ({ ...s, ...state, ccpKey: e.target.value }))} placeholder="clé" />
+            <Input dir="ltr" value={state.ccpKey} onChange={(e) => setForm((s) => ({ ...s, ...state, ccpKey: e.target.value }))} placeholder={t('marketer.ccpKey')} />
           </Field>
           <Field label={t('marketer.baridiMob')}>
             <Input icon={Smartphone} dir="ltr" value={state.baridiMob} onChange={(e) => setForm((s) => ({ ...s, ...state, baridiMob: e.target.value }))} placeholder="BaridiMob" />

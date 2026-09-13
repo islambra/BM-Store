@@ -4,6 +4,7 @@ import { ArrowRight, ArrowLeft, Calendar, ChevronLeft, ChevronRight, Heart, Mess
 import { useLanguage } from '../../context/LanguageContext'
 import { useAuth } from '../../context/AuthContext'
 import * as api from '../../services/api'
+import { formatPrice } from '../common/Price'
 import type { PostItem } from '../../services/catalog'
 import CommentsSection from './CommentsSection'
 import ShareModal from './ShareModal'
@@ -17,7 +18,7 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
   const ArrowIcon = rtl ? ArrowLeft : ArrowRight
   const text = rtl ? (post.textAr || post.textEn) : (post.textEn || post.textAr)
   const productName = rtl ? (post.product.nameAr || post.product.name) : post.product.name
-  const title = text?.split('\n')[0] || (rtl ? 'منشور جديد' : 'New post')
+  const title = text?.split('\n')[0] || t('posts.newPost')
 
   const [liked, setLiked] = useState(post.userLiked)
   const [likesCount, setLikesCount] = useState(post.likesCount)
@@ -101,7 +102,7 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
             </p>
           ) : (
             <p className="text-[13px] text-ink-400 italic">
-              {rtl ? 'منشور من BM Store' : 'A new update from BM Store'}
+              {t('posts.newPostFallback')}
             </p>
           )}
 
@@ -121,10 +122,10 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
               <p className="truncate text-[13px] font-bold leading-tight text-ink-900">{productName}</p>
               <div className="mt-0.5 flex items-baseline gap-1.5 leading-tight">
                 <span className="text-[13px] font-bold text-brand-700">
-                  {post.product.price.toLocaleString()} <span className="text-[10px] font-semibold">DA</span>
+                  {formatPrice(post.product.price, lang)}
                 </span>
                 {post.product.isSpecialOffer && post.product.oldPrice && post.product.oldPrice > post.product.price && (
-                  <span className="text-[11px] text-ink-400 line-through">{post.product.oldPrice.toLocaleString()} DA</span>
+                  <span className="text-[11px] text-ink-400 line-through">{formatPrice(post.product.oldPrice, lang)}</span>
                 )}
               </div>
             </div>
@@ -168,7 +169,13 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
                 }`}
               >
                 <MessageCircle size={16} />
-                {commentLabel(commentsCount, single, commentsOpen, t('posts.comments'), t('posts.viewComments'))}
+                {commentsCount > 0
+                  ? commentsOpen
+                    ? t('posts.commentsCount', { count: commentsCount })
+                    : t('posts.viewComments')
+                  : single
+                    ? t('posts.comments')
+                    : t('posts.viewComments')}
               </button>
             </div>
             <div className="flex flex-1 flex-col items-center">
@@ -202,19 +209,6 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
   )
 }
 
-function commentLabel(
-  count: number,
-  single: boolean,
-  open: boolean,
-  commentsKey: string,
-  viewKey: string,
-) {
-  if (count > 0) {
-    return open ? `${count} ${commentsKey}` : viewKey
-  }
-  return single ? commentsKey : viewKey
-}
-
 /* ------------------------------------------------------------------ */
 /* Media carousel — one item visible, swipe + arrows + dots            */
 /* ------------------------------------------------------------------ */
@@ -225,6 +219,7 @@ interface MediaItem {
 }
 
 function PostMediaCarousel({ images, video, compact = false }: { images: string[]; video?: string | null; compact?: boolean }) {
+  const { t } = useLanguage()
   const items: MediaItem[] = [
     ...(images ?? []).map((src) => ({ kind: 'image' as const, src })),
     ...(video ? [{ kind: 'video' as const, src: video }] : []),
@@ -323,7 +318,7 @@ function PostMediaCarousel({ images, video, compact = false }: { images: string[
           <button
             type="button"
             onClick={prev}
-            aria-label="Previous media"
+            aria-label={t('posts.previousMedia')}
             className="absolute left-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 backdrop-blur transition-all hover:bg-black/60 group-hover/media:opacity-100 sm:flex"
           >
             <ChevronLeft size={18} />
@@ -331,7 +326,7 @@ function PostMediaCarousel({ images, video, compact = false }: { images: string[
           <button
             type="button"
             onClick={next}
-            aria-label="Next media"
+            aria-label={t('posts.nextMedia')}
             className="absolute right-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white opacity-0 backdrop-blur transition-all hover:bg-black/60 group-hover/media:opacity-100 sm:flex"
           >
             <ChevronRight size={18} />
@@ -360,7 +355,7 @@ function PostMediaCarousel({ images, video, compact = false }: { images: string[
                 key={i}
                 type="button"
                 onClick={() => goTo(i)}
-                aria-label={`Go to media ${i + 1}`}
+                aria-label={t('posts.goMedia', { index: i + 1 })}
                 className="h-4 w-6"
               />
             ))}

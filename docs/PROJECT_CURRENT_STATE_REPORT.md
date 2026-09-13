@@ -34,12 +34,12 @@
   sidebar shell + mobile pills and eight sections: Overview, Profile (new —
   uses `PATCH /auth/me` + `PATCH /auth/password`), Customers (orderCount +
   totalSpent), Marketers, Orders (search + Confirm/Cancel dialog flow), Products
-  (multilingual CRUD, ≤4 images, special-offer validation, reward toggle,
+  (multilingual CRUD, ≤5 images, special-offer validation, reward toggle,
   search/status filters), Categories (image + multilingual), Banners
   (image-only form).
 - **Backend additions** (completed in the previous step of this plan, all tests
   green): `isSpecialOffer` + `confirmedSales` on Product, `best-selling`/`offer`
-  catalog queries, dynamic discount computation, max-4 images, `confirmedSales`
+  catalog queries, dynamic discount computation, max-5 images, `confirmedSales`
   increment on confirm, `PATCH /auth/me`, `PATCH /auth/password`, admin
   `orderCount`+`totalSpent`, image-only public banners, category `productCount`.
 
@@ -60,7 +60,7 @@
   `(oldPrice - price) / oldPrice`; 0 when not a special offer.
 - [x] **6. Special-offer validation.** `isSpecialOffer === true` requires
   `oldPrice > price > 0`; enforced on create, update and toggle.
-- [x] **7. Max 4 images.** Product `images` is capped at 4 server-side on
+- [x] **7. Max 5 images.** Product `images` is capped at 5 server-side on
   create/update.
 - [x] **8. Confirm-side effects.** On order confirm: stock decremented,
   marketer Commission created, Reward `purchaseCount` bumped, and Product
@@ -349,3 +349,49 @@ Prepare the project for real manual testing and real usage:
 - `privacy.p1` / `terms.p1` translation copy still read "This page is a
   placeholder…" — real legal copy to be supplied by the store owner (content,
   not code).
+
+## Post-audit fixes (audit round)
+
+Full-codebase audit (client pages, admin/marketer dashboards, server
+controllers) followed by fixes; see the main audit summary in
+`docs/API.md` + the acceptance notes above.
+
+### Server (fixed, tests added/updated)
+- **Critical auth**: `registerMarketer` no longer takes over an existing
+  marketer account (wrong password → 401); `changePassword` no longer 500s
+  (selects `+passwordHash`). New tests in `server/test/auth.test.js`.
+- **Stock over-sell**: first confirm now atomically decrements stock with a
+  `$gte` guard + full rollback; 400 on insufficient stock
+  (`order.controller.js`).
+- **Payouts**: greedy claim dead-end resolved with an exact-subset fallback
+  (`findExactSubset`); subset indices mapped back through sorted `{amount, idx}`
+  entries so the correct commissions are claimed (`admin.controller.js`).
+- **Admin stats**: `escapeRegex` on user search; `totalSpent`/`orderCount`
+  exclude `cancelled`/`rejected` orders.
+- **Translation service**: falls back to returning Arabic text unchanged when
+  Google Cloud Translation is not configured (no more 500 on every product
+  save); `products.test.js` updated. Full server suite: **121/121 pass**.
+
+### Client (fixed)
+- Checkout: removed fabricated `localStorage` order + cart-clear-on-failure;
+  real error alert (role="alert") retains the cart.
+- Wishlist re-fetches when it changes (`useAsync` gained a `deps` arg);
+  ProductPage distinguishes 404 vs network error with retry and caps quantity
+  at stock; HeroSlider pre/next aria-labels correct under RTL.
+- PostCard/PostPreviewCard: real prices via `formatPrice`, no hardcoded
+  DA/fallback strings, comment count via `posts.commentsCount`, carousel
+  aria-labels localized.
+- ProductCard: wishlist/add-to-cart buttons moved out of the `<Link>` (valid
+  HTML); CartPage quantity capped at stock and shows the product category.
+- Footer: removed the four non-interactive social-icon spans.
+- Admin: category + banner deletes now require a `ConfirmDialog`; Overview
+  shows a Loader + error/retry instead of silent 0s; SpecialOffers/BestSellers
+  show an error state instead of a misleading "no results".
+- i18n: added `common.retry`, `product.imageLabel`, `posts.*`, `admin.phone`,
+  `admin.userId`, `marketer.cancelled`, `admin.deleteCategory*`,
+  `admin.deleteBanner*`, `nav.main`, `nav.mobile` (EN/FR/AR); AuthPage password
+  min length aligned to 8; CategoryCard honors `nameFr`; Breadcrumb/ShareModal/
+  Comments/order-detail aria-labels localized; ReferralTracker uses the
+  `referral` service helpers.
+- Verification: client `tsc + vite build` and vitest **5/5** green after all
+  fixes.

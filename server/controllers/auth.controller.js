@@ -146,7 +146,7 @@ export const updateMe = asyncHandler(async (req, res) => {
 })
 
 export const changePassword = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id)
+  const user = await User.findById(req.user._id).select('+passwordHash')
   if (!user) return sendError(res, 'Account not found', 401)
 
   const { currentPassword, newPassword } = req.body ?? {}
@@ -229,9 +229,12 @@ export const registerMarketer = asyncHandler(async (req, res) => {
     return sendError(res, 'Valid phone number is required', 400)
   }
 
-  const existing = await User.findOne({ phone: phoneKey }).lean()
+  const existing = await User.findOne({ phone: phoneKey })
   if (existing) {
     if (existing.role === 'MARKETER') {
+      const full = await User.findById(existing._id).select('+passwordHash')
+      const ok = full && full.passwordHash ? await bcrypt.compare(password, full.passwordHash) : false
+      if (!ok) return sendError(res, 'Invalid phone or password', 401)
       let profile = await MarketerProfile.findOne({ user: existing._id }).lean()
       if (!profile) {
         let code = generateReferralCode()

@@ -31,26 +31,30 @@ export default function ProductCard({ product }: { product: Product }) {
   }
 
   return (
-    <Link
-      to={`/product/${product.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-300 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lift"
-    >
+    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-300 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lift">
       {/* Image */}
       <div className="relative aspect-square overflow-hidden bg-canvas">
-        {isOffer && (
-          <span className="absolute start-3 top-3 z-10 badge bg-accent-500 text-white">-{product.discount}%</span>
-        )}
-        <img
-          src={product.image}
-          alt={name}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        {product.stock <= 0 && (
-          <span className="absolute inset-0 z-10 flex items-center justify-center bg-white/55 text-xs font-bold text-ink-700 backdrop-blur-[1px]">
-            {t('product.outOfStock')}
-          </span>
-        )}
+        <Link
+          to={`/product/${product.id}`}
+          className="absolute inset-0 block"
+          aria-label={name}
+          tabIndex={-1}
+        >
+          {isOffer && (
+            <span className="absolute start-3 top-3 z-10 badge bg-accent-500 text-white">-{product.discount}%</span>
+          )}
+          <img
+            src={product.image}
+            alt={name}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          {product.stock <= 0 && (
+            <span className="absolute inset-0 z-10 flex items-center justify-center bg-white/55 text-xs font-bold text-ink-700 backdrop-blur-[1px]">
+              {t('product.outOfStock')}
+            </span>
+          )}
+        </Link>
 
         {/* Wishlist */}
         <button
@@ -81,7 +85,7 @@ export default function ProductCard({ product }: { product: Product }) {
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col gap-1 p-3.5 sm:p-4">
+      <Link to={`/product/${product.id}`} className="flex flex-1 flex-col gap-1 p-3.5 sm:p-4">
         <span className="flex items-center gap-1 text-[11px] font-semibold text-ink-400">
           <span className="truncate">{categoryLabel}</span>
         </span>
@@ -94,7 +98,7 @@ export default function ProductCard({ product }: { product: Product }) {
             <p className="mt-0.5 text-[11px] font-bold text-accent-600">{t('product.limited')}</p>
           )}
         </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
   )
 }

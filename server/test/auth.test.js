@@ -111,6 +111,46 @@ describe('authentication', () => {
     assert.match(res.body.message, /phone number already exists/i)
   })
 
+  it('rejects re-registering a marketer phone with a wrong password', async () => {
+    const number = phone()
+    await request(app).post('/api/auth/register-marketer').send({
+      name: 'Owned Marketer',
+      phone: number,
+      password: 'Secret@1234',
+      ccp: '00123456789',
+    })
+    const res = await request(app).post('/api/auth/register-marketer').send({
+      name: 'Impostor',
+      phone: number,
+      password: 'anything-else',
+    })
+    assert.equal(res.status, 401)
+    assert.match(res.body.message, /invalid phone or password/i)
+  })
+
+  it('changes the password when the current password is correct', async () => {
+    const agent = request.agent(app)
+    const number = phone()
+    await agent.post('/api/auth/register').send({ name: 'Pwd Changer', phone: number, password: 'Secret@1234' })
+
+    const wrong = await agent.patch('/api/auth/password').send({
+      currentPassword: 'not-the-password',
+      newPassword: 'NewSecret@4321',
+    })
+    assert.equal(wrong.status, 400)
+    assert.match(wrong.body.message, /current password is incorrect/i)
+
+    const ok = await agent.patch('/api/auth/password').send({
+      currentPassword: 'Secret@1234',
+      newPassword: 'NewSecret@4321',
+    })
+    assert.equal(ok.status, 200)
+
+    const relogin = request.agent(app)
+    const bad = await relogin.post('/api/auth/login').send({ phone: number, password: 'Secret@1234' })
+    assert.equal(bad.status, 401)
+  })
+
   it('rejects /me without a session', async () => {
     const res = await request(app).get('/api/auth/me')
     assert.equal(res.status, 401)

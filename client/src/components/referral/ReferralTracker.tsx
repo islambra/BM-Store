@@ -1,7 +1,13 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { trackReferral } from '../../services/api'
-import { getVisitorId, getStoredReferral, isStoredReferralExpired } from '../../services/referral'
+import {
+  getVisitorId,
+  getStoredReferral,
+  isStoredReferralExpired,
+  storeReferral,
+  clearReferral,
+} from '../../services/referral'
 
 /**
  * Best-effort referral attribution. Tracks every visit that carries a ?ref code
@@ -18,7 +24,7 @@ export default function ReferralTracker() {
     const visitorId = getVisitorId()
     void trackReferral({ referralCode: code, path: location.pathname, visitorId })
       .then(({ referralId, expiresAt }) => {
-        if (referralId) storeReferralLocally(referralId, code, expiresAt)
+        if (referralId) storeReferral({ id: referralId, code, expiresAt })
       })
       .catch(() => {
         /* tracking is best-effort */
@@ -27,12 +33,8 @@ export default function ReferralTracker() {
 
   useEffect(() => {
     const stored = getStoredReferral()
-    if (stored && isStoredReferralExpired(stored)) localStorage.removeItem('bm-referral')
+    if (stored && isStoredReferralExpired(stored)) clearReferral()
   }, [location.pathname])
 
   return null
-}
-
-function storeReferralLocally(id: string, code: string, expiresAt?: string) {
-  localStorage.setItem('bm-referral', JSON.stringify({ id, code, expiresAt }))
 }

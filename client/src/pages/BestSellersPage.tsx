@@ -5,6 +5,7 @@ import { loadProductsPage } from '../services/catalog'
 import ProductCard from '../components/product/ProductCard'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
+import { Alert } from '../components/common/FormControls'
 import { ProductCardSkeleton } from '../components/common/Skeletons'
 
 export default function BestSellersPage() {
@@ -20,7 +21,16 @@ export default function BestSellersPage() {
         subtitle={t('home.bestSellingSub')}
       />
 
-      {best.loading ? (
+      {best.error ? (
+        <div className="mt-7">
+          <Alert tone="danger">
+            <p>{best.error}</p>
+            <button type="button" onClick={() => void best.reload()} className="btn-ghost mt-3">
+              {t('common.retry')}
+            </button>
+          </Alert>
+        </div>
+      ) : best.loading ? (
         <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <ProductCardSkeleton key={i} />

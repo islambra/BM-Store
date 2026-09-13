@@ -102,7 +102,7 @@ export default function HeroSlider() {
           <button
             type="button"
             onClick={prev}
-            aria-label={isRtl ? t('hero.next') : t('hero.previous')}
+            aria-label={t('hero.previous')}
             className="absolute start-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-ink-900/40 text-white backdrop-blur transition-colors hover:bg-brand-600 focus-visible:outline-none focus-visible:shadow-focus md:flex"
           >
             <PrevIcon size={20} />
@@ -110,7 +110,7 @@ export default function HeroSlider() {
           <button
             type="button"
             onClick={next}
-            aria-label={isRtl ? t('hero.previous') : t('hero.next')}
+            aria-label={t('hero.next')}
             className="absolute end-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-ink-900/40 text-white backdrop-blur transition-colors hover:bg-brand-600 focus-visible:outline-none focus-visible:shadow-focus md:flex"
           >
             <NextIcon size={20} />

@@ -107,7 +107,7 @@ which requires `oldPrice > price > 0`); normal products always return `discount:
 and no `oldPrice`. Products also expose `isFeatured`,
 `confirmedSales` (incremented on confirmed orders, used by best-selling sort; 0 for a
 fresh/no-purchase storefront so the fallback order is creation date) and `images`
-(max 4).
+(max 5).
 
 `sort` values: `featured`, `popular`, `best-selling` (confirmedSales desc, then
 newest), `newest`, `priceAsc`, `priceDesc`. Add `offer=true` to list only

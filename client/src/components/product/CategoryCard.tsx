@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, ArrowLeft, Flame, Leaf, Droplets, Sparkles, Cake, Nut, Bean, Apple } from 'lucide-react'
 import type { Category } from '../../types'
 import { useLanguage } from '../../context/LanguageContext'
+import { localizedName } from '../../utils/localize'
 
 const iconMap = {
   spices: Flame,
@@ -12,11 +13,6 @@ const iconMap = {
   natural: Leaf,
   dried: Apple,
   oilsHoney: Droplets,
-}
-
-const nameByLang = (c: Category, lang: string) => {
-  if (lang === 'ar' && c.nameAr) return c.nameAr
-  return c.name
 }
 
 export default function CategoryCard({
@@ -30,7 +26,7 @@ export default function CategoryCard({
   const Icon = iconMap[category.icon] ?? Sparkles
   const isAr = lang === 'ar'
   const Arrow = isAr ? ArrowLeft : ArrowRight
-  const name = nameByLang(category, lang)
+  const name = localizedName(category, lang)
 
   if (variant === 'compact') {
     return (

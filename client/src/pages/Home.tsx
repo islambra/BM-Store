@@ -99,10 +99,6 @@ export default function Home() {
 
       {/* Latest Posts */}
       <HomePostsSection />
-
-      {/* Trust / service */}
-
-      <div className="mt-14 pb-2" />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import axios from 'axios'
 import {
   Heart,
   ShoppingCart,
@@ -8,6 +9,7 @@ import {
   Check,
   PackageX,
   LogIn,
+  AlertCircle,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useCatalog } from '../context/CatalogContext'
@@ -15,6 +17,7 @@ import { useStore } from '../context/StoreContext'
 import { useAuth } from '../context/AuthContext'
 import { localizedName, localizedText } from '../utils/localize'
 import { loadProduct, loadProductsPage } from '../services/catalog'
+import { getErrorMessage } from '../services/api'
 import type { Product } from '../types'
 import ProductCard from '../components/product/ProductCard'
 import Price, { formatPrice } from '../components/common/Price'
@@ -34,16 +37,19 @@ export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [related, setRelated] = useState<Product[]>([])
   const [qty, setQty] = useState(1)
   const [mainImage, setMainImage] = useState(0)
   const [added, setAdded] = useState(false)
   const [loginNotice, setLoginNotice] = useState(false)
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     setNotFound(false)
+    setLoadError('')
     setProduct(null)
     setMainImage(0)
     setQty(1)
@@ -58,8 +64,13 @@ export default function ProductPage() {
           })
           .catch(() => undefined)
       })
-      .catch(() => {
-        if (alive) setNotFound(true)
+      .catch((err) => {
+        if (!alive) return
+        if (axios.isAxiosError(err) && err.response?.status === 404) {
+          setNotFound(true)
+        } else {
+          setLoadError(getErrorMessage(err))
+        }
       })
       .finally(() => {
         if (alive) setLoading(false)
@@ -67,7 +78,7 @@ export default function ProductPage() {
     return () => {
       alive = false
     }
-  }, [id])
+  }, [id, reloadNonce])
 
   if (loading) {
     return (
@@ -79,6 +90,22 @@ export default function ProductPage() {
               <ProductCardSkeleton key={i} />
             ))}
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="container-app pt-6 sm:pt-10">
+        <div className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-2xl border border-danger-100 bg-danger-50 px-6 py-10 text-center">
+          <AlertCircle size={26} className="text-danger-500" />
+          <p role="alert" className="text-sm font-medium text-danger-600">
+            {loadError}
+          </p>
+          <button type="button" className="btn-primary mt-2" onClick={() => setReloadNonce((n) => n + 1)}>
+            {t('common.retry')}
+          </button>
         </div>
       </div>
     )
@@ -155,7 +182,7 @@ export default function ProductPage() {
                   key={i}
                   type="button"
                   onClick={() => setMainImage(i)}
-                  aria-label={`Image ${i + 1}`}
+                  aria-label={t('product.imageLabel', { index: i + 1 })}
                   className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all ${
                     mainImage === i ? 'border-brand-600' : 'border-transparent hover:border-ink-900/20'
                   }`}
@@ -215,17 +242,19 @@ export default function ProductPage() {
                 <button
                   type="button"
                   onClick={() => setQty((q) => Math.max(1, q - 1))}
-                  className="px-3.5 py-3 text-ink-500 hover:text-ink-900"
-                  aria-label="Decrease quantity"
+                  disabled={qty <= 1}
+                  className="px-3.5 py-3 text-ink-500 hover:text-ink-900 disabled:opacity-40"
+                  aria-label={t('cart.decrease')}
                 >
                   <Minus size={16} />
                 </button>
                 <span className="w-10 text-center text-sm font-bold text-ink-900">{qty}</span>
                 <button
                   type="button"
-                  onClick={() => setQty((q) => q + 1)}
-                  className="px-3.5 py-3 text-ink-500 hover:text-ink-900"
-                  aria-label="Increase quantity"
+                  onClick={() => setQty((q) => Math.min(product.stock, q + 1))}
+                  disabled={qty >= product.stock}
+                  className="px-3.5 py-3 text-ink-500 hover:text-ink-900 disabled:opacity-40"
+                  aria-label={t('cart.increase')}
                 >
                   <Plus size={16} />
                 </button>

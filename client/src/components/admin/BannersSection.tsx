@@ -6,12 +6,14 @@ import * as api from '../../services/api'
 import { getErrorMessage } from '../../services/api'
 import { Field, Input } from '../common/FormControls'
 import ImageUploader from '../common/ImageUploader'
+import ConfirmDialog from '../common/ConfirmDialog'
 import { ErrorNote, Loader, Table } from './adminShared'
 
 export default function BannersSection() {
   const { t } = useLanguage()
   const { data, loading, error, reload } = useAsync(() => api.getAdminBanners())
   const [form, setForm] = useState({ image: '', order: 1 })
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -32,12 +34,17 @@ export default function BannersSection() {
     }
   }
 
-  const remove = async (id: string) => {
+  const confirmDelete = async () => {
+    if (!deleting) return
+    setBusy(true)
     try {
-      await api.deleteBanner(id)
+      await api.deleteBanner(deleting)
+      setDeleting(null)
       void reload()
     } catch (err) {
       setNotice(getErrorMessage(err))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -55,7 +62,7 @@ export default function BannersSection() {
             </td>
             <td className="px-4 py-3 text-ink-500">{b.order}</td>
             <td className="px-4 py-3 text-end">
-              <button type="button" onClick={() => void remove(String(b._id))} className="icon-btn text-red-700">
+              <button type="button" onClick={() => setDeleting(String(b._id))} className="icon-btn text-red-700" aria-label={t('common.remove')}>
                 <Trash2 size={17} />
               </button>
             </td>
@@ -79,6 +86,16 @@ export default function BannersSection() {
           {t('admin.banner.create')}
         </button>
       </div>
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        title={t('admin.deleteBannerTitle')}
+        description={t('admin.deleteBannerDesc')}
+        confirmLabel={t('common.remove')}
+        cancelLabel={t('common.cancel')}
+        busy={busy}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleting(null)}
+      />
     </div>
   )
 }

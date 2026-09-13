@@ -13,6 +13,8 @@ import {
   attachCommissionStatus,
 } from './marketer.controller.js'
 
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 export const getUsers = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
@@ -20,9 +22,10 @@ export const getUsers = asyncHandler(async (req, res) => {
   if (req.query.role) query.role = req.query.role
   else query.role = { $ne: 'ADMIN' }
   if (req.query.q) {
+    const safe = escapeRegex(req.query.q.trim())
     query.$or = [
-      { name: { $regex: req.query.q, $options: 'i' } },
-      { phone: { $regex: req.query.q, $options: 'i' } },
+      { name: { $regex: safe, $options: 'i' } },
+      { phone: { $regex: safe, $options: 'i' } },
     ]
   }
 
@@ -35,6 +38,7 @@ export const getUsers = asyncHandler(async (req, res) => {
       .lean(),
     User.countDocuments(query),
     Order.aggregate([
+      { $match: { status: { $nin: ['cancelled', 'rejected'] } } },
       { $group: { _id: '$user', orderCount: { $sum: 1 }, totalSpent: { $sum: '$total' } } },
     ]),
   ])
@@ -185,6 +189,31 @@ export const updateMarketerStatus = asyncHandler(async (req, res) => {
   return sendSuccess(res, profile, 'Marketer status updated')
 })
 
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+
+// Finds any subset of `amounts` that sums exactly to `target`. Returns indices
+// or null. Realistic commission lists are small (dozens), so a pruned
+// backtracking search (largest values first, skip over-target) is fast; the
+// node budget guards against pathological inputs.
+function findExactSubset(amounts, target) {
+  let nodes = 0
+  const search = (start, remaining, chosen) => {
+    nodes += 1
+    if (nodes > 200000) return null
+    if (remaining === 0) return chosen
+    for (let i = start; i < amounts.length; i += 1) {
+      const a = amounts[i]
+      if (a > remaining) continue
+      chosen.push(i)
+      const result = search(i + 1, Math.round((remaining - a) * 100) / 100, chosen)
+      if (result) return result
+      chosen.pop()
+    }
+    return null
+  }
+  return search(0, target, [])
+}
+
 export const recordPayout = asyncHandler(async (req, res) => {
   const { marketerId, amount, method, reference, notes } = req.body ?? {}
   if (!marketerId || !amount || !method) {
@@ -197,7 +226,7 @@ export const recordPayout = asyncHandler(async (req, res) => {
   const user = await User.findById(marketerId)
   if (!user || user.role !== 'MARKETER') return sendError(res, 'Marketer not found', 400)
 
-  const amt = Math.round(Number(amount) * 100) / 100
+  const amt = round2(amount)
   if (!Number.isFinite(amt) || amt <= 0) return sendError(res, 'Invalid payout amount', 400)
 
   const available = (await commissionBuckets(marketerId)).availableBalance
@@ -210,39 +239,64 @@ export const recordPayout = asyncHandler(async (req, res) => {
     .select('_id amount availableAt')
     .lean()
 
-  // Claim exactly `amt` out of AVAILABLE commissions, oldest first. Each claim
-  // is an atomic conditional update, so two concurrent payouts can never
-  // double-claim a commission. A commission is only claimed when its full
-  // amount still fits in the remaining payout budget — commissions are
-  // per-order records, so the paid-out total always equals the sum of the
-  // commissions it references (no over-selection, no partial splits).
   const now = new Date()
-  const claimed = []
-  let remaining = amt
-  for (const c of commissions) {
-    if (remaining <= 0) break
-    const cAmount = Math.round((c.amount || 0) * 100) / 100
-    if (cAmount > remaining) continue
-    const res = await Commission.findOneAndUpdate(
-      { _id: c._id, marketer: marketerId, status: 'AVAILABLE' },
+  const setSent = (id) =>
+    Commission.findOneAndUpdate(
+      { _id: id, marketer: marketerId, status: 'AVAILABLE' },
       { $set: { status: 'PAYMENT_SENT', paidAt: now } },
       { new: true }
     )
-    if (res) {
+  const restore = (ids) =>
+    ids.length
+      ? Commission.updateMany(
+          { _id: { $in: ids }, status: 'PAYMENT_SENT' },
+          { $set: { status: 'AVAILABLE', paidAt: null } }
+        )
+      : Promise.resolve()
+
+  let claimed = []
+  let remaining = amt
+
+  // Claim whole commissions that fit, oldest first. Each claim is an atomic
+  // conditional update, so two concurrent payouts can never double-claim.
+  for (const c of commissions) {
+    if (remaining <= 0) break
+    const cAmount = round2(c.amount)
+    if (cAmount > remaining) continue
+    if (await setSent(c._id)) {
       claimed.push(c._id)
-      remaining = Math.round((remaining - cAmount) * 100) / 100
+      remaining = round2(remaining - cAmount)
     }
   }
 
   if (remaining > 0) {
-    // Roll back any partial claim so no money is marked sent without a payout.
-    if (claimed.length) {
-      await Commission.updateMany(
-        { _id: { $in: claimed }, status: 'PAYMENT_SENT' },
-        { $set: { status: 'AVAILABLE', paidAt: null } }
-      )
+    // Greedy can dead-end (e.g. commissions [200, 400], payout 400). Roll back
+    // and look for any exact subset that sums to the payout amount, preferring
+    // a full match over a 409 that can never succeed.
+    await restore(claimed)
+    claimed = []
+    const sorted = commissions
+      .map((c, idx) => ({ amount: round2(c.amount), idx }))
+      .sort((a, b) => b.amount - a.amount)
+    const match = findExactSubset(
+      sorted.map((e) => e.amount),
+      amt
+    )
+    if (match) {
+      const ids = match.map((i) => commissions[sorted[i].idx]._id)
+      const ok = []
+      for (const id of ids) if (await setSent(id)) ok.push(id)
+      if (ok.length === ids.length) {
+        claimed = ok
+        remaining = 0
+      } else {
+        await restore(ok)
+      }
     }
-    const exactHit = commissions.some((c) => Math.round((c.amount || 0) * 100) / 100 === amt)
+  }
+
+  if (remaining > 0) {
+    const exactHit = commissions.some((c) => round2(c.amount) === amt)
     if (!exactHit) {
       return sendError(res, 'Payout amount must exactly match one or more available commissions', 400)
     }

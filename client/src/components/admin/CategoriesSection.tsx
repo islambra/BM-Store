@@ -6,12 +6,14 @@ import * as api from '../../services/api'
 import { getErrorMessage } from '../../services/api'
 import { Field, Input } from '../common/FormControls'
 import ImageUploader from '../common/ImageUploader'
+import ConfirmDialog from '../common/ConfirmDialog'
 import { ErrorNote, Loader, Table } from './adminShared'
 
 export default function CategoriesSection() {
   const { t } = useLanguage()
   const { data, loading, error, reload } = useAsync(() => api.getAdminCategories())
   const [form, setForm] = useState({ nameAr: '', image: '' })
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -32,12 +34,17 @@ export default function CategoriesSection() {
     }
   }
 
-  const remove = async (id: string) => {
+  const confirmDelete = async () => {
+    if (!deleting) return
+    setBusy(true)
     try {
-      await api.deleteCategory(id)
+      await api.deleteCategory(deleting)
+      setDeleting(null)
       void reload()
     } catch (err) {
       setNotice(getErrorMessage(err))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -57,7 +64,7 @@ export default function CategoriesSection() {
               </div>
             </td>
             <td className="px-4 py-3 text-end">
-              <button type="button" onClick={() => void remove(String(c._id))} className="icon-btn text-red-700">
+              <button type="button" onClick={() => setDeleting(String(c._id))} className="icon-btn text-red-700" aria-label={t('common.remove')}>
                 <Trash2 size={17} />
               </button>
             </td>
@@ -81,6 +88,16 @@ export default function CategoriesSection() {
           {busy ? t('common.saving') : t('admin.category.create')}
         </button>
       </div>
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        title={t('admin.deleteCategoryTitle')}
+        description={t('admin.deleteCategoryDesc')}
+        confirmLabel={t('common.remove')}
+        cancelLabel={t('common.cancel')}
+        busy={busy}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleting(null)}
+      />
     </div>
   )
 }

@@ -3,13 +3,13 @@ import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 
 export default function Breadcrumb({ items }: { items: { label: string; to?: string }[] }) {
-  const { lang } = useLanguage()
+  const { lang, t } = useLanguage()
   const Chevron = lang === 'ar' ? ChevronLeft : ChevronRight
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 flex-wrap text-xs text-ink-500">
+    <nav aria-label={t('nav.home')} className="flex items-center gap-1.5 flex-wrap text-xs text-ink-500">
       <Link to="/" className="font-medium hover:text-brand-700">
-        {lang === 'ar' ? 'الرئيسية' : 'Home'}
+        {t('nav.home')}
       </Link>
       {items.map((item, i) => (
         <span key={i} className="flex items-center gap-1.5">

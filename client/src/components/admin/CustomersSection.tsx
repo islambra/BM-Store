@@ -53,7 +53,7 @@ export default function CustomersSection() {
             </td>
             <td className="px-4 py-3 text-ink-500">{u.orderCount ?? 0}</td>
             <td className="px-4 py-3 font-semibold text-ink-900">{formatPrice(u.totalSpent ?? 0, lang)}</td>
-            <td className="px-4 py-3 text-ink-500">{new Date(u.createdAt).toLocaleDateString()}</td>
+            <td className="px-4 py-3 text-ink-500">{new Date(u.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-GB')}</td>
             <td className="px-4 py-3 text-end">
               <button
                 type="button"

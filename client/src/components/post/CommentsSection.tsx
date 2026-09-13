@@ -301,7 +301,7 @@ export default function CommentsSection({
                             setEditingId(null)
                             setEditingText('')
                           }}
-                          aria-label="Cancel"
+                          aria-label={t('common.cancel')}
                           className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink-500"
                         >
                           <X size={14} />

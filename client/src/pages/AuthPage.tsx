@@ -47,7 +47,7 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
       setError(t('auth.passwordMismatch'))
       return
     }
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(t('auth.passwordShort'))
       return
     }

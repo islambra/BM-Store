@@ -23,7 +23,7 @@ export default function MobileNav() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:hidden"
-      aria-label="Mobile navigation"
+      aria-label={t('nav.mobile')}
     >
       <div className="mx-auto grid w-full max-w-md grid-cols-4 items-stretch rounded-[1.6rem] border border-line/80 bg-white/90 shadow-lift backdrop-blur-xl">
         {items.map((item) => {
