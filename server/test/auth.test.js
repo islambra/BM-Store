@@ -201,4 +201,46 @@ describe('authentication', () => {
     assert.equal(me.status, 200)
     assert.equal(me.body?.data?.user, null)
   })
+
+  it('keeps the current session alive after a password change', async () => {
+    const agent = request.agent(app)
+    const number = phone()
+    await agent.post('/api/auth/register').send({ name: 'Pwd Session', phone: number, password: 'Secret@1234' })
+
+    const ok = await agent.patch('/api/auth/password').send({
+      currentPassword: 'Secret@1234',
+      newPassword: 'NewSecret@4321',
+    })
+    assert.equal(ok.status, 200)
+    assert.ok((ok.headers['set-cookie'] || []).some((c) => c.startsWith('bm_refresh=')))
+
+    const refreshed = await agent.post('/api/auth/refresh')
+    assert.equal(refreshed.status, 200)
+    assert.equal(refreshed.body.data.user.phone, number)
+  })
+
+  it('revokes refresh tokens for the account on logout', async () => {
+    const number = phone()
+    const agent = request.agent(app)
+    const registered = await agent.post('/api/auth/register').send({
+      name: 'Revoked',
+      phone: number,
+      password: 'Secret@1234',
+    })
+    const refreshCookie = (registered.headers['set-cookie'] || [])
+      .find((c) => c.startsWith('bm_refresh='))
+      ?.split(';')[0]
+    assert.ok(refreshCookie, 'register must set a refresh cookie')
+
+    const logout = await agent.post('/api/auth/logout')
+    assert.equal(logout.status, 200)
+
+    // A stolen copy of the pre-logout refresh cookie must no longer be usable.
+    const reuse = await request(app).post('/api/auth/refresh').set('Cookie', refreshCookie)
+    assert.equal(reuse.status, 401)
+
+    const me = await request(app).get('/api/auth/me').set('Cookie', refreshCookie)
+    assert.equal(me.status, 200)
+    assert.equal(me.body?.data?.user, null)
+  })
 })

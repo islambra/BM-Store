@@ -49,6 +49,7 @@ Rules:
 | Method | Path       | Auth | Purpose        |
 | ------ | ---------- | ---- | -------------- |
 | GET    | `/health`  | –    | Liveness probe |
+| GET    | `/config`  | –    | Storefront config — `{deliveryFee}` (single source of truth for the flat delivery fee) |
 
 ## Auth (rate-limited: 30 req / 15 min, enforced in production only)
 
@@ -56,11 +57,11 @@ Rules:
 | ------ | --------------------- | ------------- | ------------------------------------ | ------- |
 | POST   | `/auth/register`      | –             | `{name, phone, password, referralId?, visitorId?, email?}`; `referralId` links the new account to an active referral (marketer attribution); linking requires the `visitorId` (when sent) to match the referral's visitor | `{user}` (201) |
 | POST   | `/auth/login`         | –             | `{phone, password}`                  | `{user}` + cookies |
-| POST   | `/auth/logout`        | cookie        | –                                    | – |
-| POST   | `/auth/refresh`       | refresh cookie| rotates access + refresh token pair  | `{user}` |
+| POST   | `/auth/logout`        | cookie        | revokes all outstanding refresh tokens for the account | – |
+| POST   | `/auth/refresh`       | refresh cookie| rotates access + refresh token pair; a revoked/stale token is rejected (401) | `{user}` |
 | GET    | `/auth/me`            | access cookie | –                                    | `{user}` |
 | PATCH  | `/auth/me`            | access cookie | `{name?, email?, phone?, avatar?}`    | `{user}` (email conflict → 409) |
-| PATCH  | `/auth/password`      | access cookie | `{currentPassword, newPassword}` (min 8 chars) | – |
+| PATCH  | `/auth/password`      | access cookie | `{currentPassword, newPassword}` (min 8 chars); revokes other sessions and reissues this one | – |
 | POST   | `/auth/become-marketer` | access cookie (USER) | makes the user a MARKETER and issues their referral code | `{user, marketer}` (201, or 200 if already marketer) |
 | POST   | `/auth/register-marketer` | –          | `{name, phone, password, email?, bio?, avatar?, ccp?, ccpKey?, baridiMob?}` (own account) | `{user, marketer}` (201; 200 if the phone already belongs to a MARKETER — logs them back in) |
 

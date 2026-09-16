@@ -15,7 +15,11 @@ export function signAccessToken(user) {
 }
 
 export function signRefreshToken(user) {
-  return jwt.sign({ sub: String(user._id ?? user.id), role: user.role }, REFRESH_SECRET, { expiresIn: '30d' })
+  return jwt.sign(
+    { sub: String(user._id ?? user.id), role: user.role, v: user.refreshVersion ?? 0 },
+    REFRESH_SECRET,
+    { expiresIn: '30d' }
+  )
 }
 
 export function verifyAccessToken(token) {

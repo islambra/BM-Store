@@ -20,7 +20,6 @@ import { useAuth } from '../context/AuthContext'
 import { localizedName } from '../utils/localize'
 import { localizeError } from '../utils/errors'
 import { wilayas, getWilayaName } from '../data/wilayas'
-import { DELIVERY_FEE } from '../config/shop'
 import { formatPrice } from '../components/common/Price'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
@@ -39,7 +38,7 @@ function newClientKey() {
 
 export default function CheckoutPage() {
   const { t, lang } = useLanguage()
-  const { cart, cartTotal, clearCart } = useStore()
+  const { cart, cartTotal, clearCart, deliveryFee } = useStore()
   const { user } = useAuth()
   const ArrowIcon = lang === 'ar' ? ArrowLeft : ArrowRight
 
@@ -118,7 +117,7 @@ export default function CheckoutPage() {
   const estimateDiscount = eligible.reduce((sum, row) => sum + row.amount, 0)
   const estimatePercent = cartTotal > 0 && estimateDiscount > 0 ? Math.round((estimateDiscount / cartTotal) * 100) : 0
 
-  const delivery = cartTotal > 0 ? DELIVERY_FEE : 0
+  const delivery = cartTotal > 0 ? deliveryFee : 0
   const total = cartTotal + delivery - (cartTotal > 0 ? estimateDiscount : 0)
 
   const submit = async (e: React.FormEvent) => {

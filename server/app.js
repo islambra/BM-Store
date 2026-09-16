@@ -5,8 +5,9 @@ import cors from 'cors'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import mongoose from 'mongoose'
-import { sendError } from './utils/response.js'
+import { sendError, sendSuccess } from './utils/response.js'
 import { getBucket, findGridFSFile } from './utils/gridfs.js'
+import { DELIVERY_FEE } from './controllers/order.controller.js'
 import healthRoutes from './routes/health.routes.js'
 import authRoutes from './routes/auth.routes.js'
 import productRoutes from './routes/product.routes.js'
@@ -84,6 +85,7 @@ app.use('/uploads/:id', async (req, res, next) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 app.use('/api', healthRoutes)
+app.get('/api/config', (_req, res) => sendSuccess(res, { deliveryFee: DELIVERY_FEE }))
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)

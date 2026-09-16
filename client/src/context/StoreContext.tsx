@@ -1,11 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import axios from 'axios'
 import type { CartItem, Product } from '../types'
 import { useLanguage } from './LanguageContext'
+import { getShopConfig } from '../services/api'
+import { loadProduct } from '../services/catalog'
 
 interface StoreContextValue {
   cart: CartItem[]
   wishlist: string[]
+  deliveryFee: number
   cartCount: number
   cartTotal: number
   addToCart: (product: Product, quantity?: number) => { success: boolean; message?: string }
@@ -45,6 +49,56 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const { t } = useLanguage()
   const [cart, setCart] = useState<CartItem[]>(() => load(CART_KEY, []))
   const [wishlist, setWishlist] = useState<string[]>(() => load(WISHLIST_KEY, []))
+  const [deliveryFee, setDeliveryFee] = useState(350)
+
+  // Single source of truth for the delivery fee comes from the server. The
+  // local 350 is only a render fallback until the config loads.
+  useEffect(() => {
+    let active = true
+    getShopConfig()
+      .then((cfg) => {
+        if (active) setDeliveryFee(cfg.deliveryFee)
+      })
+      .catch(() => {
+        /* keep the fallback */
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // Rehydrate the persisted cart once on mount against the live catalog: fresh
+  // snapshots replace stale ones (price/image/name/stock changes) and items
+  // whose product no longer exists (404) are dropped so checkout can't act on
+  // dead stock. Any other failure keeps the item — no data loss.
+  useEffect(() => {
+    const persisted = load(CART_KEY, []) as CartItem[]
+    if (persisted.length === 0) return
+    let active = true
+    ;(async () => {
+      const settled = await Promise.allSettled(persisted.map((item) => loadProduct(item.product.id)))
+      if (!active) return
+      setCart((prev) => {
+        const fresh = new Map<string, Product>()
+        const dropped = new Set<string>()
+        settled.forEach((result, i) => {
+          const id = persisted[i].product.id
+          if (result.status === 'fulfilled') {
+            fresh.set(id, result.value)
+          } else if (axios.isAxiosError(result.reason) && result.reason.response?.status === 404) {
+            dropped.add(id)
+          }
+        })
+        if (fresh.size === 0 && dropped.size === 0) return prev
+        return prev
+          .map((item) => (fresh.has(item.product.id) ? { ...item, product: fresh.get(item.product.id) as Product } : item))
+          .filter((item) => !dropped.has(item.product.id))
+      })
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     localStorage.setItem(CART_KEY, JSON.stringify(cart))
@@ -129,6 +183,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       value={{
         cart,
         wishlist,
+        deliveryFee,
         cartCount,
         cartTotal,
         addToCart,

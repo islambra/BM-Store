@@ -111,10 +111,19 @@ export const loginSeller = asyncHandler(async (req, res) => {
   return sendSuccess(res, { seller: safeSeller(seller) }, 'Logged in')
 })
 
-export const logoutSeller = (_req, res) => {
+export const logoutSeller = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies?.[REFRESH_COOKIE]
+  if (refreshToken) {
+    try {
+      const payload = verifyRefreshToken(refreshToken)
+      await User.updateOne({ _id: payload.sub }, { $inc: { refreshVersion: 1 } })
+    } catch {
+      /* token already invalid — nothing to revoke */
+    }
+  }
   clearAuthCookies(res)
   return sendSuccess(res, null, 'Logged out')
-}
+})
 
 export const refreshSeller = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.[REFRESH_COOKIE]
@@ -129,6 +138,11 @@ export const refreshSeller = asyncHandler(async (req, res) => {
 
   const user = await User.findById(payload.sub).select('-passwordHash').lean()
   if (!user || user.role !== 'SELLER') return sendError(res, 'Account not found', 401)
+  // Stale token (revoked by logout/password change or issued pre-refreshVersion).
+  if ((user.refreshVersion ?? 0) !== (payload.v ?? 0)) {
+    clearAuthCookies(res)
+    return sendError(res, 'Session expired, please log in again', 401)
+  }
 
   const seller = await Seller.findOne({ phone: user.phone }).lean()
   if (!seller) return sendError(res, 'Seller profile not found', 401)
@@ -210,7 +224,10 @@ export const changeSellerPassword = asyncHandler(async (req, res) => {
   if (!ok) return sendError(res, 'Current password is incorrect', 400)
 
   user.passwordHash = await bcrypt.hash(newPassword, 10)
+  // Revoke all other sessions; reissue cookies so this session stays logged in.
+  user.refreshVersion = (user.refreshVersion ?? 0) + 1
   await user.save()
+  setAuthCookies(res, user)
   return sendSuccess(res, null, 'Password updated')
 })
 

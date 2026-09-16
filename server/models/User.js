@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true, select: false },
     role: { type: String, enum: ROLES, default: 'USER', index: true },
     avatar: String,
+    refreshVersion: { type: Number, default: 0 },
     ccp: { type: String, trim: true },
     ccpKey: { type: String, trim: true },
     baridiMob: { type: String, trim: true },

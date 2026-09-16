@@ -15,4 +15,11 @@ describe('health', () => {
     assert.equal(res.body.success, true)
     assert.ok(res.body.data.uptime >= 0)
   })
+
+  it('GET /api/config returns the delivery fee', async () => {
+    const res = await request(app).get('/api/config')
+    assert.equal(res.status, 200)
+    assert.equal(res.body.success, true)
+    assert.equal(typeof res.body.data.deliveryFee, 'number')
+  })
 })

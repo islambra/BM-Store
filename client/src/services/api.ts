@@ -260,6 +260,10 @@ export function getCategories() {
   return get<CategoryRecord[]>('/categories')
 }
 
+export function getShopConfig() {
+  return get<{ deliveryFee: number }>('/config')
+}
+
 export function getBanners() {
   return get<BannerRecord[]>('/banners')
 }

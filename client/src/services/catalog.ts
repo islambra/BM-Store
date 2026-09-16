@@ -149,18 +149,21 @@ export async function loadProduct(idOrSlug: string): Promise<Product> {
   }
 }
 
-/* Small in-memory cache so wishlist rows and related sections do not refetch. */
-const productCache = new Map<string, Promise<Product>>()
+/* Small in-memory cache so wishlist rows and related sections do not refetch.
+   Entries expire after 5 minutes so edits/price changes surface to returning
+   visitors instead of being stuck behind a stale snapshot. */
+const PRODUCT_CACHE_TTL = 5 * 60 * 1000
+const productCache = new Map<string, { at: number; promise: Promise<Product> }>()
 
 export function cachedProductFetcher(id: string) {
-  if (!productCache.has(id)) {
-    const promise = loadProduct(id).catch((err) => {
-      productCache.delete(id)
-      throw err
-    })
-    productCache.set(id, promise)
-  }
-  return productCache.get(id) as Promise<Product>
+  const hit = productCache.get(id)
+  if (hit && Date.now() - hit.at < PRODUCT_CACHE_TTL) return hit.promise
+  const promise = loadProduct(id).catch((err) => {
+    productCache.delete(id)
+    throw err
+  })
+  productCache.set(id, { at: Date.now(), promise })
+  return promise
 }
 
 export async function loadProductsByIds(ids: string[]): Promise<Product[]> {

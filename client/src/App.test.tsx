@@ -5,6 +5,7 @@ import App from './App'
 
 vi.mock('./services/api', () => ({
   getMe: () => Promise.reject(new Error('no session')),
+  getShopConfig: () => Promise.resolve({ deliveryFee: 350 }),
   isSessionKnownDead: () => false,
   markSessionAlive: () => {},
   markSessionDead: () => {},

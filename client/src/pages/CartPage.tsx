@@ -6,7 +6,6 @@ import { useStore } from '../context/StoreContext'
 import { useAuth } from '../context/AuthContext'
 import { useCatalog } from '../context/CatalogContext'
 import { localizedName } from '../utils/localize'
-import { DELIVERY_FEE } from '../config/shop'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
 import { Alert } from '../components/common/FormControls'
@@ -14,14 +13,14 @@ import { formatPrice } from '../components/common/Price'
 
 export default function CartPage() {
   const { t, lang } = useLanguage()
-  const { cart, updateQuantity, removeFromCart, cartTotal } = useStore()
+  const { cart, updateQuantity, removeFromCart, cartTotal, deliveryFee } = useStore()
   const { user } = useAuth()
   const { localizeCategory } = useCatalog()
   const navigate = useNavigate()
   const ArrowIcon = lang === 'ar' ? ArrowLeft : ArrowRight
   const [loginNotice, setLoginNotice] = useState(false)
 
-  const delivery = cartTotal > 0 ? DELIVERY_FEE : 0
+  const delivery = cartTotal > 0 ? deliveryFee : 0
   const total = cartTotal + delivery
 
   if (cart.length === 0) {
