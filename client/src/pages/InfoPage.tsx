@@ -23,13 +23,13 @@ const copy: Record<string, { key: string; paragraphs: string[] }[]> = {
   privacy: [
     {
       key: 'privacy.intro',
-      paragraphs: ['privacy.p1'],
+      paragraphs: ['privacy.p1', 'privacy.p2', 'privacy.p3', 'privacy.p4'],
     },
   ],
   terms: [
     {
       key: 'terms.intro',
-      paragraphs: ['terms.p1'],
+      paragraphs: ['terms.p1', 'terms.p2', 'terms.p3', 'terms.p4'],
     },
   ],
 }

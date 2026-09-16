@@ -23,6 +23,9 @@ server/config/*-key.json
 *.log
 npm-debug.log*
 
+# File-upload leftovers (uploads are stored in GridFS, never on disk)
+server/uploads/
+
 # Editor / OS
 .vscode/
 .idea/

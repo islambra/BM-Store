@@ -97,4 +97,26 @@ describe('role protection', () => {
     assert.equal(res.status, 201)
     assert.match(res.body.data.url, /^\/uploads\/[0-9a-f]{24}$/)
   })
+
+  it('rejects uploaded files whose content is not a real image', async () => {
+    const phone = uniquePhone()
+    const registration = await request(app).post('/api/seller/register').send({
+      fullName: 'Uploading Seller',
+      email: `upload-${phone}@test.dev`,
+      phone,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    assert.equal(registration.status, 201)
+
+    const agent = request.agent(app)
+    const login = await agent.post('/api/seller/login').send({ phone, password: 'Secret@1234' })
+    assert.equal(login.status, 200)
+
+    // Arbitrary text sent with an image mimetype must be refused.
+    const res = await agent
+      .post('/api/admin/upload')
+      .attach('image', Buffer.from('This is definitely not an image file'), 'fake.png')
+    assert.equal(res.status, 400)
+  })
 })

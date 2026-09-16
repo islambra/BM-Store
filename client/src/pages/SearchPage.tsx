@@ -11,7 +11,7 @@ import SearchBar from '../components/common/SearchBar'
 import EmptyState from '../components/common/EmptyState'
 import { ProductCardSkeleton } from '../components/common/Skeletons'
 
-const suggestions = ['Saffron', 'Honey', 'Argan', 'Almonds', 'Olive Oil', 'Dates']
+const suggestionKeys = ['search.chip.saffron', 'search.chip.honey', 'search.chip.argan', 'search.chip.almonds', 'search.chip.oliveOil', 'search.chip.dates']
 
 export default function SearchPage() {
   const [params] = useSearchParams()
@@ -72,16 +72,19 @@ export default function SearchPage() {
               <TrendingUp size={14} />
               {t('search.suggestions')}
             </span>
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => navigate(`/search?q=${encodeURIComponent(s)}`)}
-                className="rounded-full bg-ink-900/5 px-3.5 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-brand-50 hover:text-brand-700"
-              >
-                {s}
-              </button>
-            ))}
+            {suggestionKeys.map((key) => {
+              const term = t(key)
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => navigate(`/search?q=${encodeURIComponent(term)}`)}
+                  className="rounded-full bg-ink-900/5 px-3.5 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                >
+                  {term}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

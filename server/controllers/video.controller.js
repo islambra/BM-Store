@@ -1,4 +1,4 @@
-import { uploadVideo } from '../utils/upload.js'
+import { uploadVideo, isValidVideoBuffer } from '../utils/upload.js'
 import { saveFileToGridFS } from '../utils/gridfs.js'
 import { sendSuccess, sendError } from '../utils/response.js'
 
@@ -6,6 +6,9 @@ export const uploadVideoFile = [
   uploadVideo.single('video'),
   async (req, res) => {
     if (!req.file) return sendError(res, 'No video file provided', 400)
+    if (!isValidVideoBuffer(req.file.buffer)) {
+      return sendError(res, 'File content does not match an allowed video type', 400)
+    }
     try {
       const id = await saveFileToGridFS({
         buffer: req.file.buffer,
