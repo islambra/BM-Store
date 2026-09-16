@@ -8,23 +8,32 @@ export default function ConfirmDialog({
   description,
   confirmLabel,
   cancelLabel,
+  confirmText, // alias for confirmLabel
+  cancelText,  // alias for cancelLabel
   onConfirm,
   onCancel,
   busy = false,
   danger = true,
+  tone, // alias for danger
   icon,
 }: {
   open: boolean
   title: string
   description: string
-  confirmLabel: string
-  cancelLabel: string
+  confirmLabel?: string
+  cancelLabel?: string
+  confirmText?: string
+  cancelText?: string
   onConfirm: () => void
   onCancel: () => void
   busy?: boolean
   danger?: boolean
+  tone?: 'danger' | 'warning' | 'primary'
   icon?: ReactNode
 }) {
+  const confirm = confirmLabel ?? confirmText ?? 'Confirm'
+  const cancel = cancelLabel ?? cancelText ?? 'Cancel'
+  const isDanger = danger ?? tone === 'danger'
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -64,15 +73,15 @@ export default function ConfirmDialog({
         </div>
         <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
           <button type="button" onClick={onCancel} disabled={busy} className="btn-ghost w-full sm:w-auto">
-            {cancelLabel}
+            {cancel}
           </button>
           <button
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className={danger ? 'btn-danger w-full sm:w-auto' : 'btn-primary w-full sm:w-auto'}
+            className={isDanger ? 'btn-danger w-full sm:w-auto' : 'btn-primary w-full sm:w-auto'}
           >
-            {busy ? `${confirmLabel}…` : confirmLabel}
+            {busy ? `${confirm}…` : confirm}
           </button>
         </div>
       </div>

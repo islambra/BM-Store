@@ -1,10 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { LanguageProvider } from './context/LanguageContext'
 import { CatalogProvider } from './context/CatalogContext'
 import { StoreProvider } from './context/StoreContext'
 import { AuthProvider } from './context/AuthContext'
 import Layout from './components/layout/Layout'
 import AdminLayout from './components/layout/AdminLayout'
+import SellerLayout from './components/layout/SellerLayout'
 import ScrollToTop from './components/common/ScrollToTop'
 import { RequireRole } from './components/auth/RequireRole'
 import Home from './pages/Home'
@@ -30,6 +31,10 @@ import MarketerPage from './pages/MarketerPage'
 import MarketerAuthPage from './pages/MarketerAuthPage'
 import AdminPage from './pages/AdminPage'
 import AdminMarketerDetailsPage from './pages/admin/AdminMarketerDetailsPage'
+import SellerPage from './pages/SellerPage'
+import SellerAuthPage from './pages/SellerAuthPage'
+import StoresPage from './pages/StoresPage'
+import StorePage from './pages/StorePage'
 
 export default function App() {
   return (
@@ -52,6 +57,8 @@ export default function App() {
                   <Route path="/search" element={<SearchPage />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/wishlist" element={<WishlistPage />} />
+                  <Route path="/stores" element={<StoresPage />} />
+                  <Route path="/store/:slug" element={<StorePage />} />
                   <Route
                     path="/dashboard"
                     element={
@@ -68,11 +75,13 @@ export default function App() {
                   <Route
                     path="/marketer"
                     element={
-                      <RequireRole roles={['MARKETER', 'ADMIN']}>
+                      <RequireRole roles={['MARKETER']}>
                         <MarketerPage />
                       </RequireRole>
                     }
                   />
+                  <Route path="/seller/register" element={<SellerAuthPage mode="register" />} />
+                  <Route path="/seller/login" element={<SellerAuthPage mode="login" />} />
                   <Route path="/about" element={<InfoPage kind="about" />} />
                   <Route path="/contact" element={<InfoPage kind="contact" />} />
                   <Route path="/help" element={<InfoPage kind="help" />} />
@@ -97,6 +106,25 @@ export default function App() {
                       </RequireRole>
                     }
                   />
+                </Route>
+                <Route element={<SellerLayout />}>
+                  <Route
+                    path="/seller"
+                    element={
+                      <RequireRole roles={['SELLER']}>
+                        <Outlet />
+                      </RequireRole>
+                    }
+                  >
+                    <Route index element={<SellerPage />} />
+                    <Route path="store" element={<SellerPage />} />
+                    <Route path="products" element={<SellerPage />} />
+                    <Route path="categories" element={<SellerPage />} />
+                    <Route path="orders" element={<SellerPage />} />
+                    <Route path="earnings" element={<SellerPage />} />
+                    <Route path="subscription" element={<SellerPage />} />
+                    <Route path="profile" element={<SellerPage />} />
+                  </Route>
                 </Route>
                 <Route element={<ClientDashboardLayout />}>
                   <Route

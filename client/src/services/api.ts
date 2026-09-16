@@ -37,7 +37,7 @@ export function getErrorMessage(err: unknown): string {
 export interface User {
   id: string
   name: string
-  role: 'USER' | 'MARKETER' | 'ADMIN'
+  role: 'USER' | 'MARKETER' | 'SELLER' | 'ADMIN'
   avatar: string | null
   phone: string | null
   createdAt: string
@@ -193,6 +193,10 @@ export interface ProductRecord {
   isFeatured: boolean
   isSpecialOffer?: boolean
   confirmedSales?: number
+  ownerType?: 'BM_STORE' | 'SELLER'
+  store?: string
+  seller?: string
+  status?: 'active' | 'paused_by_seller' | 'disabled_by_admin'
 }
 
 export interface BannerRecord {
@@ -286,15 +290,25 @@ export function createOrder(body: CreateOrderInput) {
 export interface MyOrderRecord {
   _id: string
   orderRef: string
-  /** Customer's personal order number (1, 2, ...). Absent on legacy orders. */
+  /** Customer's personal reward order number (1, 2, ...). Assigned at confirmation. */
   customerOrderNumber?: number
-  /** Loyalty discount percent applied (5 normal, 7 every 10th). */
+  /** Blended reward discount percent applied at confirmation. */
   discountPercent?: number
-  /** Loyalty discount amount in DZD. */
+  /** Blended reward discount amount in DZD. */
   discountAmount?: number
   /** Legacy per-product reward discount (pre-discount-system orders only). */
   rewardDiscount?: number
-  items: { productId: string; name: string; qty: number; price: number; image?: string }[]
+  items: {
+    productId: string
+    name: string
+    qty: number
+    price: number
+    image?: string
+    category?: string
+    discountPercent?: number
+    discountAmount?: number
+    isRewardMilestone?: boolean
+  }[]
   customer: {
     fullName: string
     phone: string
@@ -312,7 +326,7 @@ export interface MyOrderRecord {
 }
 
 export function getMyOrders() {
-  return get<{ orders: MyOrderRecord[]; nextCustomerOrderNumber: number; nextDiscountPercent: number }>('/orders/me')
+  return get<{ orders: MyOrderRecord[]; nextCustomerOrderNumber: number }>('/orders/me')
 }
 
 export function updateMyOrder(
@@ -462,10 +476,503 @@ export function reportPayoutNotReceived(id: string) {
   return post<{ payout: MarketerPayoutRecord }>(`/marketer/payments/${id}/report-not-received`)
 }
 
+// ---- seller ----------------------------------------------------------------
+
+export interface SellerProfilePayload {
+  seller: {
+    id: string
+    fullName: string
+    email: string
+    phone: string
+    status: string
+    createdAt: string
+  }
+  store: {
+    id: string
+    name: string
+    slug: string
+    status: string
+    subscriptionPlan: string
+    subscriptionEndDate: string | null
+  } | null
+}
+
+export interface SellerStoreRequestPayload {
+  _id: string
+  sellerName: string
+  sellerEmail: string
+  sellerPhone: string
+  storeName: string
+  storeDescription?: string
+  storeLogo?: string
+  storePhone?: string
+  wilaya?: string
+  city?: string
+  slug: string
+  subscriptionPlan: 'monthly' | 'yearly'
+  expectedAmount: number
+  paymentProof: string
+  status: 'pending' | 'approved' | 'rejected'
+  rejectionReason?: string
+  requestDate: string
+  reviewedAt?: string
+  reviewedBy?: string
+  isRenewal: boolean
+  store?: string
+}
+
+export interface SellerStorePayload {
+  _id: string
+  seller: string
+  name: string
+  slug: string
+  description?: string
+  logo?: string
+  phone?: string
+  wilaya?: string
+  city?: string
+  status: string
+  subscriptionPlan?: string
+  subscriptionStartDate?: string
+  subscriptionEndDate?: string
+  createdAt: string
+}
+
+export interface SellerProductPayload {
+  _id: string
+  name: string
+  nameAr?: string
+  nameFr?: string
+  description?: string
+  descriptionAr?: string
+  descriptionFr?: string
+  price: number
+  oldPrice?: number
+  image: string
+  images: string[]
+  thumbnail?: string
+  category: string
+  categoryName: string
+  tags?: string[]
+  stock: number
+  lowStockThreshold: number
+  isActive: boolean
+  isFeatured: boolean
+  isSpecialOffer: boolean
+  confirmedSales?: number
+  discount: number
+  ownerType: 'BM_STORE' | 'SELLER'
+  store: string
+  seller: string
+  status: 'active' | 'paused_by_seller' | 'disabled_by_admin'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SellerCategoryPayload {
+  _id: string
+  slug: string
+  name: string
+  nameAr?: string
+  nameFr?: string
+  image?: string
+  icon?: string
+  order: number
+  active: boolean
+  store: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SellerOrderPayload {
+  _id: string
+  orderRef: string
+  user: string
+  store: string
+  items: { productId: string; name: string; qty: number; price: number; image?: string }[]
+  customer: {
+    fullName: string
+    phone: string
+    wilaya: string
+    wilayaName?: string
+    commune: string
+    address: string
+    note?: string
+  }
+  subtotal: number
+  delivery: number
+  customerOrderNumber?: number
+  discountPercent?: number
+  discountAmount?: number
+  total: number
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SellerEarningsStats {
+  totalProducts: number
+  activeProducts: number
+  pausedProducts: number
+  totalOrders: number
+  pendingOrders: number
+  deliveredOrders: number
+  cancelledOrders: number
+  deliveredRevenue: number
+  monthlyRevenue: number
+}
+
+export interface SellerSubscriptionPayload {
+  plan: string
+  status: string
+  startDate: string | null
+  endDate: string | null
+  daysRemaining: number
+  isExpiringSoon: boolean
+}
+
+export interface SellerPage {
+  page: number
+  limit: number
+  total: number
+  pages: number
+}
+
+export function registerSeller(body: {
+  fullName: string
+  email: string
+  phone: string
+  password: string
+  confirmPassword: string
+}) {
+  return post<{ seller: SellerProfilePayload['seller'] }>('/seller/register', body)
+}
+
+export function loginSeller(identifier: string, password: string) {
+  return post<{ seller: SellerProfilePayload['seller'] }>('/seller/login', { identifier, password })
+}
+
+export function logoutSeller() {
+  return post<null>('/seller/logout')
+}
+
+export function getSellerMe() {
+  return get<SellerProfilePayload>('/seller/me')
+}
+
+export function updateSellerMe(body: { fullName?: string; email?: string; phone?: string }) {
+  return patch<SellerProfilePayload>('/seller/me', body)
+}
+
+export function changeSellerPassword(body: { currentPassword: string; newPassword: string }) {
+  return patch<null>('/seller/password', body)
+}
+
+export function submitStoreRequest(body: {
+  storeName: string
+  storeDescription?: string
+  storeLogo?: string
+  storePhone?: string
+  wilaya?: string
+  city?: string
+  slug: string
+  subscriptionPlan: 'monthly' | 'yearly'
+  paymentProof: string
+}) {
+  return post<{ storeRequest: SellerStoreRequestPayload }>('/seller/store-request', body)
+}
+
+export function getMyStoreRequest() {
+  return get<{ storeRequest: SellerStoreRequestPayload | null }>('/seller/store-request')
+}
+
+export function checkSlugAvailability(slug: string) {
+  return get<{ available: boolean }>(`/seller/check-slug?slug=${encodeURIComponent(slug)}`)
+}
+
+export function getMyStore() {
+  return get<{ store: SellerStorePayload }>('/store')
+}
+
+export function updateMyStore(body: {
+  name?: string
+  description?: string
+  logo?: string
+  phone?: string
+  wilaya?: string
+  city?: string
+}) {
+  return patch<{ store: SellerStorePayload }>('/store', body)
+}
+
+export function listMyProducts(params?: { page?: number; limit?: number; status?: string; q?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.status) qs.set('status', params.status)
+  if (params?.q) qs.set('q', params.q)
+  const q = qs.toString()
+  return get<SellerPage & { products: SellerProductPayload[] }>(`/store/products${q ? `?${q}` : ''}`)
+}
+
+export function getMyProduct(id: string) {
+  return get<SellerProductPayload>(`/store/products/${id}`)
+}
+
+export function createMyProduct(body: Partial<SellerProductPayload>) {
+  return post<SellerProductPayload>('/store/products', body)
+}
+
+export function updateMyProduct(id: string, body: Partial<SellerProductPayload>) {
+  return patch<SellerProductPayload>(`/store/products/${id}`, body)
+}
+
+export function deleteMyProduct(id: string) {
+  return remove<null>(`/store/products/${id}`)
+}
+
+export function toggleMyProductStatus(id: string, body: { isActive?: boolean; isSpecialOffer?: boolean; status?: string }) {
+  return patch<SellerProductPayload>(`/store/products/${id}/toggle`, body)
+}
+
+export function listMyCategories() {
+  return get<{ categories: SellerCategoryPayload[] }>('/store/categories')
+}
+
+export function createMyCategory(body: Partial<SellerCategoryPayload>) {
+  return post<SellerCategoryPayload>('/store/categories', body)
+}
+
+export function updateMyCategory(id: string, body: Partial<SellerCategoryPayload>) {
+  return patch<SellerCategoryPayload>(`/store/categories/${id}`, body)
+}
+
+export function deleteMyCategory(id: string) {
+  return remove<null>(`/store/categories/${id}`)
+}
+
+export function listMyOrders(params?: { page?: number; limit?: number; status?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.status) qs.set('status', params.status)
+  const q = qs.toString()
+  return get<SellerPage & { orders: SellerOrderPayload[] }>(`/store/orders${q ? `?${q}` : ''}`)
+}
+
+export function getMyOrder(id: string) {
+  return get<{ order: SellerOrderPayload }>(`/store/orders/${id}`)
+}
+
+export function updateMyOrderStatus(id: string, status: string) {
+  return patch<{ order: SellerOrderPayload }>(`/store/orders/${id}/status`, { status })
+}
+
+export function deleteMyStoreOrder(id: string) {
+  return remove<null>(`/store/orders/${id}`)
+}
+
+export function getMyEarnings() {
+  return get<{ stats: SellerEarningsStats }>('/store/earnings')
+}
+
+export function getMySubscription() {
+  return get<{ subscription: SellerSubscriptionPayload }>('/store/subscription')
+}
+
+export function submitRenewalRequest(body: { subscriptionPlan: 'monthly' | 'yearly'; paymentProof: string }) {
+  return post<{ storeRequest: SellerStoreRequestPayload }>('/store/subscription/renew', body)
+}
+
+// ---- public stores ---------------------------------------------------------
+
+export interface PublicStorePayload {
+  _id: string
+  name: string
+  slug: string
+  logo?: string
+  description?: string
+  wilaya?: string
+  city?: string
+  phone?: string
+  sellerName: string
+  productCount: number
+}
+
+export interface PublicStoreDetailPayload {
+  store: PublicStorePayload & { productCount: number }
+  categories: SellerCategoryPayload[]
+  specialOffers: SellerProductPayload[]
+  newProducts: SellerProductPayload[]
+  bestSelling: SellerProductPayload[]
+  allProducts: SellerPage & { products: SellerProductPayload[] }
+}
+
+export function listPublicStores(params?: { page?: number; limit?: number; q?: string; wilaya?: string; city?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.q) qs.set('q', params.q)
+  if (params?.wilaya) qs.set('wilaya', params.wilaya)
+  if (params?.city) qs.set('city', params.city)
+  const q = qs.toString()
+  return get<SellerPage & { stores: PublicStorePayload[] }>(`/stores${q ? `?${q}` : ''}`)
+}
+
+export function getPublicStore(slug: string, params?: { page?: number; limit?: number; category?: string; sort?: string; q?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.category) qs.set('category', params.category)
+  if (params?.sort) qs.set('sort', params.sort)
+  if (params?.q) qs.set('q', params.q)
+  const q = qs.toString()
+  return get<PublicStoreDetailPayload>(`/stores/${slug}${q ? `?${q}` : ''}`)
+}
+
+export function getStoreCategories(slug: string) {
+  return get<{ categories: SellerCategoryPayload[] }>(`/stores/${slug}/categories`)
+}
+
+export function searchCategoriesAcrossStores(q: string) {
+  return get<{ categories: { category: SellerCategoryPayload; store: PublicStorePayload; productCount: number }[] }>(`/stores/categories/search?q=${encodeURIComponent(q)}`)
+}
+
+export function checkStoreSubscription(slug: string) {
+  return get<{ store: { id: string; name: string; slug: string; status: string; subscriptionPlan: string; subscriptionEndDate: string | null; isExpired: boolean; daysRemaining: number; isExpiringSoon: boolean } }>(`/stores/${slug}/subscription`)
+}
+
 // ---- referral tracking (public) ------------------------------------------
 
 export function trackReferral(body: { referralCode: string; path?: string; visitorId?: string; productId?: string }) {
   return post<{ referralId: string; expiresAt?: string }>('/marketing/track', body)
+}
+
+// ---- admin seller management ---------------------------------------------
+
+export interface AdminSellerRecord {
+  _id: string
+  fullName: string
+  email: string
+  phone: string
+  status: 'active' | 'suspended'
+  createdAt: string
+  store: {
+    id: string
+    name: string
+    slug: string
+    status: string
+    subscriptionPlan: string
+    subscriptionEndDate: string
+    daysRemaining: number
+    isExpired: boolean
+  } | null
+  stats: {
+    totalProducts: number
+    activeProducts: number
+    totalOrders: number
+    deliveredOrders: number
+    deliveredRevenue: number
+  }
+}
+
+export interface AdminStoreRequestRecord {
+  _id: string
+  seller: string
+  sellerName: string
+  sellerEmail: string
+  sellerPhone: string
+  storeName: string
+  storeDescription?: string
+  storeLogo?: string
+  storePhone?: string
+  wilaya?: string
+  city?: string
+  slug: string
+  subscriptionPlan: 'monthly' | 'yearly'
+  expectedAmount: number
+  paymentProof: string
+  status: 'pending' | 'approved' | 'rejected'
+  rejectionReason?: string
+  requestDate: string
+  reviewedAt?: string
+  reviewedBy?: string
+  isRenewal: boolean
+  store?: string
+  createdAt: string
+}
+
+export interface AdminStoreRecord {
+  _id: string
+  seller: { _id: string; fullName: string; email: string; phone: string } | string
+  name: string
+  slug: string
+  description?: string
+  logo?: string
+  phone?: string
+  wilaya?: string
+  city?: string
+  status: string
+  subscriptionPlan?: string
+  subscriptionStartDate?: string
+  subscriptionEndDate?: string
+  createdAt: string
+  stats: {
+    totalProducts: number
+    activeProducts: number
+    totalOrders: number
+    deliveredOrders: number
+    deliveredRevenue: number
+  }
+}
+
+export function adminListSellers(params?: { page?: number; limit?: number; q?: string; status?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.q) qs.set('q', params.q)
+  if (params?.status) qs.set('status', params.status)
+  const q = qs.toString()
+  return get<Page & { sellers: AdminSellerRecord[] }>(`/admin/seller/sellers${q ? `?${q}` : ''}`)
+}
+
+export function adminListStoreRequests(params?: { page?: number; limit?: number; status?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.status) qs.set('status', params.status)
+  const q = qs.toString()
+  return get<Page & { requests: AdminStoreRequestRecord[] }>(`/admin/seller/store-requests${q ? `?${q}` : ''}`)
+}
+
+export function adminApproveStoreRequest(id: string) {
+  return post<{ store: unknown; request: AdminStoreRequestRecord }>(`/admin/seller/store-requests/${id}/approve`)
+}
+
+export function adminRejectStoreRequest(id: string, rejectionReason?: string) {
+  return post<{ request: AdminStoreRequestRecord }>(`/admin/seller/store-requests/${id}/reject`, { rejectionReason })
+}
+
+export function adminListStores(params?: { page?: number; limit?: number; q?: string; status?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.page) qs.set('page', String(params.page))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.q) qs.set('q', params.q)
+  if (params?.status) qs.set('status', params.status)
+  const q = qs.toString()
+  return get<Page & { stores: AdminStoreRecord[] }>(`/admin/seller/stores${q ? `?${q}` : ''}`)
+}
+
+export function adminSuspendStore(id: string) {
+  return post<{ store: AdminStoreRecord }>(`/admin/seller/stores/${id}/suspend`)
+}
+
+export function adminActivateStore(id: string) {
+  return post<{ store: AdminStoreRecord }>(`/admin/seller/stores/${id}/activate`)
+}
+
+export function adminDeleteSeller(id: string) {
+  return remove<{ id: string }>(`/admin/seller/sellers/${id}`)
 }
 
 // ---- admin ---------------------------------------------------------------
@@ -474,6 +981,7 @@ export interface AdminUser {
   _id: string
   name: string
   phone?: string
+  email?: string | null
   role: string
   avatar?: string | null
   createdAt: string
@@ -564,6 +1072,10 @@ export function updateAdminOrderStatus(id: string, status: string) {
   return patch<{ order: AdminOrderRecord }>(`/admin/orders/${id}/status`, { status })
 }
 
+export function deleteAdminOrder(id: string) {
+  return remove<null>(`/admin/orders/${id}`)
+}
+
 export function getAdminProducts(params?: { page?: number; limit?: number; q?: string; category?: string; isActive?: boolean }) {
   const qs = new URLSearchParams()
   if (params?.page) qs.set('page', String(params.page))
@@ -605,6 +1117,54 @@ export function updateCategory(id: string, body: Partial<CategoryRecord>) {
 
 export function deleteCategory(id: string) {
   return remove<null>(`/admin/categories/${id}`)
+}
+
+export interface RewardCategoryRecord {
+  _id: string
+  slug: string
+  name: string
+  nameAr?: string
+  nameFr?: string
+  rewardEnabled: boolean
+  rewardNormalPercent: number
+  rewardSpecialPercent: number
+  active: boolean
+}
+
+export interface AdminRewards {
+  settings: { rewardSystemEnabled: boolean }
+  categories: RewardCategoryRecord[]
+}
+
+export interface PublicRewards {
+  enabled: boolean
+  categories: Pick<
+    RewardCategoryRecord,
+    'slug' | 'name' | 'nameAr' | 'nameFr' | 'rewardNormalPercent' | 'rewardSpecialPercent'
+  >[]
+}
+
+export function getAdminRewards() {
+  return get<AdminRewards>('/admin/rewards')
+}
+
+export function updateRewardSettings(body: { rewardSystemEnabled: boolean }) {
+  return patch<AdminRewards>('/admin/rewards/settings', body)
+}
+
+export function updateCategoryReward(
+  id: string,
+  body: {
+    rewardEnabled?: boolean
+    rewardNormalPercent?: number
+    rewardSpecialPercent?: number
+  },
+) {
+  return patch<AdminRewards>(`/admin/rewards/categories/${id}`, body)
+}
+
+export function getPublicRewards() {
+  return get<PublicRewards>('/rewards')
 }
 
 export interface BannerAdminList {
@@ -684,7 +1244,7 @@ export interface CreatePostInput {
   mediaType: 'images' | 'video'
   images?: string[]
   video?: string
-  productId: string
+  productId?: string
   status?: 'draft' | 'published'
 }
 

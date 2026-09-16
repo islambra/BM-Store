@@ -1,5 +1,5 @@
 ﻿import { Link, NavLink, useLocation } from 'react-router-dom'
-import { Heart, ShoppingCart, Megaphone } from 'lucide-react'
+import { Heart, ShoppingCart, Megaphone, Store } from 'lucide-react'
 import Logo from '../common/Logo'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import SearchBar from '../common/SearchBar'
@@ -64,8 +64,15 @@ export default function Header() {
     { to: '/categories', label: t('nav.categories'), end: false },
     { to: '/special-offers', label: t('nav.deals'), end: false },
     { to: '/best-sellers', label: t('nav.bestSellers'), end: false },
+    { to: '/stores', label: t('nav.stores'), end: false },
     { to: '/posts', label: t('nav.posts'), end: false },
   ]
+
+  const isSeller = user?.role === 'SELLER'
+  // Sellers reach their dashboard from the account menu, not the navbar.
+  const canSellFromNav = !isSeller
+  const showSellEntry = !isAdminRoute && !isMarketerRoute && canSellFromNav && user?.role !== 'ADMIN' && user?.role !== 'MARKETER'
+  const sellTo = isSeller ? '/seller' : '/seller/register'
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur">
@@ -105,7 +112,7 @@ export default function Header() {
               {item.label}
             </NavLink>
           ))}
-          {!isAdminRoute && !isMarketerRoute && (user?.role !== 'ADMIN') && (user?.role !== 'MARKETER') && (
+          {!isAdminRoute && !isMarketerRoute && (user?.role !== 'ADMIN') && (user?.role !== 'MARKETER') && (user?.role !== 'SELLER') && (
             <button
               type="button"
               onClick={become.open}
@@ -114,6 +121,15 @@ export default function Header() {
               <Megaphone size={14} />
               {t('marketer.become')}
             </button>
+          )}
+          {showSellEntry && (
+            <Link
+              to={sellTo}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            >
+              <Store size={14} />
+              {isSeller ? t('seller.dashboard') : t('seller.storeRequest')}
+            </Link>
           )}
         </div>
       </nav>
@@ -135,7 +151,16 @@ export default function Header() {
           </div>
 
           <div className="ms-auto flex items-center gap-4">
-            {!isAdminRoute && !isMarketerRoute && (user?.role !== 'ADMIN') && (user?.role !== 'MARKETER') && (
+            {showSellEntry && (
+              <Link
+                to={sellTo}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+              >
+                <Store size={15} />
+                {isSeller ? t('seller.dashboard') : t('seller.storeRequest')}
+              </Link>
+            )}
+            {!isAdminRoute && !isMarketerRoute && (user?.role !== 'ADMIN') && (user?.role !== 'MARKETER') && (user?.role !== 'SELLER') && (
               <button
                 type="button"
                 onClick={become.open}

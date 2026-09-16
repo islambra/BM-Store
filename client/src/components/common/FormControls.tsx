@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Check, ChevronDown } from 'lucide-react'
 
@@ -153,7 +153,7 @@ export function Alert({
   children,
   className = '',
 }: {
-  tone?: 'info' | 'success' | 'warning' | 'danger'
+  tone?: 'info' | 'success' | 'warning' | 'danger' | 'error'
   children: ReactNode
   className?: string
 }) {
@@ -162,12 +162,73 @@ export function Alert({
       ? 'border-success-100 bg-success-50 text-success-700'
       : tone === 'warning'
         ? 'border-warning-100 bg-warning-50 text-warning-700'
-        : tone === 'danger'
+        : tone === 'danger' || tone === 'error'
           ? 'border-danger-100 bg-danger-50 text-danger-700'
           : 'border-brand-100 bg-brand-50 text-brand-700'
   return (
-    <div role={tone === 'danger' ? 'alert' : undefined} className={`rounded-xl border px-4 py-3 text-sm font-medium ${cls} ${className}`}>
+    <div role={tone === 'danger' || tone === 'error' ? 'alert' : undefined} className={`rounded-xl border px-4 py-3 text-sm font-medium ${cls} ${className}`}>
       {children}
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Label                                                               */
+/* ------------------------------------------------------------------ */
+
+export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
+  required?: boolean
+}
+
+export function Label({ required, children, className = '', ...rest }: LabelProps) {
+  return (
+    <label className={`label ${className}`} {...rest}>
+      {children}
+      {required && <span className="text-danger-500 ml-1">*</span>}
+    </label>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Button                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger'
+  icon?: ReactNode
+  loading?: boolean
+}
+
+export function Button({
+  variant = 'primary',
+  icon,
+  loading,
+  children,
+  disabled,
+  className = '',
+  ...rest
+}: ButtonProps) {
+  const isDisabled = disabled || loading
+
+  const baseStyles = 'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed'
+
+  const variantStyles = {
+    primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500',
+    secondary: 'bg-surface text-ink-900 border border-line hover:bg-ink-900/5 focus-visible:ring-ink-900',
+    ghost: 'text-ink-700 hover:bg-ink-900/5 focus-visible:ring-ink-900',
+    outline: 'bg-transparent border border-line text-ink-700 hover:bg-ink-900/5 focus-visible:ring-ink-900',
+    danger: 'bg-danger-600 text-white hover:bg-danger-700 focus-visible:ring-danger-500',
+  }
+
+  return (
+    <button
+      className={`${baseStyles} ${variantStyles[variant]} ${className}`}
+      disabled={isDisabled}
+      {...rest}
+    >
+      {loading && <span className="animate-spin" data-testid="spinner">⏳</span>}
+      {!loading && icon}
+      {children}
+    </button>
   )
 }

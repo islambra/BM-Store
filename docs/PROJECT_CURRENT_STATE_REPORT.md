@@ -99,9 +99,10 @@
 - [x] **23. Admin products.** Multilingual create/edit, ≤4 images,
   special-offer flag with validation, reward/featured toggles, search +
   active filter.
-- [x] **24. Order management.** Confirm/Cancel shown only for `pending-review`
-  orders, each gated behind a ConfirmDialog; other statuses render a badge only;
-  client-side search by ref/name/phone.
+- [x] **24. Order management.** Confirm/Cancel shown only for `pending`
+  orders, each gated behind a ConfirmDialog; confirmed orders can be delivered
+  (or cancelled); other statuses render a badge only; client-side search by
+  ref/name/phone.
 
 ### i18n & QA
 - [x] **25. i18n complete.** All new copy keyed in EN/FR/AR
@@ -395,3 +396,142 @@ controllers) followed by fixes; see the main audit summary in
   `referral` service helpers.
 - Verification: client `tsc + vite build` and vitest **5/5** green after all
   fixes.
+
+## Final correctness audit (2026-09-14)
+
+Full-stack sweep: role/routing guards, seller/marketer/admin workflows, API
+contracts, backend error handling and cross-store uniqueness. All real bugs
+below were fixed this round.
+
+### Critical (fixed)
+- **`product.controller.js` — `store` symbol never imported.** `getProductBySlug`
+  referenced a bare `Store` for every seller-product slug lookup → `ReferenceError`.
+  Added the missing import.
+- **`Category.slug` had a *global* `unique: true` index**, so two different
+  seller stores (or a store + BM) could never both create a category with the
+  same slug → 500 on every second store. Removed the global unique; the compound
+  unique `{ store, slug }` (no longer sparse) now enforces per-scope uniqueness,
+  BM included.
+- **`Product.slug` global uniqueness vs per-store slugify.** Seller products were
+  slugified against other products *in the same store* only, so a seller product
+  could collide with a BM product's slug (or another store's) → 500. `uniqueProductSlug`
+  in `store.controller.js` now checks globally and suffixes on collision (matches
+  BM's own `uniqueSlug`).
+
+### Major (fixed)
+- **Invalid `ObjectId` → 500** instead of 400. Global error middleware now maps
+  Mongoose `CastError` → 400 "Invalid ID format" and `ValidationError` → 400
+  (`server/app.js`), covering every controller that reads `req.params.id`.
+- **Seller dashboard tab/URL mismatch.** All `/seller/*` routes rendered the
+  Overview panel because `SellerPage` kept local tab state. The active tab is now
+  derived from `useLocation()` and tab clicks `navigate()`; header subtitle shows
+  the active tab's label.
+- **`/marketer` allowed ADMIN** with no marketer profile → empty dashboard. Guard
+  narrowed to `['MARKETER']`.
+- **`/dashboard` legacy page for MARKETER.** `DashboardRedirect` now sends USER →
+  `/dashboard/profile`, MARKETER → `/marketer`; the legacy `DashboardPage.tsx`
+  is unreferenced and deleted.
+- **GridFS orphans on delete.** Added `deleteFileFromGridFS` +
+  `deleteGridFSByUrl` (`server/utils/gridfs.js`) and wired image cleanup into
+  product deletes (admin + seller + admin-seller), banner delete and post delete.
+- **Admin category delete created orphaned categories.** Now guarded by a
+  product-count check (same rule the seller panel already had). Test updated for
+  isolation (categories suite clears `products` in `beforeEach`).
+- **Order delivery edit could 500.** `updateMyOrder` validated only
+  wilaya/commune/address, so a partial `customer` payload with empty `fullName`
+  or `phone` broke the required delivery fields on save. `fullName` and `phone`
+  are now validated and trimmed like the rest.
+
+### Cleanup / non-issues verified
+- Deleted dead files: `pages/DashboardPage.tsx`, `components/common/Skeleton.tsx`
+  (singular, unused), `components/common/Alert.tsx` (unused — real `Alert` lives
+  in `FormControls.tsx`).
+- Removed unused imports in `admin.seller.controller.js` (`Category`, `User`).
+- Footer Account link now routes by role (`getAccountRoute`); UserMenu mobile
+  pill highlights `/admin`, `/seller`, `/marketer` too; SellerLayout sidebar
+  Profile links to `/seller/profile`.
+- Audit false positives confirmed working as-is: `OrderStatusBadge` localizes all
+  statuses; `StoreContext.clearCart` is already atomic (`setCart([])`).
+
+### Verification (this round)
+- Server: `node --test` — **121/121 pass**.
+- Client: `tsc && vite build` (2023 modules) **green**; vitest **5/5 pass**.
+
+## Phase 7 — BM Store-only per-category reward system
+
+Replaces the old fixed 5%/7% loyalty discount with a reward system that is
+**exclusive to BM Store**, configurable **per BM Store category** by the admin,
+applied **server-side at confirmation**, and counted **only on confirmed orders**.
+
+### 15-point acceptance checklist
+
+1. **BM Store only** — Seller orders never get a reward; Seller
+   categories cannot be configured as reward categories (admin API → 400). ✔
+2. **Per-category config** — `rewardEnabled`, `rewardNormalPercent`,
+   `rewardSpecialPercent` live on BM Category documents (`store` absent/null). ✔
+3. **System toggle** — global on/off in the new `RewardSettings` singleton
+   (default on); when off no discount is applied and `GET /api/rewards` returns
+   an empty payload. ✔
+4. **Purchase cycle** — order 1–9 normal percent, every 10th order (10, 20, …)
+   the special percent; the milestone order begins the next cycle. ✔
+5. **Counted on confirmed only** — `customerOrderNumber` is allocated at
+   confirmation (`max + 1`); rejected/cancelled *pending* orders consume no
+   number; a confirmed-then-cancelled order keeps its number. ✔
+6. **Multi-category orders** — each line item is discounted with its category's
+   percent; order stores the blended percent + total discount amount. ✔
+7. **Server-side calculation** — client-supplied reward fields are ignored;
+   money (discount amounts, totals) is computed server-side in integer DZD. ✔
+8. **Snapshots & immutability** — confirmed items store `category`,
+   `discountPercent`, `discountAmount`, `isRewardMilestone`; later config
+   changes never rewrite history. ✔
+9. **Admin dashboard UI** — new "Rewards" tab: system toggle + per-category
+   checklist with normal/special percent inputs and inline validation,
+   EN/AR localized. ✔
+10. **Customer display** — checkout shows a per-category estimate for the
+    next order (milestone-aware) validated at confirmation; order details show
+    blended + per-item reward chips. ✔
+11. **Referral/commission intact** — commission remains 10% of the product
+    subtotal, `PENDING` → `AVAILABLE` on delivery, and the reward applies
+    independently on confirm. ✔
+12. **Concurrency & uniqueness** — allocation retries on a partial unique
+    `{user, customerOrderNumber}` index (see `config/rewardMigrations.js`,
+    which also drops the old sparse index whose null-on-missing semantics
+    collided for unnumbered pending orders); `clientKey` checkout dedupe kept. ✔
+13. **Public API** — `GET /api/rewards` exposes enabled categories + percents
+    (read-only) for the storefront estimate. ✔
+14. **Tests** — `server/test/customer-discount.test.js` rewritten (6 suites:
+    cycle 1,2,9,10,11,19,20,21; per-category differences; multi-category;
+    per-customer sequences; trust/immutability; rejected/cancelled counting;
+    seller/category ownership + validation; disabled system; config change
+    snapshot; referral+commission). Full server suite **133/133 pass**. ✔
+15. **No demo data + client green** — no seeds/fakes added (entirely
+    DB-driven), no frontend hardcoding of percentages; client `tsc + vite
+    build` green, vitest 5/5. ✔
+
+### Files added / changed (server)
+- New: `server/models/RewardSettings.js`, `server/controllers/reward.controller.js`,
+  `server/routes/reward.routes.js`, `server/config/rewardMigrations.js`.
+- Changed: `server/models/Category.js` (reward fields), `server/models/Order.js`
+  (item snapshot fields; `discountPercent` default 0; index definition moved out
+  of the schema), `server/utils/customerDiscount.js` (fully rewritten),
+  `server/controllers/order.controller.js` (creation without discount +
+  `settleRewardAndStatus`), `server/routes/admin.routes.js`, `server/app.js`
+  (`/api/rewards`), `server/config/db.js` + `server/test/helpers.mjs` (run the
+  index migration), `server/test/orders.test.js`, `server/test/customer-discount.test.js`.
+- Legacy orders (already holding a number) keep working via the 5%/7% legacy
+  fallback on edit.
+
+### Files added / changed (client)
+- New: `components/admin/RewardsSection.tsx`.
+- Changed: `pages/AdminPage.tsx` (Rewards tab), `services/api.ts` (game-endpoint
+  functions, `MyOrderRecord` item fields, `/orders/me` no longer returns
+  `nextDiscountPercent`), `types/index.ts` (Category reward fields, OrderItem
+  fields), `pages/CheckoutPage.tsx` (per-category milestone-aware estimate,
+  BM-only via `GET /api/rewards`), `pages/client/ClientOrderDetailsPage.tsx`
+  (per-item reward chips), `i18n/translations.ts` (admin.rewards.*,
+  admin.tabs.rewards, common.yes/no EN/AR).
+
+### Verification (this phase)
+- Server: `npm test` — **133/133 pass** (was failing a partial-index 409 layout;
+  resolved via the partial unique index migration).
+- Client: `npm run build` (tsc + vite) green; vitest **5/5 pass**.

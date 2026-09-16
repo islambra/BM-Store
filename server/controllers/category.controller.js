@@ -2,6 +2,7 @@ import Category from '../models/Category.js'
 import Product from '../models/Product.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 import { translateArabicToEnglish } from '../services/translationService.js'
+import { deleteFileFromGridFS } from '../utils/gridfs.js'
 
 const pickFields = (body) => {
   const fields = ['slug', 'name', 'nameAr', 'nameFr', 'image', 'icon', 'order', 'active']
@@ -111,7 +112,17 @@ export const adminUpdate = asyncHandler(async (req, res) => {
 })
 
 export const adminDelete = asyncHandler(async (req, res) => {
-  const doc = await Category.findByIdAndDelete(req.params.id)
+  const doc = await Category.findById(req.params.id)
   if (!doc) return sendError(res, 'Category not found', 404)
+
+  const productsCount = await Product.countDocuments({ category: doc.slug })
+  if (productsCount > 0) {
+    return sendError(res, `Cannot delete category. ${productsCount} product(s) are using this category. Please move or delete them first.`, 400)
+  }
+
+  if (doc.image && /^[0-9a-fA-F]{24}$/.test(doc.image)) {
+    await deleteFileFromGridFS(doc.image)
+  }
+  await Category.deleteOne({ _id: doc._id })
   return sendSuccess(res, null, 'Category deleted')
 })

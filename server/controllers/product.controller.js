@@ -1,13 +1,15 @@
 import mongoose from 'mongoose'
 import Product from '../models/Product.js'
+import Store from '../models/Store.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 import { translateArabicFieldsToEnglish } from '../services/translationService.js'
+import { deleteGridFSByUrl } from '../utils/gridfs.js'
 
 const sortMap = {
   priceAsc: { price: 1 },
   priceDesc: { price: -1 },
-  popular: { confirmedSales: -1, createdAt: 1 },
-  'best-selling': { confirmedSales: -1, createdAt: 1 },
+  popular: { confirmedSales: -1, createdAt: -1 },
+  'best-selling': { confirmedSales: -1, createdAt: -1 },
   newest: { createdAt: -1 },
   featured: { isFeatured: -1, createdAt: -1 },
 }
@@ -26,15 +28,28 @@ const toPublic = (doc) => {
   delete out.rating
   delete out.reviewCount
   if (!isOffer) out.oldPrice = undefined
+  // Include ownership info
+  out.ownerType = doc.ownerType || 'BM_STORE'
+  out.store = doc.store || undefined
   return out
 }
 
 export const getProducts = asyncHandler(async (req, res) => {
-  const { category, q, sort, minPrice, maxPrice, inStock, featured, offer } = req.query
+  const { category, q, sort, minPrice, maxPrice, inStock, featured, offer, store } = req.query
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
 
-  const query = { isActive: true }
+  const query = { isActive: true, status: 'active' }
+  // By default, only show BM Store products unless store filter is specified
+  if (store) {
+    if (store === 'bm-store') {
+      query.ownerType = 'BM_STORE'
+    } else {
+      query.store = store
+    }
+  } else {
+    query.ownerType = 'BM_STORE'
+  }
   if (category) query.category = category
   if (featured === 'true') query.isFeatured = true
   if (offer === 'true') query.isSpecialOffer = true
@@ -86,8 +101,18 @@ export const getProductById = asyncHandler(async (req, res) => {
 })
 
 export const getProductBySlug = asyncHandler(async (req, res) => {
-  const doc = await Product.findOne({ slug: req.params.slug, isActive: true }).lean()
+  const doc = await Product.findOne({ slug: req.params.slug, isActive: true, status: 'active' }).lean()
   if (!doc) return sendError(res, 'Product not found', 404)
+
+  // If it's a seller product, check store status
+  if (doc.ownerType === 'SELLER' && doc.store) {
+    const store = await Store.findById(doc.store).lean()
+    const now = new Date()
+    if (!store || store.status !== 'active' || (store.subscriptionEndDate && new Date(store.subscriptionEndDate) <= now)) {
+      return sendError(res, 'Product not found', 404)
+    }
+  }
+
   return sendSuccess(res, toPublic(doc))
 })
 
@@ -164,6 +189,8 @@ export const adminListProducts = asyncHandler(async (req, res) => {
   if (req.query.isActive === 'false') query.isActive = false
   if (req.query.isFeatured === 'true') query.isFeatured = true
   if (req.query.category) query.category = req.query.category
+  if (req.query.ownerType) query.ownerType = req.query.ownerType
+  if (req.query.store) query.store = req.query.store
   if (req.query.q) {
     const safe = escapeRegex(req.query.q.trim())
     query.$or = [
@@ -174,7 +201,13 @@ export const adminListProducts = asyncHandler(async (req, res) => {
   }
 
   const [products, total] = await Promise.all([
-    Product.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Product.find(query)
+      .populate('store', 'name slug')
+      .populate('seller', 'fullName')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
     Product.countDocuments(query),
   ])
   return sendSuccess(res, { products, page, limit, total, pages: Math.ceil(total / limit) })
@@ -271,6 +304,9 @@ export const adminDeleteProduct = asyncHandler(async (req, res) => {
 
   const product = await Product.findByIdAndDelete(id)
   if (!product) return sendError(res, 'Product not found', 404)
+
+  const images = ['image', 'thumbnail', ...(Array.isArray(product.images) ? product.images : [])]
+  await Promise.all(images.map((img) => deleteGridFSByUrl(img)))
   return sendSuccess(res, null, 'Product deleted')
 })
 

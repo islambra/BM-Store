@@ -1,5 +1,6 @@
 import HeroBanner, { MAX_ACTIVE_BANNERS } from '../models/HeroBanner.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
+import { deleteGridFSByUrl } from '../utils/gridfs.js'
 
 const pickFields = (body) => {
   const fields = [
@@ -73,5 +74,6 @@ export const adminUpdate = asyncHandler(async (req, res) => {
 export const adminDelete = asyncHandler(async (req, res) => {
   const doc = await HeroBanner.findByIdAndDelete(req.params.id)
   if (!doc) return sendError(res, 'Banner not found', 404)
+  await deleteGridFSByUrl(doc.image)
   return sendSuccess(res, null, 'Banner deleted')
 })

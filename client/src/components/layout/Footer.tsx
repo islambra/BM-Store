@@ -1,15 +1,18 @@
 import { Link } from 'react-router-dom'
 import logo from '../../assets/logo.jpg'
 import { useLanguage } from '../../context/LanguageContext'
+import { useAuth } from '../../context/AuthContext'
 import { useCatalog } from '../../context/CatalogContext'
 import { localizedName } from '../../utils/localize'
 import { languages } from '../../i18n/translations'
+import { getAccountRoute } from '../../utils/account'
 
 const catName = (c: { name: string; nameAr?: string; nameFr?: string }, lang: string) => localizedName(c, lang)
 
 export default function Footer() {
   const { t, lang, setLang } = useLanguage() // prettier-ignore
   const { categories } = useCatalog()
+  const { user } = useAuth()
 
   return (
     <footer className="mt-16 bg-ink-900 pb-28 text-white lg:pb-0">
@@ -30,11 +33,13 @@ export default function Footer() {
             </h3>
             <ul className="space-y-2.5 text-sm text-white/70">
               <li><Link className="transition-colors hover:text-white" to="/categories">{t('nav.categories')}</Link></li>
+              <li><Link className="transition-colors hover:text-white" to="/stores">{t('nav.stores')}</Link></li>
               <li><Link className="transition-colors hover:text-white" to="/special-offers">{t('nav.deals')}</Link></li>
               <li><Link className="transition-colors hover:text-white" to="/best-sellers">{t('nav.bestSellers')}</Link></li>
               <li><Link className="transition-colors hover:text-white" to="/wishlist">{t('common.wishlist')}</Link></li>
-              <li><Link className="transition-colors hover:text-white" to="/dashboard">{t('common.account')}</Link></li>
+              <li><Link className="transition-colors hover:text-white" to={getAccountRoute(user?.role)}>{t('common.account')}</Link></li>
               <li><Link className="transition-colors hover:text-white" to="/marketer">{t('marketer.become')}</Link></li>
+              <li><Link className="transition-colors hover:text-white" to="/seller/register">{t('seller.storeRequest')}</Link></li>
             </ul>
           </div>
 

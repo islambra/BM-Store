@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { runRewardOrderIndexMigration } from './rewardMigrations.js'
 
 export async function connectDB(uri) {
   if (!uri || uri.startsWith('your_')) {
@@ -11,5 +12,6 @@ export async function connectDB(uri) {
   const conn = await mongoose.connect(uri, {
     serverSelectionTimeoutMS: 10000,
   })
+  await runRewardOrderIndexMigration()
   return conn
 }

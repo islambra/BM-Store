@@ -52,3 +52,4 @@ export const requireRole = (...roles) => (req, res, next) => {
 
 export const requireAdmin = requireRole('ADMIN')
 export const requireMarketer = requireRole('MARKETER', 'ADMIN')
+export const requireSeller = requireRole('SELLER')

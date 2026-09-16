@@ -4,13 +4,17 @@ import Footer from './Footer'
 import MobileNav from './MobileNav'
 import ReferralTracker from '../referral/ReferralTracker'
 
-const AUTH_PATHS = ['/login', '/register', '/marketer/signup', '/marketer/login']
+const AUTH_PATHS = ['/login', '/register', '/marketer/signup', '/marketer/login', '/seller/register', '/seller/login']
 const FOOTERLESS_PATHS = ['/cart', '/wishlist']
 
 export default function Layout() {
   const { pathname } = useLocation()
   const isAuthPage = AUTH_PATHS.includes(pathname)
-  const showFooter = !isAuthPage && !FOOTERLESS_PATHS.includes(pathname) && !pathname.startsWith('/posts')
+  const showFooter =
+    !isAuthPage &&
+    !FOOTERLESS_PATHS.includes(pathname) &&
+    !pathname.startsWith('/posts') &&
+    !pathname.startsWith('/store')
   return (
     <div className="flex min-h-screen flex-col">
       <ReferralTracker />
@@ -19,7 +23,7 @@ export default function Layout() {
         <Outlet />
       </main>
       {showFooter && <Footer />}
-      <MobileNav />
+      {!isAuthPage && <MobileNav />}
     </div>
   )
 }

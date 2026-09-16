@@ -41,12 +41,14 @@ export function ErrorNote({ message }: { message: string }) {
   return <Alert tone="danger">{message}</Alert>
 }
 
-export function Badge({ children, tone }: { children: ReactNode; tone: 'ok' | 'warn' | 'muted' }) {
+export function Badge({ children, tone }: { children: ReactNode; tone: 'ok' | 'warn' | 'muted' | 'danger' }) {
   const cls =
     tone === 'ok'
       ? 'bg-success-50 text-success-700'
       : tone === 'warn'
         ? 'bg-warning-50 text-warning-700'
-        : 'bg-ink-900/5 text-ink-500'
+        : tone === 'danger'
+          ? 'bg-danger-50 text-danger-600'
+          : 'bg-ink-900/5 text-ink-500'
   return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold ${cls}`}>{children}</span>
 }

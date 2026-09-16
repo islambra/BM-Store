@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 import app from '../app.js'
 import { connectTest, disconnectTest, uniquePhone } from './helpers.mjs'
+import Seller from '../models/Seller.js'
+import User from '../models/User.js'
 
 const phone = uniquePhone
 
@@ -76,6 +78,39 @@ describe('authentication', () => {
     assert.equal(res.status, 201)
     assert.equal(res.body.data.user.role, 'MARKETER')
     assert.ok(res.body.data.marketer.referralCode)
+  })
+
+  it('registers a seller with a linked User account and a working session', async () => {
+    const number = phone()
+    const email = `seller-${number}@test.dev`
+
+    const res = await request(app).post('/api/seller/register').send({
+      fullName: 'Seller Tester',
+      email,
+      phone: number,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    assert.equal(res.status, 201)
+    assert.equal(res.body.success, true)
+    assert.equal(res.body.data.seller.phone, number)
+    assert.equal(res.body.data.seller.email, email)
+    const setCookies = res.headers['set-cookie'] || []
+    assert.ok(setCookies.some((c) => c.startsWith('bm_access=')))
+
+    const seller = await Seller.findOne({ phone: number }).lean()
+    assert.ok(seller, 'seller record must exist')
+    assert.ok(seller.user, 'seller must reference the created user')
+    const account = await User.findOne({ phone: number }).lean()
+    assert.equal(account.role, 'SELLER')
+    assert.equal(seller.user.toString(), account._id.toString())
+
+    const agent = request.agent(app)
+    const login = await agent.post('/api/seller/login').send({ phone: number, password: 'Secret@1234' })
+    assert.equal(login.status, 200)
+    const me = await agent.get('/api/seller/me')
+    assert.equal(me.status, 200)
+    assert.equal(me.body.data.seller.phone, number)
   })
 
   it('re-registering an existing marketer phone logs them back in instead of erroring', async () => {

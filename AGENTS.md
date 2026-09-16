@@ -16,8 +16,10 @@
 - i18n via `client/src/i18n/translations.ts` (`t()` and `lang` from `useLanguage`). All user-facing copy must be keyed there in EN/FR/AR.
 - Money in integer DZD; compute totals server-side only; ignore client price in order creation.
 - No email/notifications features.
-- Admin can only `pending-review` → `confirmed`/`cancelled` (first status change); Confirm/Cancel must show a confirm dialog on the client.
+- Order lifecycle is `pending` → `confirmed` → `delivered` (`cancelled`/`rejected` are terminal, allowed from `pending`, cancel also from `confirmed`). One status change per step; Confirm/Deliver/Cancel must show a confirm dialog on the client.
 - `confirmed` status: decrement stock and increment Product `confirmedSales`.
+- Marketer commission (BM Store referral orders only) is computed and credited ONLY on `delivered` — never at creation/confirmation. Statistics that reflect completed orders (deliveredRevenue, admin user totalSpent, etc.) only count `delivered` orders.
+- `pending` = editable/cancellable by the customer; once `confirmed` the order is locked.
 - Customer loyalty discount is order-level only: `customerOrderNumber` (per-customer sequence) → 5%, every 10th → 7% (see `server/utils/customerDiscount.js`). No per-product reward system.
 - Public APIs are read-only-ish, admin APIs under `/api/admin/*`; all mutations behind loose auth check, role checks inside handlers (no middleware).
 

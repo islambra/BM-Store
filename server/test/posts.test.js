@@ -76,7 +76,7 @@ describe('posts (media section)', () => {
     assert.match(res.body.message, /Video URL is required/)
   })
 
-  it('requires a valid linked product', async () => {
+  it('rejects an unknown linked product but allows posts without a product', async () => {
     const agent = await adminAgent()
     const bad = await agent.post('/api/admin/posts').send({
       mediaType: 'images',
@@ -86,9 +86,9 @@ describe('posts (media section)', () => {
     assert.equal(bad.status, 404)
     assert.match(bad.body.message, /Product not found/)
 
-    const missing = await agent.post('/api/admin/posts').send({ mediaType: 'images', images: ['/a.jpg'] })
-    assert.equal(missing.status, 400)
-    assert.match(missing.body.message, /Product is required/)
+    const textOnly = await agent.post('/api/admin/posts').send({ mediaType: 'images', images: ['/a.jpg'] })
+    assert.equal(textOnly.status, 201)
+    assert.equal(textOnly.body.data.productId, null)
   })
 
   it('edit updates text, media and product', async () => {

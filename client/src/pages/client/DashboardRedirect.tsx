@@ -2,9 +2,8 @@ import { Navigate } from 'react-router-dom'
 import { LoaderCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
-import DashboardPage from '../DashboardPage'
 
-/* /dashboard entry: USER accounts go to the client dashboard, others keep the legacy page. */
+/* /dashboard entry: send every role to its own dashboard. */
 export default function DashboardRedirect() {
   const { user, loading } = useAuth()
   const { t } = useLanguage()
@@ -19,5 +18,8 @@ export default function DashboardRedirect() {
   if (user?.role === 'USER') {
     return <Navigate to="/dashboard/profile" replace />
   }
-  return <DashboardPage />
+  if (user?.role === 'MARKETER') {
+    return <Navigate to="/marketer" replace />
+  }
+  return <Navigate to="/dashboard/profile" replace />
 }

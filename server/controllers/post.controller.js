@@ -5,6 +5,7 @@ import Reaction from '../models/Reaction.js'
 import mongoose from 'mongoose'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 import { translateArabicToEnglish } from '../services/translationService.js'
+import { deleteGridFSByUrl } from '../utils/gridfs.js'
 
 const pickFields = (body) => {
   const fields = ['textEn', 'textAr', 'mediaType', 'images', 'video', 'productId', 'status']
@@ -221,11 +222,15 @@ export const adminListPosts = asyncHandler(async (_req, res) => {
 export const adminCreatePost = asyncHandler(async (req, res) => {
   const data = pickFields(req.body)
 
-  if (!data.productId) return sendError(res, 'Product is required', 400)
-  if (!mongoose.isValidObjectId(data.productId)) return sendError(res, 'Invalid product', 400)
-
-  const product = await Product.findById(data.productId).lean()
-  if (!product) return sendError(res, 'Product not found', 404)
+  // Product is optional: a post may link a product or stand on its own.
+  if (data.productId === undefined || data.productId === null || data.productId === '') {
+    data.productId = null
+  } else if (!mongoose.isValidObjectId(data.productId)) {
+    return sendError(res, 'Invalid product', 400)
+  } else {
+    const product = await Product.findById(data.productId).lean()
+    if (!product) return sendError(res, 'Product not found', 404)
+  }
 
   if (data.mediaType === 'video') {
     data.images = []
@@ -262,8 +267,12 @@ export const adminUpdatePost = asyncHandler(async (req, res) => {
 
   const data = pickFields(req.body)
 
-  if (data.productId) {
-    if (!mongoose.isValidObjectId(data.productId)) return sendError(res, 'Invalid product', 400)
+  // Allow removing the linked product (productId: '' or null).
+  if (data.productId === undefined || data.productId === null || data.productId === '') {
+    data.productId = null
+  } else if (!mongoose.isValidObjectId(data.productId)) {
+    return sendError(res, 'Invalid product', 400)
+  } else {
     const product = await Product.findById(data.productId).lean()
     if (!product) return sendError(res, 'Product not found', 404)
   }
@@ -300,6 +309,7 @@ export const adminDeletePost = asyncHandler(async (req, res) => {
   await Promise.all([
     Reaction.deleteMany({ post: doc._id }),
     Comment.deleteMany({ post: doc._id }),
+    ...[...(Array.isArray(doc.images) ? doc.images : [])].map((img) => deleteGridFSByUrl(img)),
   ])
   return sendSuccess(res, null, 'Post deleted')
 })

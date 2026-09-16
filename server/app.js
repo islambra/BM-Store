@@ -19,6 +19,11 @@ import adminRoutes from './routes/admin.routes.js'
 import uploadRoutes from './routes/upload.routes.js'
 import postRoutes from './routes/post.routes.js'
 import commentRoutes from './routes/comments.routes.js'
+import sellerRoutes from './routes/seller.routes.js'
+import storeRoutes from './routes/store.routes.js'
+import publicStoreRoutes from './routes/public.store.routes.js'
+import rewardRoutes from './routes/reward.routes.js'
+import adminSellerRoutes from './routes/admin.seller.routes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -67,12 +72,17 @@ app.use('/api', healthRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
+app.use('/api/rewards', rewardRoutes)
 app.use('/api/banners', bannerRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/marketer', marketerRoutes)
 app.use('/api/marketing', marketingRoutes)
 app.use('/api/admin/upload', uploadRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/admin/seller', adminSellerRoutes)
+app.use('/api/seller', sellerRoutes)
+app.use('/api/store', storeRoutes)
+app.use('/api/stores', publicStoreRoutes)
 app.use('/api/posts', postRoutes)
 app.use('/api/comments', commentRoutes)
 
@@ -86,8 +96,18 @@ app.use((err, _req, res, _next) => {
         ? 'An account with this phone number already exists'
         : field === 'referralCode'
           ? 'That referral code is already in use'
-          : 'A record with this value already exists'
+          : field === 'email'
+            ? 'An account with this email already exists'
+            : field === 'slug'
+              ? 'This store URL is already taken'
+              : 'A record with this value already exists'
     return sendError(res, message, 409)
+  }
+  if (err.name === 'CastError') {
+    return sendError(res, 'Invalid ID format', 400)
+  }
+  if (err.name === 'ValidationError') {
+    return sendError(res, err.message || 'Validation failed', 400)
   }
   console.error('[Server error]', err.stack ?? err)
   res.status(err.statusCode || 500).json({

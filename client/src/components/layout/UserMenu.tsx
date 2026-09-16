@@ -98,14 +98,17 @@ export default function UserMenu({ variant }: { variant: Variant }) {
   }
 
   const items: MenuItem[] =
-    user.role === 'ADMIN'
+    getAccountRoute(user.role) === '/admin'
       ? [{ label: getAccountLabel(user.role, t), icon: ShieldCheck, to: '/admin' }]
-      : user.role === 'USER'
-        ? [{ label: getAccountLabel(user.role, t), icon: LayoutDashboard, to: '/dashboard/profile' }]
-        : [{ label: getAccountLabel(user.role, t), icon: Store, to: '/marketer' }]
+      : getAccountRoute(user.role) === '/seller'
+        ? [{ label: getAccountLabel(user.role, t), icon: Store, to: '/seller' }]
+        : getAccountRoute(user.role) === '/marketer'
+          ? [{ label: getAccountLabel(user.role, t), icon: Store, to: '/marketer' }]
+          : [{ label: getAccountLabel(user.role, t), icon: LayoutDashboard, to: '/dashboard/profile' }]
 
+  const roleRoute = getAccountRoute(user.role)
   const triggerLabel = getAccountLabel(user.role, t)
-  const Icon = user.role === 'ADMIN' ? ShieldCheck : user.role === 'MARKETER' ? Store : User
+  const Icon = roleRoute === '/admin' ? ShieldCheck : roleRoute === '/seller' || roleRoute === '/marketer' ? Store : User
 
   if (variant === 'desktop') {
     return (
@@ -180,7 +183,7 @@ export default function UserMenu({ variant }: { variant: Variant }) {
     )
   }
 
-  const userRouteActive = ['/dashboard', '/admin'].some((p) => location.pathname.startsWith(p))
+  const userRouteActive = ['/dashboard', '/admin', '/seller', '/marketer'].some((p) => location.pathname.startsWith(p))
 
   return (
     <>

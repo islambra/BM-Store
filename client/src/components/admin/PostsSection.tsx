@@ -195,7 +195,6 @@ function PostFormModal({
   }, [])
 
   const save = async () => {
-    if (!productId) { setError(t('admin.post.productRequired')); return }
     if (mediaType === 'video' && !video) { setError(t('admin.post.videoRequired')); return }
     setBusy(true)
     setError('')
@@ -205,7 +204,7 @@ function PostFormModal({
         mediaType,
         images: mediaType === 'images' ? images : [],
         video: mediaType === 'video' ? video : undefined,
-        productId,
+        productId: productId || undefined,
       }
       if (mode === 'edit' && post) {
         await api.updatePost(post._id, body)
@@ -462,7 +461,7 @@ function ProductSelectField({
 
   return (
     <div className="space-y-2">
-      <Field label={t('admin.post.selectProduct')} required>
+      <Field label={t('admin.post.selectProduct')}>
         <div className="relative">
           <Search size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-ink-400" />
           <input
@@ -475,6 +474,19 @@ function ProductSelectField({
           />
         </div>
       </Field>
+
+      <button
+        type="button"
+        onClick={() => { setSelected(null); setQuery(''); setOpen(false); onChange('') }}
+        className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+          selected === null && !query.trim()
+            ? 'border-brand-600 bg-brand-50 text-brand-700'
+            : 'border-line text-ink-500 hover:border-brand-300 hover:text-brand-700'
+        }`}
+      >
+        <X size={14} />
+        {t('admin.post.noProductOption')}
+      </button>
 
       {selected && !open && !query.trim() && (
         <div className="flex items-center gap-3 rounded-xl border border-line bg-canvas p-3">

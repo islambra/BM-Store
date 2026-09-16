@@ -1,5 +1,29 @@
 /* Lightweight skeleton loaders for products, lists and rows. */
 
+export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'text' | 'circular' | 'rectangular'
+  width?: string | number
+  height?: string | number
+}
+
+export function Skeleton({ className, variant = 'text', width, height, ...props }: SkeletonProps) {
+  const baseStyles = 'animate-pulse bg-ink-900/10 rounded'
+
+  const variantStyles = {
+    text: 'h-4 w-full',
+    circular: 'rounded-full',
+    rectangular: 'rounded-xl',
+  }
+
+  return (
+    <div
+      className={`${baseStyles} ${variantStyles[variant]} ${className}`}
+      style={{ width, height }}
+      {...props}
+    />
+  )
+}
+
 export function ProductCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface">

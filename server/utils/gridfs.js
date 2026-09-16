@@ -28,3 +28,19 @@ export function saveFileToGridFS({ buffer, mimetype, originalname }) {
 export async function findGridFSFile(_id) {
   return getBucket().find({ _id }).next()
 }
+
+export async function deleteFileFromGridFS(_id) {
+  try {
+    await getBucket().delete(_id)
+  } catch {
+    // File may not exist or already deleted — swallow silently
+  }
+}
+
+// Cleans up a GridFS-backed image if `url` is a stored /uploads/:id reference.
+// External URLs and static files are left untouched.
+export async function deleteGridFSByUrl(url) {
+  if (typeof url !== 'string') return
+  const m = url.match(/^\/uploads\/([0-9a-fA-F]{24})$/)
+  if (m) await deleteFileFromGridFS(m[1])
+}

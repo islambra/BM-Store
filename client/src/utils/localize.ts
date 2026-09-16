@@ -15,5 +15,5 @@ export const pickLang = (lang: Lang | string, en: string, ar?: string, fr?: stri
 export const localizedName = (item: LocalizedLabel, lang: Lang | string): string =>
   pickLang(lang as Lang, item.name, item.nameAr, item.nameFr)
 
-export const localizedText = (item: { description: string; descriptionAr?: string; descriptionFr?: string }, lang: Lang | string): string =>
-  pickLang(lang as Lang, item.description, item.descriptionAr, item.descriptionFr)
+export const localizedText = (item: { description?: string; descriptionAr?: string; descriptionFr?: string }, lang: Lang | string): string =>
+  pickLang(lang as Lang, item.description ?? '', item.descriptionAr, item.descriptionFr)

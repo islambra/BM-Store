@@ -31,7 +31,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback((next: Lang) => setLangState(next), [])
 
   const t = useCallback(
-    (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars),
+    (key: string, vars?: Record<string, string | number>) => {
+      const result = translate(lang, key, vars)
+      return typeof result === 'string' ? result : ''
+    },
     [lang]
   )
 

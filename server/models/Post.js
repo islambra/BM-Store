@@ -7,7 +7,7 @@ const postSchema = new mongoose.Schema(
     mediaType: { type: String, enum: ['images', 'video'], default: 'images' },
     images: { type: [String], default: [] },
     video: { type: String, default: null },
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
     status: { type: String, enum: ['draft', 'published'], default: 'draft', index: true },
   },
   { timestamps: true }

@@ -62,6 +62,46 @@ Rules:
 `user` is always `{id, name, email, role, avatar, phone, createdAt}`.
 `marketer` is `{referralCode, referralLink, publicName, status, profileId}`.
 
+## Seller (separate session: auth under `/seller`, owner dashboard under `/store`)
+
+Seller accounts use their own cookie session (SellerSession) distinct from
+customer accounts.
+
+| Method | Path                 | Auth          | Note                                                          | Returns |
+| ------ | -------------------- | ------------- | ------------------------------------------------------------- | ------- |
+| POST   | `/seller/register`   | – (rate-limited) | `{fullName, phone, password, ...}`                          | `{seller}` (201) |
+| POST   | `/seller/login`      | – (rate-limited) | `{identifier, password}`; `identifier` is the seller's **phone or email** (server resolves which) | `{seller}` + seller cookies |
+| POST   | `/seller/logout`     | seller cookie | –                                                             | – |
+| POST   | `/seller/refresh`    | seller refresh cookie | rotates the seller token pair                             | `{seller}` |
+| GET    | `/seller/me`         | seller cookie |                                                               | `{seller, store}` |
+| PATCH  | `/seller/me`         | seller cookie | `{fullName?, email?, phone?, avatar?, location?}`             | `{seller}` |
+| PATCH  | `/seller/password`   | seller cookie | `{currentPassword, newPassword}` (min 8 chars)                | – |
+| POST   | `/seller/store-request` | seller cookie | submit / renew a store request (incl. payment proof)       | `{request}` (201) |
+| GET    | `/seller/store-request` | seller cookie | current store request (with status/reason)                 | `{request}` |
+| GET    | `/seller/check-slug` | seller cookie | `?slug=`; slug availability                                  | `{available, reserved, message?}` |
+
+Storage endpoints (all require a seller session) are relative to `/store`:
+`GET/PATCH /store` (my store), `/store/products` (+ `/products/:id`,
+`/products` POST/PATCH/DELETE, `PATCH /products/:id/toggle`),
+`/store/categories` (CRUD), `/store/orders` (+ `PATCH /orders/:id/status`),
+`GET /store/earnings`, `GET /store/subscription`, and
+`POST /store/subscription/renew`.
+
+**Subscription lifecycle (server-side scheduler).** A store's subscription runs
+until `subscriptionEndDate`; after that the store is marked `expired` and hidden
+from the public. If it is not renewed within the 5-day **grace period** it is
+soft-deleted (`status: 'deleted'`), its products are set `isActive: false`, and
+its uploaded images are cleaned up — data is kept so a late renewal restores
+the store and all its old products. Renewing an expired/deleted store (via
+store-request renewal) reactivates it and re-enables its previously active
+products. The scheduler runs at startup and hourly. Admin can also suspend /
+extra-activate a store manually. Stripe-less: renewal is admin-approved
+(proof-of-payment based) exactly like the original request.
+
+`store.status` ∈ `pending | active | expired | suspended | rejected | deleted`.
+`store` shape returned to the seller includes `{id, slug, status, plan,
+subscriptionEndDate, ...}`.
+
 ## Public catalog
 
 | Method | Path                  | Note                                              | Returns |
@@ -85,9 +125,10 @@ Rules:
 
 Posts carry multilingual text flat (`textEn`, `textAr`) plus media.
 `mediaType` is `images` (up to 5 `images[]`) or `video` (single `video` URL,
-`images` cleared). `productId` references the existing Product (`_id`) — the
-server validates it exists and never stores duplicate product data. `status`
-is `draft` | `published`. Public endpoints only return `published` posts.
+`images` cleared). `productId` (optional) references the existing Product (`_id`) —
+the server validates it exists when provided and never stores duplicate product
+data. `status` is `draft` | `published`. Public endpoints only return
+`published` posts.
 
 Every public post payload also includes `likesCount`, `commentsCount`, and
 `userLiked` (true when the authenticated viewer liked it; `optionalAuth` is used
@@ -118,28 +159,40 @@ special offers (requires `oldPrice > price > 0`).
 | Method | Path        | Auth          | Note                                                    | Returns |
 | ------ | ----------- | ------------- | ------------------------------------------------------- | ------- |
 | POST   | `/orders`   | access cookie | `{items:[{productId, qty}], referralId?, visitorId?, clientKey?, customer}` | `{order}` (201; `{order, deduped:true}` 200 on retried `clientKey`) |
-| GET    | `/orders/me`| access cookie | orders belonging to the logged-in user                  | `{orders, nextCustomerOrderNumber, nextDiscountPercent}` |
+| GET    | `/orders/me`| access cookie | orders belonging to the logged-in user                  | `{orders, nextCustomerOrderNumber}` |
 
 The server recomputes all prices/totals and stores product price snapshots on
 order items; client-supplied prices, discounts, totals and order numbers are
 ignored. A flat `DELIVERY_FEE` is added to every order.
 
-**Customer order discount (single source of truth: `utils/customerDiscount.js`).**
-Every authenticated order gets an order-level loyalty discount from the
-customer's PERSONAL order number (`customerOrderNumber`: 1st, 2nd, ... order of
-that customer — independent per customer, not the global store number):
-5% normally, 7% on every 10th (`n % 10 === 0`). Each order permanently stores
-`customerOrderNumber`, `discountPercent`, `discountAmount`, `subtotal`,
-`delivery` (fee) and `total = subtotal + delivery - discountAmount`; historical
-orders never change. Numbers are allocated at creation (max ever allocated + 1,
-falling back to legacy order count + 1 for pre-system orders), unique per user
-via a `{user, customerOrderNumber}` unique index with retry; cancelled/rejected
-orders keep their numbers (no reuse, no gaps in history). Customer edits while
-`pending-review` keep number + percent and only recompute the amount from the
-new subtotal. An optional `clientKey` makes checkout idempotent: retries with
-the same key return the original order instead of consuming a new number.
-Special-offer products already carry their offer price in `product.price`, so
-the loyalty discount applies once at order level and never stacks per product.
+**Reward discount (single source of truth: `utils/customerDiscount.js`).**
+The reward is a **BM Store only** discount: Seller orders never receive it.
+Discounts are configured per BM Store category by an admin (`rewardEnabled`,
+`rewardNormalPercent`, `rewardSpecialPercent`) and applied only to orders whose
+items belong to reward-enabled, active BM categories.
+
+- **Counted purchases:** only *confirmed* BM orders. A confirmed-then-cancelled
+  order keeps its number; a rejected or cancelled *pending* order never increments
+  the count. The personal purchase number (`customerOrderNumber`) is allocated at
+  **confirmation time** (max already-allocated + 1, else 1). `nextCustomerOrderNumber`
+  exposed via `GET /orders/me` is a display estimate, not a lock.
+- **Cycle:** the next purchase number `n` uses the **normal** percent when
+  `n % 10 !== 0` and the **special** percent when `n % 10 === 0` (so 10th and 20th
+  orders are special and begin a new cycle).
+- **Per-item snapshot:** each confirmed item stores `category`,
+  `discountPercent`, `discountAmount` and `isRewardMilestone`; the order stores
+  the blended `discountPercent` (1-decimal display figure) and total
+  `discountAmount`, with `total = subtotal + delivery - discountAmount`.
+  Historical orders are immutable — later config changes never rewrite them.
+- **Concurrency:** allocation retries on the `{user, customerOrderNumber}` unique
+  index (a *partial* index — see `config/rewardMigrations.js` — that only covers
+  documents holding a numeric number, so pending/rejected/cancelled orders never
+  collide). An optional `clientKey` makes checkout idempotent.
+- **Legacy orders** (created before this change and already holding a number)
+  keep their original percent and amount; on later edits the legacy 5%/7% rule
+  recomputes the amount only.
+- Special-offer products already carry their offer price in `product.price`, so
+  the reward applies once on the item price and never stacks with an offer badge.
 
 **Referral attribution.** At order creation the server resolves the referral to
 attribute: a `referralId` in the body is only accepted when it belongs to the
@@ -186,18 +239,24 @@ The tracker stamps an anonymous `visitor` identity (from `visitorId`, else the
 active referral for the same marketer + identity is returned instead of creating
 a duplicate (idempotent).
 
-## Customer loyalty discount
+## Customer rewards
 
-There is exactly one discount system: every authenticated order gets 5%, every
-10th personal order gets 7% (see **Customer order discount** under Orders).
-The old per-product reward system (`Reward` model, `isRewardEligible`,
-`purchaseCount`, per-line `rewardDiscount`) has been removed.
+The reward system is **BM Store only** (Seller categories can never be reward
+categories):
+
+| Method | Path                                 | Note                                                        | Returns |
+| ------ | ------------------------------------ | ----------------------------------------------------------- | ------- |
+| GET    | `/rewards`                           | public, read-only; when the system is disabled returns `{enabled:false, categories:[]}` | `{enabled, categories:[{slug, name, nameAr, nameFr, rewardNormalPercent, rewardSpecialPercent}]}` |
+
+See **Reward discount** under Orders for how the percentages are applied at
+confirmation. The old per-product reward system (`Reward` model,
+`isRewardEligible`, `purchaseCount`, per-line `rewardDiscount`) has been removed.
 
 ## Admin (auth + role ADMIN; all under `/admin`)
 
 | Method | Path                       | Note                                        | Returns |
 | ------ | -------------------------- | ------------------------------------------- | ------- |
-| GET    | `/admin/users`             | `?role&q&page&limit`; each user includes `orderCount` and `totalSpent` | `{users, page, limit, total, pages}` |
+| GET    | `/admin/users`             | `?role&q&page&limit`; each user includes `orderCount` and `totalSpent`; when `role` is omitted, SELLER and ADMIN accounts are excluded (customers only) | `{users, page, limit, total, pages}` |
 | GET    | `/admin/marketers`         | marketers + profile + computed stats (incl. `availableBalance`, phone) | `{marketers}` |
 | GET    | `/admin/marketers/:id`     | profile + stats + `commissionsCount` + payouts + referral link | `{profile, stats, commissionsCount, payouts, referralLink}` |
 | GET    | `/admin/marketers/:id/orders`      | `?page&limit&status`; referred orders w/ commission | `{orders, page, limit, total, pages}` |
@@ -217,6 +276,9 @@ The old per-product reward system (`Reward` model, `isRewardEligible`,
 | POST   | `/admin/categories`        | `{nameAr, image?, icon?, order?, active?}` (whitelisted; slug unique/auto-generated) | `{category}` (201) |
 | PATCH  | `/admin/categories/:id`    | partial update; changing `nameAr` re-translates `name` | `{category}` |
 | DELETE | `/admin/categories/:id`    |                                             | – |
+| GET    | `/admin/rewards`           | system toggle + BM Store categories with reward fields | `{settings:{rewardSystemEnabled}, categories:[{_id, slug, name, nameAr, nameFr, rewardEnabled, rewardNormalPercent, rewardSpecialPercent, active}]}` |
+| PATCH  | `/admin/rewards/settings`  | `{rewardSystemEnabled: boolean}`; boolean required | `{settings, categories}` (same as GET) |
+| PATCH  | `/admin/rewards/categories/:id` | `{rewardEnabled?, rewardNormalPercent?, rewardSpecialPercent?}`; Seller category → 400; percents must be whole numbers 0–100 | `{settings, categories}` |
 | GET    | `/admin/banners`           |                                             | `{banners, activeCount, max}` |
 | POST   | `/admin/banners`           | requires only `image` (plus optional `link`, `order`, `active`); max 5 active | `{banner}` (201) |
 | PATCH  | `/admin/banners/:id`       | `{active:true}` blocked when at max         | `{banner}` |
@@ -224,8 +286,21 @@ The old per-product reward system (`Reward` model, `isRewardEligible`,
 | POST   | `/admin/payouts`           | `{marketerId, amount, method(CCP\|BaridiMob), reference?, notes?}`; amount ≤ marketer's `availableBalance`; claims `AVAILABLE` commissions FIFO by **atomic** conditional updates so concurrent payouts never double-claim; `amount` must exactly equal the sum of the claimed commissions (commissions are per-order records — no partial splits; a non-matching amount → 400 and nothing is changed) | `{payout}` (201) |
 | GET    | `/admin/payouts`           | `?marketer&status` (sent\|received\|disputed\|cancelled); payouts populated with marketer | `{payouts}` |
 | PATCH  | `/admin/payouts/:id`       | `{action: 'cancel'}` — allowed from `sent`/`disputed`; commissions restored to `AVAILABLE` with `paidAt` cleared | `{payout}` |
+| GET    | `/admin/seller/sellers`    | `?q&page&limit`; `q` matches name/email/phone; each seller includes `stats {totalProducts, totalOrders}`; store populated with `daysRemaining` (expiry countdown) and `isExpired` | `{sellers, page, pages, total}` |
+| GET    | `/admin/seller/sellers/:id` | a single seller with their store                           | `{seller, store}` |
+| DELETE | `/admin/seller/sellers/:id` | deletes the seller account + linked User + store request + store + products + categories + orders + uploaded images | `{id}` |
+| GET    | `/admin/seller/store-requests` | `?status` (default pending) & `?page&limit`            | `{requests, page, pages, total}` |
+| POST   | `/admin/seller/store-requests/:id/approve` | activates the store (or renews/restores an expired/deleted store, re-enabling its products) | `{store}` |
+| POST   | `/admin/seller/store-requests/:id/reject` | `{reason?}`; seller sees the reason                   | `{request}` |
+| GET    | `/admin/seller/stores`     | `?q&page&limit; each store includes `stats` and its seller   | `{stores, page, pages, total}` |
+| POST   | `/admin/seller/stores/:id/suspend` / `.../activate` | toggle a store manually           | `{store}` |
+| GET    | `/admin/seller/products`   | `?q&page&limit`; seller products only                        | `{products, page, pages, total}` |
+| DELETE | `/admin/seller/products/:id` |                                                          | – |
+| POST   | `/admin/seller/products/:id/enable` / `.../disable` | override seller product status       | `{product}` |
+| GET    | `/admin/seller/orders`     | seller orders                                              | `{orders}` |
+| PATCH  | `/admin/seller/orders/:id/status` | same state machine as admin orders                     | `{order}` |
 | GET    | `/admin/posts`             | all posts (draft + published), product populated | `{posts}` |
-| POST   | `/admin/posts`             | `{textAr, mediaType, images?, video?, productId, status?}`; Arabic text auto-translated to English (`textAr` → `textEn`); product required & validated, images capped at 5, video posts clear images | `{post}` (201) |
+| POST   | `/admin/posts`             | `{textAr, mediaType, images?, video?, productId?, status?}`; Arabic text auto-translated to English (`textAr` → `textEn`); `productId` optional — when provided it must reference a valid product; images capped at 5, video posts clear images | `{post}` (201) |
 | PATCH  | `/admin/posts/:id`         | partial update; changing `textAr` re-translates `textEn`; image/video/product-only edits never call the translation API | `{post}` |
 | DELETE | `/admin/posts/:id`         |                                             | – |
 | PATCH  | `/admin/posts/:id/publish` | toggles `draft` ⇄ `published`               | `{post}` |

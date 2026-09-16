@@ -13,7 +13,10 @@ const REQUIRED = [
 
 describe('categories', () => {
   before(connectTest)
-  beforeEach(async () => clearCollection('categories'))
+  beforeEach(async () => {
+    await clearCollection('categories')
+    await clearCollection('products')
+  })
   after(disconnectTest)
 
   async function adminHeaders() {

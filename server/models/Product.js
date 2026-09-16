@@ -1,5 +1,7 @@
 import mongoose from 'mongoose'
 
+export const OWNER_TYPES = ['BM_STORE', 'SELLER']
+
 const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -24,6 +26,10 @@ const productSchema = new mongoose.Schema(
     isSpecialOffer: { type: Boolean, default: false, index: true },
     confirmedSales: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
+    ownerType: { type: String, enum: OWNER_TYPES, default: 'BM_STORE', index: true },
+    store: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', index: true },
+    seller: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', index: true },
+    status: { type: String, enum: ['active', 'paused_by_seller', 'disabled_by_admin'], default: 'active', index: true },
   },
   { timestamps: true }
 )
@@ -33,5 +39,7 @@ productSchema.index({ isActive: 1, isFeatured: 1 })
 productSchema.index({ isSpecialOffer: 1, isActive: 1 })
 productSchema.index({ confirmedSales: -1, createdAt: 1 })
 productSchema.index({ name: 'text', nameAr: 'text', nameFr: 'text', description: 'text', descriptionAr: 'text', descriptionFr: 'text' })
+productSchema.index({ ownerType: 1, isActive: 1, status: 1 })
+productSchema.index({ store: 1, isActive: 1, status: 1 })
 
 export default mongoose.model('Product', productSchema)

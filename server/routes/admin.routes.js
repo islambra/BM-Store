@@ -24,7 +24,7 @@ import {
   adminDeleteProduct,
   adminToggleProduct,
 } from '../controllers/product.controller.js'
-import { listOrders, updateOrderStatus } from '../controllers/order.controller.js'
+import { listOrders, updateOrderStatus, adminDeleteOrder } from '../controllers/order.controller.js'
 import {
   adminListPosts,
   adminCreatePost,
@@ -32,6 +32,11 @@ import {
   adminDeletePost,
   adminPublishPost,
 } from '../controllers/post.controller.js'
+import {
+  adminGetRewards,
+  adminUpdateSettings,
+  adminUpdateCategoryReward,
+} from '../controllers/reward.controller.js'
 
 const router = Router()
 
@@ -52,6 +57,7 @@ router.patch('/marketers/:id/status', updateMarketerStatus)
 
 router.get('/orders', listOrders)
 router.patch('/orders/:id/status', updateOrderStatus)
+router.delete('/orders/:id', adminDeleteOrder)
 
 router.get('/products', adminListProducts)
 router.post('/products', adminCreateProduct)
@@ -63,6 +69,10 @@ router.get('/categories', category.adminList)
 router.post('/categories', category.adminCreate)
 router.patch('/categories/:id', category.adminUpdate)
 router.delete('/categories/:id', category.adminDelete)
+
+router.get('/rewards', adminGetRewards)
+router.patch('/rewards/settings', adminUpdateSettings)
+router.patch('/rewards/categories/:id', adminUpdateCategoryReward)
 
 router.get('/banners', banner.adminList)
 router.post('/banners', banner.adminCreate)

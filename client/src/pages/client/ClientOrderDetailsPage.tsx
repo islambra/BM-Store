@@ -27,14 +27,7 @@ import ConfirmDialog from '../../components/common/ConfirmDialog'
 import { Field, Input, Select, Textarea } from '../../components/common/FormControls'
 import { getWilayaName, wilayas } from '../../data/wilayas'
 
-const TIMELINE_STAGES = [
-  'pending-review',
-  'customer-contacted',
-  'confirmed',
-  'processing',
-  'shipped',
-  'delivered',
-]
+const TIMELINE_STAGES = ['pending', 'confirmed', 'delivered']
 
 const TERMINAL_STATUSES = ['cancelled', 'rejected']
 
@@ -54,7 +47,7 @@ function Timeline({ status }: { status: string }) {
     return (
       <div className="flex items-center gap-3 rounded-xl bg-canvas/70 px-4 py-3">
         <OrderStatusBadge status={status} />
-        <p className="text-xs text-ink-500">{t(statusKey[status] ?? 'order.pendingReview')}</p>
+        <p className="text-xs text-ink-500">{t(statusKey[status] ?? 'order.pending')}</p>
       </div>
     )
   }
@@ -146,7 +139,7 @@ export default function ClientOrderDetailsPage() {
   const [actionError, setActionError] = useState('')
 
   const order: MyOrderRecord | undefined = data?.orders.find((o) => o._id === id)
-  const editable = order?.status === 'pending-review'
+  const editable = order?.status === 'pending'
 
   const confirmDelete = async () => {
     if (!order || deleting) return
@@ -270,6 +263,12 @@ export default function ClientOrderDetailsPage() {
                     <p className="mt-0.5 text-xs tabular-nums text-ink-400">
                       {t('client.quantity')}: {item.qty} · {formatPrice(item.price, lang)}
                     </p>
+                    {(item.discountPercent ?? 0) > 0 && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-success-700">
+                        {item.isRewardMilestone ? '★' : '☆'} −{item.discountPercent}%
+                        {item.discountAmount != null && item.discountAmount > 0 ? ` · ${formatPrice(item.discountAmount, lang)}` : ''}
+                      </span>
+                    )}
                   </div>
                   <p className="shrink-0 text-sm font-extrabold tabular-nums text-ink-900">
                     {formatPrice(item.price * item.qty, lang)}

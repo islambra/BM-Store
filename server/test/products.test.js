@@ -17,7 +17,7 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
   before(connectTest)
   after(disconnectTest)
 
-  it('sorts best-selling by confirmedSales desc then createdAt asc', async () => {
+  it('sorts best-selling by confirmedSales desc then createdAt desc', async () => {
     const cat = `cat-${Date.now()}`
     await Product.create([
       { slug: `bs-a-${Date.now()}`, name: 'BS A', price: 100, category: cat, categoryName: 'Cat', confirmedSales: 5, createdAt: new Date('2026-01-01') },
@@ -28,7 +28,40 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
     const res = await request(app).get('/api/products').query({ sort: 'best-selling', category: cat, limit: 10 })
     assert.equal(res.status, 200)
     const names = res.body.data.products.map((p) => p.name)
-    assert.deepEqual(names, ['BS C', 'BS B', 'BS A'])
+    assert.deepEqual(names, ['BS B', 'BS C', 'BS A'])
+  })
+
+  it('makes an admin-created BM product visible on the storefront', async () => {
+    const agent = await adminAgent()
+    const created = await agent.post('/api/admin/products').send({
+      nameAr: 'زعتر حر',
+      descriptionAr: 'زعتر جبلي فاخر',
+      price: 500,
+      oldPrice: 0,
+      stock: 50,
+      category: `cat-${Date.now()}`,
+      categoryName: 'Cat',
+      images: ['/uploads/photo.jpg'],
+    })
+    assert.equal(created.status, 201)
+    const id = created.body.data._id
+    const raw = await Product.findById(id).lean()
+    assert.equal(raw.isActive, true)
+    assert.equal(raw.status, 'active')
+    assert.equal(raw.ownerType, 'BM_STORE')
+
+    const list = await request(app).get('/api/products').query({ limit: 50 })
+    assert.equal(list.status, 200)
+    assert.ok(list.body.data.products.some((p) => String(p._id) === id), 'product must appear in the public catalog')
+
+    const bySlug = await request(app).get(`/api/products/slug/${raw.slug}`)
+    assert.equal(bySlug.status, 200)
+    assert.equal(String(bySlug.body.data._id), id)
+
+    await Product.updateOne({ _id: id }, { confirmedSales: 9999 })
+    const best = await request(app).get('/api/products').query({ sort: 'best-selling', limit: 10 })
+    assert.equal(best.status, 200)
+    assert.equal(String(best.body.data.products[0]._id), id, 'new admin product must rank first in best selling')
   })
 
   it('filters special offers via offer=true', async () => {

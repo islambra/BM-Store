@@ -9,9 +9,10 @@ interface ImageUploaderProps {
   max?: number
   value: string | string[]
   onChange: (v: string | string[]) => void
+  accept?: string
 }
 
-export default function ImageUploader({ label, multiple = false, max, value, onChange }: ImageUploaderProps) {
+export default function ImageUploader({ label, multiple = false, max, value, onChange, accept }: ImageUploaderProps) {
   const { t } = useLanguage()
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
@@ -101,7 +102,7 @@ export default function ImageUploader({ label, multiple = false, max, value, onC
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={accept || "image/*"}
         className="hidden"
         onChange={(e) => void pick(e.target.files?.[0])}
       />

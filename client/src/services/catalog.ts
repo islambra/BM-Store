@@ -32,6 +32,7 @@ export function toCategory(r: CategoryRecord): Category {
 export function toProduct(r: ProductRecord): Product {
   return {
     id: r._id,
+    slug: r.slug || r._id,
     name: r.name,
     nameAr: r.nameAr,
     nameFr: r.nameFr,
@@ -53,6 +54,10 @@ export function toProduct(r: ProductRecord): Product {
     isFeatured: r.isFeatured ?? false,
     isSpecialOffer: r.isSpecialOffer ?? false,
     confirmedSales: r.confirmedSales ?? 0,
+    ownerType: r.ownerType,
+    store: r.store,
+    seller: r.seller,
+    status: r.status,
   }
 }
 

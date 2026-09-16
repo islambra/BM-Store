@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronDown, ClipboardList, Megaphone, Search } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ClipboardList, Megaphone, Search, Trash2 } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -18,32 +18,31 @@ interface StatusAction {
   descKey: string
   confirmKey: string
   danger?: boolean
+  kind?: 'status' | 'delete'
+}
+
+const deleteAction: StatusAction = {
+  target: 'delete',
+  kind: 'delete',
+  labelKey: 'admin.deleteOrder',
+  titleKey: 'admin.deleteOrderTitle',
+  descKey: 'admin.deleteOrderDesc',
+  confirmKey: 'admin.deleteOrder',
+  danger: true,
 }
 
 /* Next valid workflow step(s) for each status — mirrors the server state machine. */
 function actionsFor(status: string): StatusAction[] {
   switch (status) {
-    case 'pending-review':
+    case 'pending':
       return [
         { target: 'confirmed', labelKey: 'admin.confirmOrder', titleKey: 'admin.confirmTitle', descKey: 'admin.confirmDesc', confirmKey: 'admin.confirmOrder' },
         { target: 'cancelled', labelKey: 'admin.cancelOrder', titleKey: 'admin.cancelTitle', descKey: 'admin.cancelDesc', confirmKey: 'admin.cancelOrder', danger: true },
       ]
-    case 'customer-contacted':
-      return [
-        { target: 'confirmed', labelKey: 'admin.confirmOrder', titleKey: 'admin.confirmTitle', descKey: 'admin.confirmDesc', confirmKey: 'admin.confirmOrder' },
-        { target: 'rejected', labelKey: 'admin.rejectOrder', titleKey: 'admin.rejectTitle', descKey: 'admin.rejectDesc', confirmKey: 'admin.rejectOrder', danger: true },
-      ]
     case 'confirmed':
       return [
-        { target: 'processing', labelKey: 'admin.startProcessing', titleKey: 'admin.processTitle', descKey: 'admin.processDesc', confirmKey: 'admin.startProcessing' },
-      ]
-    case 'processing':
-      return [
-        { target: 'shipped', labelKey: 'admin.markShipped', titleKey: 'admin.shipTitle', descKey: 'admin.shipDesc', confirmKey: 'admin.markShipped' },
-      ]
-    case 'shipped':
-      return [
         { target: 'delivered', labelKey: 'admin.markDelivered', titleKey: 'admin.deliverTitle', descKey: 'admin.deliverDesc', confirmKey: 'admin.markDelivered' },
+        { target: 'cancelled', labelKey: 'admin.cancelOrder', titleKey: 'admin.cancelTitle', descKey: 'admin.cancelDesc', confirmKey: 'admin.cancelOrder', danger: true },
       ]
     default:
       return []
@@ -87,7 +86,11 @@ export default function OrdersSection() {
     setBusy(true)
     setNotice('')
     try {
-      await api.updateAdminOrderStatus(String(pending.order._id), pending.action.target)
+      if (pending.action.kind === 'delete') {
+        await api.deleteAdminOrder(String(pending.order._id))
+      } else {
+        await api.updateAdminOrderStatus(String(pending.order._id), pending.action.target)
+      }
       setPending(null)
       void reload()
     } catch (err) {
@@ -196,6 +199,14 @@ export default function OrdersSection() {
                         </button>
                       ))
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setPending({ order: o, action: deleteAction })}
+                      className="btn-secondary btn-sm inline-flex items-center gap-1 text-danger-700"
+                    >
+                      <Trash2 size={14} />
+                      {t('admin.deleteOrder')}
+                    </button>
                   </div>
                 </div>
                 {isOpen && (

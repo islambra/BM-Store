@@ -6,6 +6,7 @@ import Category from '../models/Category.js'
 import HeroBanner from '../models/HeroBanner.js'
 import MarketerProfile from '../models/MarketerProfile.js'
 import Product from '../models/Product.js'
+import { runRewardOrderIndexMigration } from '../config/rewardMigrations.js'
 
 function testUri() {
   const raw = process.env.MONGODB_URI || 'mongodb://localhost:27017/bmstore'
@@ -22,6 +23,7 @@ export async function connectTest() {
       socketTimeoutMS: 120000,
     })
   }
+  await runRewardOrderIndexMigration()
 }
 
 export async function disconnectTest() {

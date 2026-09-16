@@ -69,8 +69,6 @@ async function primeMarketerAndDeliver(visitor = 'visitor-1') {
 
   const admin = await adminAgent()
   await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'confirmed' })
-  await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'processing' })
-  await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'shipped' })
   const delivered = await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'delivered' })
   assert.equal(delivered.status, 200)
 
@@ -190,7 +188,7 @@ describe('referral + commission lifecycle', () => {
     assert.ok(stored.referredAt)
   })
 
-  it('creates a PENDING commission at order time, then AVAILABLE on delivery', async () => {
+  it('creates the commission only once the order is delivered', async () => {
     const { user, admin, orderId } = await primeMarketerAndDeliver('pending-visitor')
     const commission = await Commission.findOne({ order: orderId }).lean()
     assert.ok(commission)
@@ -202,7 +200,7 @@ describe('referral + commission lifecycle', () => {
     assert.equal(detail.body.data.stats.totalEarnings, 200)
   })
 
-  it('cancels a commission when the order is cancelled', async () => {
+  it('never creates a commission when the order is cancelled before delivery', async () => {
     const { user, orderId } = await createMarketer().then(async ({ user, profile }) => {
       const referral = await Referral.create({
         marketer: user._id,
@@ -225,10 +223,8 @@ describe('referral + commission lifecycle', () => {
     await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'confirmed' })
     await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'cancelled' })
 
-    const commission = await Commission.findOne({ order: orderId }).lean()
-    assert.equal(commission.status, 'CANCELLED')
-    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'PENDING' }), 0)
-    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'AVAILABLE' }), 0)
+    assert.equal(await Commission.countDocuments({ order: orderId }), 0)
+    assert.equal(await Commission.countDocuments({ marketer: user._id }), 0)
   })
 
   it('does not double-credit a commission on repeated delivery attempts', async () => {
@@ -368,7 +364,7 @@ describe('referral + commission lifecycle', () => {
     assert.equal(detail.status, 200)
     assert.equal(detail.body.data.stats.totalEarnings, 0)
     assert.equal(detail.body.data.stats.availableBalance, 0)
-    assert.equal(detail.body.data.stats.pendingEarnings, 100)
+    assert.equal(detail.body.data.stats.pendingEarnings, 0)
   })
 })
 
@@ -488,7 +484,7 @@ describe('payout workflow', () => {
           items: [{ productId: product._id, qty: 1 }],
           customer: deliveryInfo(),
         })
-        for (const s of ['confirmed', 'processing', 'shipped', 'delivered']) {
+        for (const s of ['confirmed', 'delivered']) {
           await admin.patch(`/api/admin/orders/${order.body.data.order._id}/status`).send({ status: s })
         }
       }

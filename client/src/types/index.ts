@@ -1,9 +1,11 @@
 export interface Product {
   id: string
+  _id?: string
+  slug: string
   name: string
   nameAr?: string
   nameFr?: string
-  description: string
+  description?: string
   descriptionAr?: string
   descriptionFr?: string
   price: number
@@ -21,6 +23,10 @@ export interface Product {
   isFeatured: boolean
   isSpecialOffer?: boolean
   confirmedSales?: number
+  ownerType?: 'BM_STORE' | 'SELLER'
+  store?: string
+  seller?: string
+  status?: 'active' | 'paused_by_seller' | 'disabled_by_admin'
 }
 
 export interface Category {
@@ -40,6 +46,9 @@ export interface Category {
     | 'natural'
     | 'dried'
     | 'oilsHoney'
+  rewardEnabled?: boolean
+  rewardNormalPercent?: number
+  rewardSpecialPercent?: number
 }
 
 export interface CartItem {
@@ -53,15 +62,7 @@ export interface ApiResponse<T> {
   data?: T
 }
 
-export type OrderStatus =
-  | 'pending-review'
-  | 'customer-contacted'
-  | 'confirmed'
-  | 'processing'
-  | 'shipped'
-  | 'delivered'
-  | 'rejected'
-  | 'cancelled'
+export type OrderStatus = 'pending' | 'confirmed' | 'delivered' | 'rejected' | 'cancelled'
 
 export interface OrderItem {
   productId: string
@@ -69,6 +70,10 @@ export interface OrderItem {
   qty: number
   price: number
   image?: string
+  category?: string
+  discountPercent?: number
+  discountAmount?: number
+  isRewardMilestone?: boolean
 }
 
 export interface OrderDelivery {

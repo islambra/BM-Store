@@ -20,7 +20,7 @@ export const getUsers = asyncHandler(async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = {}
   if (req.query.role) query.role = req.query.role
-  else query.role = { $ne: 'ADMIN' }
+  else query.role = { $nin: ['ADMIN', 'SELLER'] }
   if (req.query.q) {
     const safe = escapeRegex(req.query.q.trim())
     query.$or = [
@@ -38,7 +38,7 @@ export const getUsers = asyncHandler(async (req, res) => {
       .lean(),
     User.countDocuments(query),
     Order.aggregate([
-      { $match: { status: { $nin: ['cancelled', 'rejected'] } } },
+      { $match: { status: 'delivered' } },
       { $group: { _id: '$user', orderCount: { $sum: 1 }, totalSpent: { $sum: '$total' } } },
     ]),
   ])

@@ -44,6 +44,7 @@ export default function ProductPage() {
   const [added, setAdded] = useState(false)
   const [loginNotice, setLoginNotice] = useState(false)
   const [reloadNonce, setReloadNonce] = useState(0)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -134,13 +135,23 @@ export default function ProductPage() {
   const description = localizedText(product, lang)
 
   const handleAdd = () => {
-    addToCart(product, qty)
+    setError('')
+    const result = addToCart(product, qty)
+    if (!result.success) {
+      setError(result.message || '')
+      return
+    }
     setAdded(true)
     setTimeout(() => setAdded(false), 1600)
   }
 
   const handleBuyNow = () => {
-    addToCart(product, qty)
+    setError('')
+    const result = addToCart(product, qty)
+    if (!result.success) {
+      setError(result.message || '')
+      return
+    }
     if (!user) {
       setLoginNotice(true)
       return
@@ -157,6 +168,12 @@ export default function ProductPage() {
           { label: name },
         ]}
       />
+
+      {error && (
+        <div className="mt-4 rounded-xl border border-danger-100 bg-danger-50 p-4">
+          <Alert tone="error">{error}</Alert>
+        </div>
+      )}
 
       <div className="mt-4 grid gap-6 lg:grid-cols-2 lg:gap-10">
         {/* Gallery */}

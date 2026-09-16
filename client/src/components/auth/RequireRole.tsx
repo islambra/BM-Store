@@ -20,6 +20,11 @@ export function RequireRole({ roles, children }: { roles: string[]; children: Re
     )
   }
   if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />
-  if (!roles.includes(user.role)) return <Navigate to={user.role === 'ADMIN' ? '/admin' : '/dashboard'} replace />
+  if (!roles.includes(user.role)) {
+    if (user.role === 'ADMIN') return <Navigate to="/admin" replace />
+    if (user.role === 'MARKETER') return <Navigate to="/marketer" replace />
+    if (user.role === 'SELLER') return <Navigate to="/seller" replace />
+    return <Navigate to="/dashboard" replace />
+  }
   return children
 }

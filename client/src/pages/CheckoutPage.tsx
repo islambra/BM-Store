@@ -25,7 +25,7 @@ import { formatPrice } from '../components/common/Price'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
 import { Alert, Field, Input, Textarea, Select } from '../components/common/FormControls'
-import { createOrder, getMyOrders } from '../services/api'
+import { createOrder, getMyOrders, getPublicRewards, type PublicRewards } from '../services/api'
 import { getStoredReferral, getVisitorId } from '../services/referral'
 
 function newClientKey() {
@@ -60,15 +60,16 @@ export default function CheckoutPage() {
   // clicks reuse it, so the backend never creates a duplicate order.
   const clientKey = useMemo(() => newClientKey(), [])
 
-  // Loyalty discount estimate (display only — the backend computes the real
-  // personal order number, percent and totals when the order is created).
-  const [nextInfo, setNextInfo] = useState<{ n: number; p: number } | null>(null)
+  // Reward estimate (display only — the backend computes the real per-category
+  // breakdown, personal order number and totals when the order is confirmed).
+  // Step 1: the customer's next reward number.
+  const [nextInfo, setNextInfo] = useState<{ n: number } | null>(null)
   useEffect(() => {
     if (!user) return
     let active = true
     getMyOrders()
       .then((res) => {
-        if (active) setNextInfo({ n: res.nextCustomerOrderNumber ?? 1, p: res.nextDiscountPercent ?? 5 })
+        if (active) setNextInfo({ n: res.nextCustomerOrderNumber ?? 1 })
       })
       .catch(() => {
         if (active) setNextInfo(null)
@@ -78,9 +79,46 @@ export default function CheckoutPage() {
     }
   }, [user])
 
+  // Step 2: the reward percentages active on BM Store categories.
+  const [rewards, setRewards] = useState<PublicRewards | null>(null)
+  useEffect(() => {
+    let active = true
+    getPublicRewards()
+      .then((res) => {
+        if (active) setRewards(res)
+      })
+      .catch(() => {
+        if (active) setRewards(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // Per-category estimate for the NEXT order: order #n uses the special
+  // percent when n is a milestone (n % 10 === 0), otherwise the normal one.
+  const eligible = useMemo(() => {
+    if (!rewards?.enabled) return []
+    const bySlug = new Map(rewards.categories.map((c) => [c.slug, c]))
+    const pctKey = (nextInfo ? nextInfo.n : 1) % 10 === 0 ? 'rewardSpecialPercent' : 'rewardNormalPercent'
+    const acc = new Map<string, { cat: PublicRewards['categories'][number]; amount: number }>()
+    for (const { product, quantity } of cart) {
+      const c = bySlug.get(product.category)
+      if (!c || !c[pctKey]) continue
+      const { cat, amount } = acc.get(product.category) ?? { cat: c, amount: 0 }
+      acc.set(product.category, { cat, amount: amount + (product.price * quantity * c[pctKey]) / 100 })
+    }
+    return [...acc.values()].map(({ cat, amount }) => ({
+      name: localizedName(cat, lang),
+      pct: cat[pctKey],
+      amount: Math.round(amount),
+    }))
+  }, [rewards, nextInfo, cart, lang])
+
+  const estimateDiscount = eligible.reduce((sum, row) => sum + row.amount, 0)
+  const estimatePercent = cartTotal > 0 && estimateDiscount > 0 ? Math.round((estimateDiscount / cartTotal) * 100) : 0
+
   const delivery = cartTotal > 0 ? DELIVERY_FEE : 0
-  const estimatePercent = nextInfo?.p ?? 5
-  const estimateDiscount = Math.round((cartTotal * estimatePercent) / 100)
   const total = cartTotal + delivery - (cartTotal > 0 ? estimateDiscount : 0)
 
   const submit = async (e: React.FormEvent) => {
@@ -331,12 +369,24 @@ export default function CheckoutPage() {
                 </li>
               ))}
             </ul>
+            {eligible.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {eligible.map((row) => (
+                  <span
+                    key={row.name}
+                    className="rounded-full bg-success-50 px-2.5 py-1 text-[11px] font-bold text-success-700"
+                  >
+                    {row.name} · {row.pct}%
+                  </span>
+                ))}
+              </div>
+            )}
             <dl className="mt-5 space-y-2.5 border-t border-line pt-4 text-sm">
               <div className="flex justify-between">
                 <dt className="text-ink-500">{t('cart.subtotal')}</dt>
                 <dd className="font-semibold text-ink-900">{formatPrice(cartTotal, lang)}</dd>
               </div>
-              {cartTotal > 0 && (
+              {estimateDiscount > 0 && (
                 <div className="flex justify-between">
                   <dt className="text-ink-500">
                     {t('client.loyaltyDiscount')} ({estimatePercent}%)
@@ -353,9 +403,9 @@ export default function CheckoutPage() {
                 <dd className="text-lg font-extrabold text-ink-900">{formatPrice(total, lang)}</dd>
               </div>
             </dl>
-            {nextInfo && cartTotal > 0 && (
+            {nextInfo && estimateDiscount > 0 && (
               <p className="mt-3 rounded-xl bg-brand-50 px-3.5 py-2.5 text-xs font-semibold leading-relaxed text-brand-800">
-                {t('client.checkoutDiscountHint', { n: nextInfo.n, p: nextInfo.p })}
+                {t('client.checkoutDiscountHint', { n: nextInfo.n })}
               </p>
             )}
             <Link to="/cart" className="btn-ghost mt-4 w-full py-3">

@@ -4,11 +4,13 @@ import Product from '../models/Product.js'
 import Commission from '../models/Commission.js'
 import MarketerProfile from '../models/MarketerProfile.js'
 import Referral from '../models/Referral.js'
+import Store from '../models/Store.js'
 import {
   allocateCustomerOrderNumber,
-  calcCustomerDiscountAmount,
-  getCustomerDiscountPercent,
-  peekNextCustomerDiscount,
+  applyRewardToItems,
+  getLegacyDiscountPercent,
+  calcDiscountAmount,
+  peekNextCustomerOrderNumber,
 } from '../utils/customerDiscount.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 
@@ -62,6 +64,52 @@ async function resolveActiveReferral(req, referralId, visitorId) {
 }
 
 /**
+ * Validates that all items belong to the same store (or BM Store).
+ * Returns the store ID if valid, or throws an error.
+ */
+async function validateSingleStore(cleanItems) {
+  let storeId = null
+  let isBmStore = false
+
+  for (const item of cleanItems) {
+    const product = await Product.findById(item.productId).lean()
+    if (!product) return { error: { message: `Product not found: ${item.productId}`, status: 404 } }
+
+    const productStoreId = product.store?.toString()
+    const productOwnerType = product.ownerType
+
+    if (productOwnerType === 'BM_STORE' || !productStoreId) {
+      // This is a BM Store product
+      if (storeId && storeId !== 'BM_STORE') {
+        return { error: { message: 'Your cart contains products from different stores. Please complete or clear your current cart before adding products from a different store.', status: 400 } }
+      }
+      isBmStore = true
+      storeId = 'BM_STORE'
+    } else {
+      // This is a seller product
+      if (isBmStore) {
+        return { error: { message: 'Your cart contains products from different stores. Please complete or clear your current cart before adding products from a different store.', status: 400 } }
+      }
+      if (storeId && storeId !== productStoreId) {
+        return { error: { message: 'Your cart contains products from different stores. Please complete or clear your current cart before adding products from a different store.', status: 400 } }
+      }
+      storeId = productStoreId
+
+      // Check if store is active and subscription is valid
+      const store = await Store.findById(productStoreId).lean()
+      if (!store) return { error: { message: `Store not found for product: ${product.name}`, status: 400 } }
+      if (store.status !== 'active') return { error: { message: `Store "${store.name}" is not currently accepting orders.`, status: 400 } }
+      const now = new Date()
+      if (store.subscriptionEndDate && new Date(store.subscriptionEndDate) <= now) {
+        return { error: { message: `Store "${store.name}" has an expired subscription.`, status: 400 } }
+      }
+    }
+  }
+
+  return { storeId: storeId === 'BM_STORE' ? null : storeId, isBmStore }
+}
+
+/**
  * Prices order items exclusively from the database. Client-supplied prices,
  * discounts, totals and order numbers are never trusted.
  * Special-offer products already carry their offer price in `product.price`,
@@ -82,6 +130,7 @@ async function priceItems(items) {
     const product = await Product.findById(item.productId).lean()
     if (!product) return { error: { message: `Product not found: ${item.productId}`, status: 404 } }
     if (!product.isActive) return { error: { message: `Product is not available: ${product.name}`, status: 400 } }
+    if (product.status && product.status !== 'active') return { error: { message: `Product is not available: ${product.name}`, status: 400 } }
     if (product.stock < qty) return { error: { message: `Insufficient stock for: ${product.name}`, status: 400 } }
 
     cleanItems.push({
@@ -90,6 +139,7 @@ async function priceItems(items) {
       qty,
       price: product.price,
       image: product.image || undefined,
+      category: product.category,
     })
   }
   const subtotal = cleanItems.reduce((sum, it) => sum + it.price * it.qty, 0)
@@ -118,6 +168,11 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (priced.error) return sendError(res, priced.error.message, priced.error.status)
   const { cleanItems, subtotal } = priced
 
+  // Validate single store per order
+  const storeValidation = await validateSingleStore(cleanItems)
+  if (storeValidation.error) return sendError(res, storeValidation.error.message, storeValidation.error.status)
+  const { storeId, isBmStore } = storeValidation
+
   const delivery = customer ?? {}
   const required = ['fullName', 'phone', 'wilaya', 'commune', 'address']
   for (const field of required) {
@@ -139,7 +194,8 @@ export const createOrder = asyncHandler(async (req, res) => {
 
   const resolvedRef = await resolveActiveReferral(req, requestedReferralId, visitorId)
 
-  if (resolvedRef) {
+  // Marketer commission ONLY for BM Store products
+  if (resolvedRef && isBmStore) {
     const profile = await MarketerProfile.findOne({ user: resolvedRef.marketer }).lean()
     if (profile && String(profile.user) !== String(userId)) {
       referredBy = profile._id
@@ -154,21 +210,17 @@ export const createOrder = asyncHandler(async (req, res) => {
   let orderRef = randomRef()
   while (await Order.exists({ orderRef })) orderRef = randomRef()
 
-  // Personal order number + loyalty discount (backend is the source of truth).
-  // Allocated at creation only — historical orders never change.
-  // Concurrent checkouts for the same user could compute the same number: the
-  // unique { user, customerOrderNumber } index rejects the loser (or the
-  // duplicate clientKey), which retries with the next number — or returns the
-  // already-created order when the clientKey collided (retried submission).
+  // Reward order number + discount are NOT assigned at creation: the purchase
+  // count only increases when the order is confirmed (server-side, in
+  // updateOrderStatus). At creation a pending order simply has no discount —
+  // totals are recomputed when the store/admin confirms it.
   let order = null
   for (let attempt = 0; attempt < 3 && !order; attempt += 1) {
-    const customerOrderNumber = await allocateCustomerOrderNumber(userId)
-    const discountPercent = getCustomerDiscountPercent(customerOrderNumber)
-    const discountAmount = calcCustomerDiscountAmount(subtotal, discountPercent)
     try {
       order = await Order.create({
         orderRef,
         user: userId,
+        store: storeId,
         items: cleanItems,
         customer: {
           fullName: String(delivery.fullName).trim(),
@@ -181,11 +233,8 @@ export const createOrder = asyncHandler(async (req, res) => {
         },
         subtotal,
         delivery: shipping,
-        customerOrderNumber,
-        discountPercent,
-        discountAmount,
-        total: subtotal + shipping - discountAmount,
-        status: 'pending-review',
+        total: subtotal + shipping,
+        status: 'pending',
         referredBy,
         marketer: marketerId,
         referralId: attributedReferralId,
@@ -206,20 +255,9 @@ export const createOrder = asyncHandler(async (req, res) => {
     }
   }
 
-  if (commissionAmount > 0 && marketerId) {
-    try {
-      await Commission.create({
-        marketer: marketerId,
-        order: order._id,
-        orderId: orderRef,
-        rate: COMMISSION_RATE,
-        amount: commissionAmount,
-        status: 'PENDING',
-      })
-    } catch (e) {
-      if (e.code !== 11000) throw e
-    }
-  }
+  // NOTE: no Commission record is created here. Marketer commissions are only
+  // computed and credited when the order is DELIVERED (see updateOrderStatus),
+  // so nothing is ever earned before delivery.
 
   return sendSuccess(res, { order }, 'Order request received', 201)
 })
@@ -227,7 +265,7 @@ export const createOrder = asyncHandler(async (req, res) => {
 export const getMyOrders = asyncHandler(async (req, res) => {
   const [orders, peek] = await Promise.all([
     Order.find({ user: req.user._id }).sort({ createdAt: -1 }).lean(),
-    peekNextCustomerDiscount(req.user._id),
+    peekNextCustomerOrderNumber(req.user._id),
   ])
   return sendSuccess(res, { orders, ...peek })
 })
@@ -238,16 +276,16 @@ async function findEditableOrder(req) {
   if (String(order.user) !== String(req.user._id)) {
     return { error: { message: 'Order not found', status: 404 } }
   }
-  if (order.status !== 'pending-review') {
+  if (order.status !== 'pending') {
     return { error: { message: 'Order can no longer be modified', status: 400 } }
   }
   return { order }
 }
 
 /**
- * Customer edits their own order while it is still pending review
- * (before the store contacts them). Items are re-priced from the database,
- * stock is re-validated and totals are recomputed server-side.
+ * Customer edits their own order while it is still pending (before it is
+ * confirmed). Items are re-priced from the database, stock is re-validated
+ * and totals are recomputed server-side.
  */
 export const updateMyOrder = asyncHandler(async (req, res) => {
   const { order, error } = await findEditableOrder(req)
@@ -264,36 +302,48 @@ export const updateMyOrder = asyncHandler(async (req, res) => {
     if (priced.error) return sendError(res, priced.error.message, priced.error.status)
     const { cleanItems, subtotal } = priced
 
+    // Validate single store per order
+    const storeValidation = await validateSingleStore(cleanItems)
+    if (storeValidation.error) return sendError(res, storeValidation.error.message, storeValidation.error.status)
+const { storeId } = storeValidation
+
+    // Check if store matches the original order's store
+    const originalStoreId = order.store?.toString() || null
+    const newStoreId = storeId
+    if (originalStoreId !== newStoreId) {
+      return sendError(res, 'Cannot change store for this order. Please create a new order for products from a different store.', 400)
+    }
+
     order.items = cleanItems
     order.subtotal = subtotal
-    // Personal order number + percent are immutable once allocated; only the
-    // amount follows the edited subtotal (legacy orders without a percent
-    // keep their stored total components untouched except items/subtotal).
     if (Number.isInteger(order.customerOrderNumber) && order.customerOrderNumber > 0) {
-      order.discountPercent = getCustomerDiscountPercent(order.customerOrderNumber)
-      order.discountAmount = calcCustomerDiscountAmount(subtotal, order.discountPercent)
+      // Legacy order that already received its reward number: recompute the
+      // amount from its immutable number (historical orders never change).
+      order.discountPercent = getLegacyDiscountPercent(order.customerOrderNumber)
+      order.discountAmount = calcDiscountAmount(subtotal, order.discountPercent)
       order.total = subtotal + order.delivery - order.discountAmount
     } else {
+      // New-rule pending order: reward number + discount are assigned later
+      // at confirmation, so a pending edit carries no discount yet.
+      order.discountPercent = 0
       order.discountAmount = 0
       order.total = subtotal + order.delivery
     }
 
     if (order.referredBy) {
       order.commissionAmount = Math.round(subtotal * (COMMISSION_RATE / 100) * 100) / 100
-      await Commission.findOneAndUpdate(
-        { order: order._id, status: 'PENDING' },
-        { $set: { amount: order.commissionAmount } },
-      )
     }
   }
 
   if (customer !== undefined) {
     const delivery = customer ?? {}
-    for (const field of ['wilaya', 'commune', 'address']) {
+    for (const field of ['fullName', 'phone', 'wilaya', 'commune', 'address']) {
       if (delivery[field] !== undefined && !String(delivery[field] ?? '').trim()) {
         return sendError(res, 'Missing delivery information', 400)
       }
     }
+    if (delivery.fullName !== undefined) order.customer.fullName = String(delivery.fullName).trim()
+    if (delivery.phone !== undefined) order.customer.phone = String(delivery.phone).trim()
     if (delivery.wilaya !== undefined) order.customer.wilaya = String(delivery.wilaya).trim()
     if (delivery.wilayaName !== undefined) {
       order.customer.wilayaName = String(delivery.wilayaName).trim() || undefined
@@ -310,54 +360,123 @@ export const updateMyOrder = asyncHandler(async (req, res) => {
 })
 
 /**
- * Customer deletes their own order while it is still pending review
- * (before the store contacts them).
+ * Customer deletes their own order while it is still pending (before it is
+ * confirmed).
  */
 export const deleteMyOrder = asyncHandler(async (req, res) => {
   const { order, error } = await findEditableOrder(req)
   if (error) return sendError(res, error.message, error.status)
 
-  await releaseCommission(order, 'CANCELLED')
+  await cancelExistingCommission(order)
   await Order.deleteOne({ _id: order._id })
   return sendSuccess(res, null, 'Order deleted')
 })
 
-async function releaseCommission(order, toStatus, extraFields = {}) {
-  if (!order.commissionAmount || !order.referredBy) return false
-  const set = { status: toStatus, ...extraFields }
-  let updated = await Commission.findOneAndUpdate(
-    { order: order._id, status: 'PENDING' },
-    { $set: set },
-    { new: true }
-  )
-  if (!updated) {
-    // Commission record missing (order created before it was persisted, or a
-    // legacy order) — materialize it with the target status. The sparse unique
-    // {order} index makes this idempotent: a concurrent write wins with 11000.
-    try {
-      updated = await Commission.create({
-        marketer: order.marketer,
-        order: order._id,
-        orderId: order.orderRef,
-        rate: COMMISSION_RATE,
-        amount: order.commissionAmount,
-        ...set,
-      })
-    } catch (e) {
-      if (e.code !== 11000) throw e
-      return true
-    }
+/**
+ * Credits a BM Store referral order's marketer commission. Commissions are
+ * only ever computed and credited when the order is DELIVERED — never at
+ * creation or confirmation — and they are exclusive to BM Store orders.
+ * Idempotent: the sparse unique {order} index guarantees a single record, and
+ * an already-AVAILABLE record is never credited twice. Legacy PENDING records
+ * (created by an earlier order workflow) are upgraded to AVAILABLE here.
+ */
+async function creditCommission(order) {
+  if (!order.referredBy || !order.marketer || order.store) return false
+  const amount = Math.round(order.subtotal * (COMMISSION_RATE / 100) * 100) / 100
+  if (amount <= 0) return false
+
+  const pre = await Commission.findOne({ order: order._id }).lean()
+  if (pre?.status === 'AVAILABLE') return true
+
+  try {
+    await Commission.findOneAndUpdate(
+      { order: order._id, status: { $ne: 'AVAILABLE' } },
+      {
+        $set: {
+          status: 'AVAILABLE',
+          amount,
+          rate: COMMISSION_RATE,
+          marketer: order.marketer,
+          orderId: order.orderRef,
+          availableAt: new Date(),
+        },
+      },
+      { upsert: true }
+    )
+  } catch (e) {
+    // A concurrent delivery won the race and already credited the AVAILABLE
+    // record (unique {order} index) — nothing more to do.
+    if (e.code === 11000) return true
+    throw e
   }
 
-  if (toStatus === 'AVAILABLE') {
-    const profile = await MarketerProfile.findById(order.referredBy)
-    if (profile) {
-      profile.totalEarnings = Math.round((profile.totalEarnings + order.commissionAmount) * 100) / 100
-      await profile.save()
-    }
+  const profile = await MarketerProfile.findById(order.referredBy)
+  if (profile) {
+    profile.totalEarnings = Math.round((profile.totalEarnings + amount) * 100) / 100
+    await profile.save()
   }
   return true
 }
+
+/**
+ * Safe no-op for cancel/reject and order deletion: cancels any legacy PENDING
+ * commission record carried over from an earlier order workflow, but never
+ * creates one — commissions no longer exist before delivery.
+ */
+async function cancelExistingCommission(order) {
+  await Commission.updateOne({ order: order._id, status: 'PENDING' }, { $set: { status: 'CANCELLED' } })
+}
+
+/**
+ * Reverses the side effects of confirming/delivering an order so a hard delete
+ * leaves the catalog and the marketer books consistent:
+ * - orders that reached "confirmed"/"delivered" return product stock and roll
+ *   back confirmedSales (mirrors how confirm decremented them);
+ * - delivered referral (BM Store) orders cancel the credited AVAILABLE
+ *   commission and decrement the marketer's totalEarnings.
+ * Safe to call on any order — pending/terminal orders have no effects.
+ */
+export async function reverseOrderEffects(order) {
+  if (order.status === 'confirmed' || order.status === 'delivered') {
+    for (const item of order.items) {
+      if (!item.productId) continue
+      const product = await Product.findById(item.productId).lean()
+      const storeFilter = product?.store ? { store: product.store } : {}
+      await Product.updateOne(
+        { _id: item.productId, ...storeFilter },
+        { $inc: { stock: item.qty, confirmedSales: -item.qty } }
+      )
+    }
+  }
+
+  const commission = order.referredBy ? await Commission.findOne({ order: order._id }).lean() : null
+  if (commission) {
+    if (commission.status === 'AVAILABLE') {
+      const profile = await MarketerProfile.findById(order.referredBy)
+      if (profile) {
+        profile.totalEarnings = Math.max(0, Math.round((profile.totalEarnings - (commission.amount ?? 0)) * 100) / 100)
+        await profile.save()
+      }
+    }
+    if (commission.status !== 'CANCELLED') {
+      await Commission.updateOne({ _id: commission._id }, { $set: { status: 'CANCELLED' } })
+    }
+  }
+}
+
+/**
+ * Admin permanently deletes an order (main catalog + seller orders). Reverses
+ * stock/confirmedSales for confirmed/delivered orders and cancels any released
+ * marketer commission before removing the record.
+ */
+export const adminDeleteOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id)
+  if (!order) return sendError(res, 'Order not found', 404)
+
+  await reverseOrderEffects(order)
+  await Order.deleteOne({ _id: order._id })
+  return sendSuccess(res, null, 'Order deleted')
+})
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body ?? {}
@@ -381,8 +500,10 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     try {
       for (const item of order.items) {
         if (!item.productId) continue
+        const product = await Product.findById(item.productId).lean()
+        const storeFilter = product?.store ? { store: product.store } : {}
         const updated = await Product.findOneAndUpdate(
-          { _id: item.productId, stock: { $gte: item.qty } },
+          { _id: item.productId, ...storeFilter, stock: { $gte: item.qty } },
           { $inc: { stock: -item.qty, confirmedSales: item.qty } },
           { projection: { _id: 1 } }
         )
@@ -391,25 +512,64 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
       }
     } catch (err) {
       for (const d of decremented) {
-        await Product.updateOne({ _id: d.productId }, { $inc: { stock: d.qty, confirmedSales: -d.qty } })
+        const product = await Product.findById(d.productId).lean()
+        const storeFilter = product?.store ? { store: product.store } : {}
+        await Product.updateOne({ _id: d.productId, ...storeFilter }, { $inc: { stock: d.qty, confirmedSales: -d.qty } })
       }
       return sendError(res, 'Not enough stock to confirm this order', 400)
     }
   }
 
-  order.status = status
-  await order.save()
+  await settleRewardAndStatus(order, status)
 
+  // Commissions are credited ONLY on delivery: a referral order earns its
+  // marketer commission when the client actually receives it. Never before.
   if (wasDelivered) {
-    await releaseCommission(order, 'AVAILABLE', { availableAt: new Date() })
+    await creditCommission(order)
   }
 
   if (status === 'cancelled' || status === 'rejected') {
-    await releaseCommission(order, 'CANCELLED')
+    await cancelExistingCommission(order)
   }
 
   return sendSuccess(res, { order }, 'Order status updated')
 })
+
+/**
+ * Persists the status transition and, for BM Store orders entering the
+ * "confirmed" state for the first time, settles the reward discount:
+ * allocates the customer's next reward order number and applies the
+ * configured per-category percentages (snapshotted onto the order items).
+ * Seller orders and already-numbered legacy orders are untouched.
+ */
+async function settleRewardAndStatus(order, status) {
+  order.status = status
+
+  // Only entering "confirmed" allocates a reward number/discount. Pending,
+  // rejected and cancelled transitions never increase the purchase count.
+  if (status !== 'confirmed' || order.store || order.customerOrderNumber) {
+    await order.save()
+    return
+  }
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const nextNumber = await allocateCustomerOrderNumber(order.user)
+    const reward = await applyRewardToItems(order.items, nextNumber)
+    order.customerOrderNumber = nextNumber
+    order.discountPercent = reward.blendedPercent
+    order.discountAmount = reward.discountAmount
+    order.total = order.subtotal + order.delivery - reward.discountAmount
+    try {
+      await order.save()
+      return
+    } catch (e) {
+      // Concurrent confirm of another order by the same customer grabbed the
+      // same number — retry with the next one.
+      if (e.code !== 11000) throw e
+    }
+  }
+  throw new Error('Could not allocate reward order number, please retry')
+}
 
 export const listOrders = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)

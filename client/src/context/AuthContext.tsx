@@ -13,6 +13,7 @@ interface AuthContextValue {
   becomeMarketer: () => Promise<User>
   refresh: () => Promise<User | null>
   isMarketer: boolean
+  isSeller: boolean
   isAdmin: boolean
 }
 
@@ -94,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       becomeMarketer,
       refresh,
       isMarketer: !!user && (user.role === 'MARKETER' || user.role === 'ADMIN'),
+      isSeller: !!user && user.role === 'SELLER',
       isAdmin: !!user && user.role === 'ADMIN',
     }),
     [user, loading, login, register, registerMarketer, logout, becomeMarketer, refresh]

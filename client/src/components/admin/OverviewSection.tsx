@@ -44,7 +44,7 @@ export default function OverviewSection() {
     status: string
     customer: { fullName: string; phone: string }
   }>
-  const pending = allOrders.filter((o) => o.status === 'pending-review' || o.status === 'pending').length
+  const pending = allOrders.filter((o) => o.status === 'pending').length
   const delivered = allOrders.filter((o) => o.status === 'delivered').length
   const revenue = allOrders.filter((o) => o.status === 'delivered').reduce((sum, o) => sum + (o.total ?? 0), 0)
   const commissionsPending = (marketers.data?.marketers ?? []).reduce(

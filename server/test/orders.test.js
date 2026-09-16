@@ -8,6 +8,10 @@ import User from '../models/User.js'
 import Product from '../models/Product.js'
 import Commission from '../models/Commission.js'
 import Referral from '../models/Referral.js'
+import Seller from '../models/Seller.js'
+import Store from '../models/Store.js'
+import MarketerProfile from '../models/MarketerProfile.js'
+import Order from '../models/Order.js'
 
 const phone = uniquePhone
 
@@ -50,12 +54,13 @@ describe('orders', () => {
     assert.match(res.body.data.order.orderRef, /^BM-[0-9A-F]{6}$/)
     assert.equal(res.body.data.order.subtotal, 1600)
     assert.equal(res.body.data.order.delivery, 350)
-    // First personal order -> 5% loyalty discount (1600 * 5% = 80)
-    assert.equal(res.body.data.order.customerOrderNumber, 1)
-    assert.equal(res.body.data.order.discountPercent, 5)
-    assert.equal(res.body.data.order.discountAmount, 80)
-    assert.equal(res.body.data.order.total, 1870)
-    assert.equal(res.body.data.order.status, 'pending-review')
+    // Pending orders carry no reward yet: the number + discount are assigned
+    // server-side only when a store/admin confirms the order.
+    assert.equal(res.body.data.order.customerOrderNumber, undefined)
+    assert.equal(res.body.data.order.discountPercent, 0)
+    assert.equal(res.body.data.order.discountAmount, 0)
+    assert.equal(res.body.data.order.total, 1950)
+    assert.equal(res.body.data.order.status, 'pending')
   })
 
   it('charges a flat delivery fee on every order', async () => {
@@ -163,7 +168,7 @@ describe('orders', () => {
   })
 })
 
-describe('customer order edit + delete before contact', () => {
+describe('customer order edit + delete while pending', () => {
   before(connectTest)
   after(disconnectTest)
 
@@ -178,7 +183,7 @@ describe('customer order edit + delete before contact', () => {
     return res.body.data.order
   }
 
-  it('lets the owner edit delivery info while pending review', async () => {
+  it('lets the owner edit delivery info while pending', async () => {
     const agent = await createCustomerAgent()
     const product = await createProduct({ name: 'Editable', price: 400, stock: 5 })
     const order = await customerOrder(agent, product)
@@ -189,7 +194,7 @@ describe('customer order edit + delete before contact', () => {
     assert.equal(res.body.data.order.customer.commune, 'New Commune')
     assert.equal(res.body.data.order.customer.address, 'New Address')
     assert.equal(res.body.data.order.customer.note, 'Leave at door')
-    assert.equal(res.body.data.order.status, 'pending-review')
+    assert.equal(res.body.data.order.status, 'pending')
   })
 
   it('recomputes totals server-side when quantities change', async () => {
@@ -203,10 +208,10 @@ describe('customer order edit + delete before contact', () => {
     assert.equal(res.body.data.order.items[0].qty, 3)
     assert.equal(res.body.data.order.items[0].price, 500)
     assert.equal(res.body.data.order.subtotal, 1500)
-    // 5% of 1500 = 75 -> total 1500 + 350 - 75
-    assert.equal(res.body.data.order.discountPercent, 5)
-    assert.equal(res.body.data.order.discountAmount, 75)
-    assert.equal(res.body.data.order.total, 1775)
+    // Still pending: no reward number/discount yet -> total = subtotal + fee
+    assert.equal(res.body.data.order.discountPercent, 0)
+    assert.equal(res.body.data.order.discountAmount, 0)
+    assert.equal(res.body.data.order.total, 1850)
   })
 
   it('rejects quantity edits exceeding stock', async () => {
@@ -230,7 +235,7 @@ describe('customer order edit + delete before contact', () => {
     assert.equal(guestRes.status, 401)
   })
 
-  it('blocks edit and delete once the store contacted the customer', async () => {
+  it('blocks edit and delete once the order is confirmed', async () => {
     const { phone, password } = await createAdmin()
     const admin = request.agent(app)
     await admin.post('/api/auth/login').send({ phone, password })
@@ -239,8 +244,8 @@ describe('customer order edit + delete before contact', () => {
     const product = await createProduct({ name: 'Locked', price: 100, stock: 5 })
     const order = await customerOrder(agent, product)
 
-    const contacted = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'customer-contacted' })
-    assert.equal(contacted.status, 200)
+    const confirmed = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
+    assert.equal(confirmed.status, 200)
 
     const edit = await agent.patch(`/api/orders/${order._id}`).send({ customer: { commune: 'Too Late' } })
     assert.equal(edit.status, 400)
@@ -358,14 +363,17 @@ describe('admin order management + product CRUD', () => {
     const impossible = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'shipped' })
     assert.equal(impossible.status, 400)
 
-    const processing = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'processing' })
-    assert.equal(processing.status, 200)
-
-    const shipped = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'shipped' })
-    assert.equal(shipped.status, 200)
+    const noProcessing = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'processing' })
+    assert.equal(noProcessing.status, 400)
 
     const delivered = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'delivered' })
     assert.equal(delivered.status, 200)
+
+    const again = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'delivered' })
+    assert.equal(again.status, 400)
+
+    const rejectedAfter = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'rejected' })
+    assert.equal(rejectedAfter.status, 400)
   })
 })
 
@@ -414,8 +422,6 @@ describe('admin marketer management', () => {
     assert.equal(order.body.data.order.commissionAmount, 200)
 
     await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'confirmed' })
-    await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'processing' })
-    await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'shipped' })
     const delivered = await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'delivered' })
     assert.equal(delivered.status, 200)
     assert.equal((await Commission.countDocuments({ order: orderId, status: 'AVAILABLE' })), 1)
@@ -503,9 +509,9 @@ describe('admin order workflow + single commission', () => {
     })
     assert.equal(created.status, 201)
     const id = created.body.data.order._id
-    assert.equal(created.body.data.order.status, 'pending-review')
+    assert.equal(created.body.data.order.status, 'pending')
 
-    for (const status of ['confirmed', 'processing', 'shipped', 'delivered']) {
+    for (const status of ['confirmed', 'delivered']) {
       const res = await admin.patch(`/api/admin/orders/${id}/status`).send({ status })
       assert.equal(res.status, 200)
       assert.equal(res.body.data.order.status, status)
@@ -543,5 +549,164 @@ describe('marketer authorization', () => {
     const product = await createProduct()
     const update = await agent.patch(`/api/admin/products/${product._id}`).send({ price: 2 })
     assert.equal(update.status, 403)
+  })
+})
+
+describe('admin + seller order deletion', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  const customerInfo = { fullName: 'Del', phone: '0', wilaya: '16', commune: 'X', address: 'Y' }
+
+  async function adminAgent() {
+    const { phone, password } = await createAdmin()
+    const admin = request.agent(app)
+    await admin.post('/api/auth/login').send({ phone, password })
+    return admin
+  }
+
+  async function adminOrder(admin, product, qty = 1) {
+    const res = await admin.post('/api/orders').send({
+      items: [{ productId: product._id, qty }],
+      customer: customerInfo,
+    })
+    assert.equal(res.status, 201)
+    return res.body.data.order
+  }
+
+  it('admin deletes a pending order', async () => {
+    const admin = await adminAgent()
+    const product = await createProduct({ name: 'Del Pending', price: 100, stock: 5 })
+    const order = await adminOrder(admin, product)
+
+    const del = await admin.delete(`/api/admin/orders/${order._id}`)
+    assert.equal(del.status, 200)
+    assert.equal(await Order.countDocuments({ _id: order._id }), 0)
+  })
+
+  it('admin delete of a confirmed order restores stock and confirmedSales', async () => {
+    const admin = await adminAgent()
+    const product = await createProduct({ name: 'Del Confirmed', price: 100, stock: 10 })
+    const order = await adminOrder(admin, product, 3)
+
+    const confirmed = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
+    assert.equal(confirmed.status, 200)
+    assert.equal((await Product.findById(product._id)).stock, 7)
+    assert.equal((await Product.findById(product._id)).confirmedSales, 3)
+
+    const del = await admin.delete(`/api/admin/orders/${order._id}`)
+    assert.equal(del.status, 200)
+    assert.equal((await Product.findById(product._id)).stock, 10)
+    assert.equal((await Product.findById(product._id)).confirmedSales, 0)
+    assert.equal(await Order.countDocuments({ _id: order._id }), 0)
+  })
+
+  it('admin delete of a delivered referral order cancels the released commission', async () => {
+    const admin = await adminAgent()
+    const { user: marketerUser, profile } = await createMarketer()
+    const referral = await Referral.create({
+      marketer: marketerUser._id,
+      profile: profile._id,
+      referralCode: profile.referralCode,
+      active: true,
+      expiresAt: new Date(Date.now() + 86400000),
+      visitor: 'del-referral',
+    })
+
+    const customerPhone = uniquePhone()
+    await request(app).post('/api/auth/register').send({
+      name: 'Deleting Referral Customer',
+      phone: customerPhone,
+      password: 'Secret@1234',
+      referralId: referral._id,
+    })
+    const customer = request.agent(app)
+    await customer.post('/api/auth/login').send({ phone: customerPhone, password: 'Secret@1234' })
+
+    const product = await createProduct({ name: 'Del Referral', price: 1000, stock: 10 })
+    const created = await customer.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 2 }],
+      customer: customerInfo,
+    })
+    assert.equal(created.status, 201)
+    const id = created.body.data.order._id
+
+    await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'confirmed' })
+    const delivered = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'delivered' })
+    assert.equal(delivered.status, 200)
+    assert.equal(await Commission.countDocuments({ order: id, status: 'AVAILABLE' }), 1)
+    assert.equal((await MarketerProfile.findById(profile._id)).totalEarnings, 200)
+
+    const del = await admin.delete(`/api/admin/orders/${id}`)
+    assert.equal(del.status, 200)
+    assert.equal(await Commission.countDocuments({ order: id, status: 'AVAILABLE' }), 0)
+    assert.equal(await Commission.countDocuments({ order: id, status: 'CANCELLED' }), 1)
+    assert.equal((await MarketerProfile.findById(profile._id)).totalEarnings, 0)
+    const after = await admin.get(`/api/admin/marketers/${marketerUser._id}`)
+    assert.equal(after.body.data.stats.availableBalance, 0)
+  })
+
+  it('seller deletes only their own store order and restores stock on confirmed', async () => {
+    const admin = await adminAgent()
+
+    const makeSeller = async (suffix) => {
+      const number = uniquePhone()
+      await request(app).post('/api/seller/register').send({
+        fullName: `Seller ${suffix}`,
+        email: `seller-${suffix}-${number}@test.dev`,
+        phone: number,
+        password: 'Secret@1234',
+        confirmPassword: 'Secret@1234',
+      })
+      const agent = request.agent(app)
+      const login = await agent.post('/api/seller/login').send({ phone: number, password: 'Secret@1234' })
+      assert.equal(login.status, 200)
+      const seller = await Seller.findOne({ phone: number.replace(/[\s-]+/g, '') }).lean()
+      const store = await Store.create({
+        seller: seller._id,
+        name: `Store ${suffix}`,
+        slug: `store-${suffix}-${Date.now()}`,
+        status: 'active',
+        subscriptionEndDate: new Date(Date.now() + 86400000 * 30),
+      })
+      const product = await createProduct({ name: `Prod ${suffix}`, price: 500, stock: 10 })
+      await Product.updateOne({ _id: product._id }, { $set: { ownerType: 'SELLER', store: store._id, seller: seller._id } })
+      return { agent, store, product }
+    }
+
+    const sellerA = await makeSeller('A')
+    const sellerB = await makeSeller('B')
+
+    const customerPhone = uniquePhone()
+    await request(app).post('/api/auth/register').send({
+      name: 'Seller Customer',
+      phone: customerPhone,
+      password: 'Secret@1234',
+    })
+    const customer = request.agent(app)
+    await customer.post('/api/auth/login').send({ phone: customerPhone, password: 'Secret@1234' })
+
+    const created = await customer.post('/api/orders').send({
+      items: [{ productId: sellerA.product._id, qty: 2 }],
+      customer: customerInfo,
+    })
+    assert.equal(created.status, 201)
+    const orderId = created.body.data.order._id
+
+    // Confirm it as admin, stock is decremented by 2.
+    const confirmed = await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'confirmed' })
+    assert.equal(confirmed.status, 200)
+    assert.equal((await Product.findById(sellerA.product._id)).stock, 8)
+
+    // Seller B must not be able to delete A's order.
+    const wrongDelete = await sellerB.agent.delete(`/api/store/orders/${orderId}`)
+    assert.equal(wrongDelete.status, 404)
+
+    // Seller A deletes its own order: stock restored.
+    const ownDelete = await sellerA.agent.delete(`/api/store/orders/${orderId}`)
+    assert.equal(ownDelete.status, 200)
+    assert.equal(await Order.countDocuments({ _id: orderId }), 0)
+    assert.equal((await Product.findById(sellerA.product._id)).stock, 10)
+    assert.equal((await Product.findById(sellerA.product._id)).confirmedSales, 0)
   })
 })

@@ -232,6 +232,14 @@
   @apply text-[11px] font-bold uppercase tracking-[0.12em] text-brand-600;
 }
 
+/* Auth page signature: slow-rotating quality seal */
+@keyframes rotate-slow {
+  to { transform: rotate(360deg); }
+}
+.animate-rotate-slow {
+  animation: rotate-slow 28s linear infinite;
+}
+
 /* ---- Skeleton ------------------------------------------------------------ */
 
 .skeleton {
