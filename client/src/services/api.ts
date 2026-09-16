@@ -7,6 +7,18 @@ const api = axios.create({
   withCredentials: true,
 })
 
+// Once a refresh attempt confirms there is no live session (guest), stop
+// retrying /auth/me -> /auth/refresh on every navigation or page load.
+let sessionKnownDead = false
+
+export function isSessionKnownDead() {
+  return sessionKnownDead
+}
+
+export function markSessionAlive() {
+  sessionKnownDead = false
+}
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -14,12 +26,15 @@ api.interceptors.response.use(
     const url = original?.url ?? ''
     const isAuth = ['/auth/login', '/auth/register', '/auth/register-marketer', '/auth/refresh'].some((p) => url.includes(p))
     if (err.response?.status === 401 && original && !original._retry && !isAuth) {
+      if (sessionKnownDead) return Promise.reject(err)
       original._retry = true
       try {
         await api.post('/auth/refresh')
+        markSessionAlive()
         return api(original)
       } catch {
-        /* refresh failed — session truly expired */
+        sessionKnownDead = true
+        /* refresh failed — session truly expired, avoid repeating it */
       }
     }
     return Promise.reject(err)
@@ -41,6 +56,9 @@ export interface User {
   avatar: string | null
   phone: string | null
   createdAt: string
+  ccp?: string | null
+  ccpKey?: string | null
+  baridiMob?: string | null
 }
 
 // ---- helpers -------------------------------------------------------------
@@ -84,10 +102,10 @@ export interface AuthPayload {
 }
 
 export function getMe() {
-  return get<AuthPayload>('/auth/me')
+  return get<{ user: User | null }>('/auth/me')
 }
 
-export function updateMe(body: { name?: string; phone?: string; avatar?: string }) {
+export function updateMe(body: { name?: string; phone?: string; avatar?: string; ccp?: string; ccpKey?: string; baridiMob?: string }) {
   return patch<AuthPayload>('/auth/me', body)
 }
 
@@ -96,30 +114,46 @@ export function changePassword(body: { currentPassword: string; newPassword: str
 }
 
 export function login(phone: string, password: string) {
-  return post<AuthPayload>('/auth/login', { phone, password })
+  return post<AuthPayload>('/auth/login', { phone, password }).then((res) => {
+    markSessionAlive()
+    return res
+  })
 }
 
 export function register(name: string, phone: string, password: string, opts?: { referralId?: string; visitorId?: string }) {
-  return post<AuthPayload>('/auth/register', { name, phone, password, referralId: opts?.referralId, visitorId: opts?.visitorId })
+  return post<AuthPayload>('/auth/register', {
+    name,
+    phone,
+    password,
+    referralId: opts?.referralId,
+    visitorId: opts?.visitorId,
+  }).then((res) => {
+    markSessionAlive()
+    return res
+  })
 }
 
 export interface RegisterMarketerInput {
   name: string
   phone: string
   password: string
-  bio?: string
-  avatar?: string
   baridiMob?: string
   ccp?: string
   ccpKey?: string
 }
 
 export function registerMarketer(body: RegisterMarketerInput) {
-  return post<BecomeMarketerPayload>('/auth/register-marketer', body)
+  return post<BecomeMarketerPayload>('/auth/register-marketer', body).then((res) => {
+    markSessionAlive()
+    return res
+  })
 }
 
 export function logout() {
-  return post<null>('/auth/logout')
+  return post<null>('/auth/logout').then((res) => {
+    sessionKnownDead = true
+    return res
+  })
 }
 
 export async function uploadImage(file: File): Promise<{ url: string }> {
@@ -151,7 +185,10 @@ export interface BecomeMarketerPayload extends AuthPayload {
 }
 
 export function becomeMarketer() {
-  return post<BecomeMarketerPayload>('/auth/become-marketer')
+  return post<BecomeMarketerPayload>('/auth/become-marketer').then((res) => {
+    markSessionAlive()
+    return res
+  })
 }
 
 // ---- public catalog ------------------------------------------------------
@@ -364,8 +401,6 @@ export interface MarketerProfilePayload {
   profile: {
     id: string
     publicName: string
-    bio?: string
-    avatar?: string
     referralCode: string
     referralLink: string
     status: string
@@ -428,8 +463,6 @@ export function updateMarketerMe(body: {
   name?: string
   phone?: string
   publicName?: string
-  bio?: string
-  avatar?: string
   payoutDetails?: { ccp?: string; ccpKey?: string; baridiMob?: string }
 }) {
   return patch<MarketerProfilePayload>('/marketer/me', body)
@@ -631,6 +664,12 @@ export interface SellerSubscriptionPayload {
   isExpiringSoon: boolean
 }
 
+export interface PaymentInfoPayload {
+  ccp?: string | null
+  ccpKey?: string | null
+  baridiMob?: string | null
+}
+
 export interface SellerPage {
   page: number
   limit: number
@@ -645,15 +684,24 @@ export function registerSeller(body: {
   password: string
   confirmPassword: string
 }) {
-  return post<{ seller: SellerProfilePayload['seller'] }>('/seller/register', body)
+  return post<{ seller: SellerProfilePayload['seller'] }>('/seller/register', body).then((res) => {
+    markSessionAlive()
+    return res
+  })
 }
 
 export function loginSeller(identifier: string, password: string) {
-  return post<{ seller: SellerProfilePayload['seller'] }>('/seller/login', { identifier, password })
+  return post<{ seller: SellerProfilePayload['seller'] }>('/seller/login', { identifier, password }).then((res) => {
+    markSessionAlive()
+    return res
+  })
 }
 
 export function logoutSeller() {
-  return post<null>('/seller/logout')
+  return post<null>('/seller/logout').then((res) => {
+    sessionKnownDead = true
+    return res
+  })
 }
 
 export function getSellerMe() {
@@ -683,7 +731,7 @@ export function submitStoreRequest(body: {
 }
 
 export function getMyStoreRequest() {
-  return get<{ storeRequest: SellerStoreRequestPayload | null }>('/seller/store-request')
+  return get<{ storeRequest: SellerStoreRequestPayload | null; paymentInfo?: PaymentInfoPayload }>('/seller/store-request')
 }
 
 export function checkSlugAvailability(slug: string) {
@@ -777,7 +825,7 @@ export function getMyEarnings() {
 }
 
 export function getMySubscription() {
-  return get<{ subscription: SellerSubscriptionPayload }>('/store/subscription')
+  return get<{ subscription: SellerSubscriptionPayload; paymentInfo?: PaymentInfoPayload }>('/store/subscription')
 }
 
 export function submitRenewalRequest(body: { subscriptionPlan: 'monthly' | 'yearly'; paymentProof: string }) {
@@ -1017,43 +1065,6 @@ export function deleteAdminUser(id: string) {
 
 export function getAdminMarketers() {
   return get<{ marketers: AdminMarketer[] }>('/admin/marketers')
-}
-
-export function getAdminMarketerDetail(id: string) {
-  return get<{
-    profile: MarketerProfilePayload['profile']
-    stats: MarketerStats
-    commissionsCount: number
-    payouts: MarketerPayoutRecord[]
-    referralLink: string
-  }>(`/admin/marketers/${id}`)
-}
-
-export function getAdminMarketerOrders(id: string) {
-  return get<Page & { orders: MarketerOrderRecord[] }>(`/admin/marketers/${id}/orders`)
-}
-
-export function getAdminMarketerCommissions(id: string) {
-  return get<{ commissions: CommissionRecord[] }>(`/admin/marketers/${id}/commissions`)
-}
-
-export function getAdminMarketerReferrals(id: string) {
-  return get<{
-    referrals: {
-      _id: string
-      referralCode: string
-      landingPath: string
-      created: boolean
-      converted: boolean
-      convertedAt?: string | null
-      customer?: { _id: string; name: string } | null
-      createdAt: string
-    }[]
-  }>(`/admin/marketers/${id}/referrals`)
-}
-
-export function getAdminMarketerPayouts(id: string) {
-  return get<{ payouts: MarketerPayoutRecord[] }>(`/admin/marketers/${id}/payouts`)
 }
 
 export function deleteMarketer(id: string) {
@@ -1331,7 +1342,7 @@ export function deleteComment(commentId: string) {
   return remove<null>(`/comments/${commentId}`)
 }
 
-export function recordPayout(body: { marketerId: string; amount: number; method: 'CCP' | 'BaridiMob'; reference?: string; notes?: string }) {
+export function recordPayout(body: { marketerId: string; amount: number; method: 'CCP' | 'BaridiMob'; notes?: string }) {
   return post<MarketerPayoutRecord>('/admin/payouts', body)
 }
 

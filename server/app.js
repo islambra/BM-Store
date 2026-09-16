@@ -37,9 +37,24 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .map((s) => s.trim())
   .filter(Boolean)
 
+// Base domain under which seller stores are served as subdomains, e.g.
+// "localhost" in development or "bmstore.com" in production.
+const storeBaseDomain = (process.env.STORE_BASE_DOMAIN || '').trim().toLowerCase().replace(/^www\./, '') || 'localhost'
+
+const originAllowed = (origin) => {
+  if (!origin) return true
+  let host = ''
+  try {
+    host = new URL(origin).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  return allowedOrigins.includes(origin) || (host !== storeBaseDomain && host.endsWith(`.${storeBaseDomain}`))
+}
+
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => callback(null, originAllowed(origin)),
     credentials: true,
   })
 )

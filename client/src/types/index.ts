@@ -104,8 +104,6 @@ export interface Order {
 export interface MarketerProfile {
   id: string
   publicName: string
-  bio?: string
-  avatar?: string
   referralCode: string
   referralLink: string
   status: string

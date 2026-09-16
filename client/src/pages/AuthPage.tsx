@@ -47,7 +47,7 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
       return
     }
     if (password.length < 8) {
-      setError(t('auth.passwordShort'))
+      setError(t('auth.passwordMin'))
       return
     }
     setBusy(true)
@@ -78,7 +78,7 @@ export default function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <AuthLayout
-      eyebrow={mode === 'register' ? t('auth.createAccount') : t('auth.signIn')}
+      eyebrow={t('brand.storeName')}
       title={mode === 'register' ? t('auth.createAccount') : t('auth.welcomeBack')}
       subtitle={mode === 'register' ? t('auth.createSubtitle') : t('auth.demo')}
       brandHeadline={mode === 'register' ? t('auth.createAccount') : t('auth.welcomeBack')}

@@ -4,8 +4,7 @@ import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
 import { getErrorMessage } from '../../services/api'
-import { Alert, Field, Input, Textarea } from '../common/FormControls'
-import ImageUploader from '../common/ImageUploader'
+import { Alert, Field, Input } from '../common/FormControls'
 import { ErrorNote, Loader } from '../admin/adminShared'
 
 export default function ProfileSection() {
@@ -15,12 +14,10 @@ export default function ProfileSection() {
     name: string
     phone: string
     publicName: string
-    bio: string
-    avatar: string
     ccp: string
     ccpKey: string
     baridiMob: string
-  }>({ name: '', phone: '', publicName: '', bio: '', avatar: '', ccp: '', ccpKey: '', baridiMob: '' })
+  }>({ name: '', phone: '', publicName: '', ccp: '', ccpKey: '', baridiMob: '' })
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
@@ -37,8 +34,6 @@ export default function ProfileSection() {
     name: p.user?.name ?? '',
     phone: p.user?.phone ?? '',
     publicName: p.publicName,
-    bio: p.bio ?? '',
-    avatar: p.avatar ?? '',
     ccp: pd.ccp ?? '',
     ccpKey: pd.ccpKey ?? '',
     baridiMob: pd.baridiMob ?? '',
@@ -52,8 +47,6 @@ export default function ProfileSection() {
         name: state.name,
         phone: state.phone,
         publicName: state.publicName,
-        bio: state.bio,
-        avatar: state.avatar || undefined,
         payoutDetails: {
           ccp: state.ccp,
           ccpKey: state.ccpKey,
@@ -114,9 +107,6 @@ export default function ProfileSection() {
           <Field label={t('marketer.phone')}>
             <Input icon={Phone} dir="ltr" value={state.phone} onChange={(e) => setForm((s) => ({ ...s, ...state, phone: e.target.value }))} />
           </Field>
-          <Field label={t('marketer.avatar')} hint={t('marketer.avatarHint')}>
-            <ImageUploader value={state.avatar} onChange={(v) => setForm((s) => ({ ...s, ...state, avatar: String(v) }))} />
-          </Field>
         </div>
       </div>
 
@@ -128,9 +118,6 @@ export default function ProfileSection() {
         <div className="mt-4 grid gap-3">
           <Field label={t('marketer.publicName')}>
             <Input value={state.publicName} onChange={(e) => setForm((s) => ({ ...s, ...state, publicName: e.target.value }))} />
-          </Field>
-          <Field label={t('marketer.bio')}>
-            <Textarea value={state.bio} rows={3} onChange={(e) => setForm((s) => ({ ...s, ...state, bio: e.target.value }))} />
           </Field>
         </div>
       </div>

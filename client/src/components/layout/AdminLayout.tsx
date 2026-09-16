@@ -1,13 +1,12 @@
 import { Link, Outlet } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Store } from 'lucide-react'
+import { Store } from 'lucide-react'
 import Logo from '../common/Logo'
 import LanguageSwitcher from '../common/LanguageSwitcher'
 import { useLanguage } from '../../context/LanguageContext'
 import ReferralTracker from '../referral/ReferralTracker'
 
 export default function AdminLayout() {
-  const { t, lang } = useLanguage()
-  const BackIcon = lang === 'ar' ? ArrowRight : ArrowLeft
+  const { t } = useLanguage()
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
@@ -24,9 +23,6 @@ export default function AdminLayout() {
               {t('common.backToStore')}
             </Link>
             <LanguageSwitcher />
-            <Link to="/" aria-label={t('common.backToStore')} className="icon-btn sm:hidden" title={t('common.backToStore')}>
-              <BackIcon size={18} />
-            </Link>
           </div>
         </div>
       </header>

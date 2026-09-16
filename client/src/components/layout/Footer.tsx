@@ -1,18 +1,32 @@
 import { Link } from 'react-router-dom'
+import { AtSign, Play, Share2, type LucideIcon } from 'lucide-react'
 import logo from '../../assets/logo.jpg'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAuth } from '../../context/AuthContext'
 import { useCatalog } from '../../context/CatalogContext'
 import { localizedName } from '../../utils/localize'
-import { languages } from '../../i18n/translations'
 import { getAccountRoute } from '../../utils/account'
 
 const catName = (c: { name: string; nameAr?: string; nameFr?: string }, lang: string) => localizedName(c, lang)
 
+const socials: { icon: LucideIcon; label: string; href: string }[] = [
+  { icon: Share2, label: 'Facebook', href: 'https://www.facebook.com' },
+  { icon: AtSign, label: 'Instagram', href: 'https://www.instagram.com' },
+  { icon: Play, label: 'YouTube', href: 'https://www.youtube.com' },
+]
+
 export default function Footer() {
-  const { t, lang, setLang } = useLanguage() // prettier-ignore
+  const { t, lang } = useLanguage()
   const { categories } = useCatalog()
   const { user } = useAuth()
+
+  const supportLinks = [
+    { to: '/help', label: t('footer.faq') },
+    { to: '/contact', label: t('footer.contact') },
+    { to: '/about', label: t('footer.about') },
+    { to: '/privacy', label: t('footer.privacy') },
+    { to: '/terms', label: t('footer.terms') },
+  ]
 
   return (
     <footer className="mt-16 bg-ink-900 pb-28 text-white lg:pb-0">
@@ -25,6 +39,24 @@ export default function Footer() {
               </span>
             </Link>
             <p className="mt-4 text-sm leading-relaxed text-white/70">{t('footer.description')}</p>
+            <div className="mt-5 flex items-center gap-3">
+              <span className="text-sm font-semibold text-white/80">{t('footer.follow')}</span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              {socials.map((s) => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={s.label}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white/80 transition-colors hover:bg-brand-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                >
+                  <s.icon size={17} />
+                </a>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -48,7 +80,7 @@ export default function Footer() {
               {t('footer.categories')}
             </h3>
             <ul className="space-y-2.5 text-sm text-white/70">
-              {categories.map((c) => (
+              {categories.slice(0, 6).map((c) => (
                 <li key={c.id}>
                   <Link className="transition-colors hover:text-white" to={`/category/${c.slug}`}>
                     {catName(c, lang)}
@@ -56,28 +88,27 @@ export default function Footer() {
                 </li>
               ))}
             </ul>
+            {categories.length > 6 && (
+              <Link
+                to="/categories"
+                className="mt-3 inline-block text-sm font-semibold text-brand-400 transition-colors hover:text-brand-300"
+              >
+                {t('nav.categories')} →
+              </Link>
+            )}
           </div>
 
           <div>
             <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-white/90">
-              {t('common.language')}
+              {t('footer.support')}
             </h3>
-            <div className="flex flex-col gap-2.5">
-              {languages.map((l) => (
-                <button
-                  key={l.code}
-                  type="button"
-                  onClick={() => setLang(l.code)}
-                  className={`w-full rounded-xl px-4 py-2.5 text-start text-sm font-semibold transition-colors ${
-                    l.code === lang
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-white/10 text-white/80 hover:bg-white/20'
-                  }`}
-                >
-                  {l.label}
-                </button>
+            <ul className="space-y-2.5 text-sm text-white/70">
+              {supportLinks.map((l) => (
+                <li key={l.to}>
+                  <Link className="transition-colors hover:text-white" to={l.to}>{l.label}</Link>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
       </div>
@@ -87,10 +118,9 @@ export default function Footer() {
           <p>
             © {new Date().getFullYear()} BM Store. {t('footer.rights')}
           </p>
-          <div className="flex items-center gap-4">
-            <Link className="transition-colors hover:text-white" to="/privacy">{t('footer.privacy')}</Link>
-            <Link className="transition-colors hover:text-white" to="/terms">{t('footer.terms')}</Link>
-          </div>
+          <Link to="/" className="font-semibold text-white/60 transition-colors hover:text-white">
+            BM Store
+          </Link>
         </div>
       </div>
     </footer>

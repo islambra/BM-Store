@@ -369,9 +369,12 @@ controllers) followed by fixes; see the main audit summary in
   entries so the correct commissions are claimed (`admin.controller.js`).
 - **Admin stats**: `escapeRegex` on user search; `totalSpent`/`orderCount`
   exclude `cancelled`/`rejected` orders.
-- **Translation service**: falls back to returning Arabic text unchanged when
-  Google Cloud Translation is not configured (no more 500 on every product
-  save); `products.test.js` updated. Full server suite: **121/121 pass**.
+- **Translation service**: Arabic → English via Google Cloud Translation
+  when credentials are configured; otherwise a keyless free MyMemory fallback
+  keeps admin product/category creation working (Arabic stored as-is only when
+  both providers fail). `TRANSLATION_FALLBACK=off` restores strict
+  Google-only mode; `products.test.js` + `translation.test.js` cover both.
+  Full server suite: **121/121 pass**.
 
 ### Client (fixed)
 - Checkout: removed fabricated `localStorage` order + cart-clear-on-failure;

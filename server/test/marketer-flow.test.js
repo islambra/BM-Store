@@ -153,10 +153,10 @@ describe('referral + commission lifecycle', () => {
     })
     assert.equal(rejectedVisit.status, 404)
 
-    const detail = await prime.admin.get(`/api/admin/marketers/${user._id}`)
-    assert.equal(detail.status, 200)
-    assert.equal(detail.body.data.stats.availableBalance, 200)
-    assert.equal(detail.body.data.stats.orders, 1)
+    const me = await (await marketerAgent(user)).get('/api/marketer/me')
+    assert.equal(me.status, 200)
+    assert.equal(me.body.data.stats.availableBalance, 200)
+    assert.equal(me.body.data.stats.orders, 1)
   })
 
   it('attribution is permanent even if the referral expires after order creation', async () => {
@@ -189,15 +189,15 @@ describe('referral + commission lifecycle', () => {
   })
 
   it('creates the commission only once the order is delivered', async () => {
-    const { user, admin, orderId } = await primeMarketerAndDeliver('pending-visitor')
+    const { user, orderId } = await primeMarketerAndDeliver('pending-visitor')
     const commission = await Commission.findOne({ order: orderId }).lean()
     assert.ok(commission)
     assert.equal(commission.status, 'AVAILABLE')
     assert.equal(commission.amount, 200)
 
-    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
-    assert.equal(detail.body.data.stats.availableBalance, 200)
-    assert.equal(detail.body.data.stats.totalEarnings, 200)
+    const me = await (await marketerAgent(user)).get('/api/marketer/me')
+    assert.equal(me.body.data.stats.availableBalance, 200)
+    assert.equal(me.body.data.stats.totalEarnings, 200)
   })
 
   it('never creates a commission when the order is cancelled before delivery', async () => {
@@ -359,8 +359,7 @@ describe('referral + commission lifecycle', () => {
     })
     assert.equal(order.status, 201)
 
-    const admin = await adminAgent()
-    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
+    const detail = await (await marketerAgent(user)).get('/api/marketer/me')
     assert.equal(detail.status, 200)
     assert.equal(detail.body.data.stats.totalEarnings, 0)
     assert.equal(detail.body.data.stats.availableBalance, 0)
@@ -374,6 +373,7 @@ describe('payout workflow', () => {
 
   it("admin sends a payout and the marketer confirms receipt", async () => {
     const { admin, user, orderId } = await primeMarketerAndDeliver('confirm-visitor')
+    const agent = await marketerAgent(user)
 
     const payout = await admin.post('/api/admin/payouts').send({
       marketerId: user._id,
@@ -386,12 +386,16 @@ describe('payout workflow', () => {
     const payoutId = payout.body.data._id
 
     const commission = await Commission.findOne({ order: orderId }).lean()
-    assert.equal(commission.status, 'PAYMENT_SENT')
+    assert.equal(commission.status, 'PAYOUT_REQUESTED')
+
+    // The balance is unchanged until the marketer accepts the payment.
+    const pending = await agent.get('/api/marketer/me')
+    assert.equal(pending.body.data.stats.availableBalance, 200)
+    assert.equal(pending.body.data.stats.payoutRequested, 200)
 
     const tooBig = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 201, method: 'CCP' })
     assert.equal(tooBig.status, 400)
 
-    const agent = await marketerAgent(user)
     const confirmed = await agent.post(`/api/marketer/payments/${payoutId}/confirm-received`)
     assert.equal(confirmed.status, 200)
     assert.equal(confirmed.body.data.payout.status, 'received')
@@ -399,13 +403,15 @@ describe('payout workflow', () => {
     const afterRef = await Commission.findOne({ order: orderId }).lean()
     assert.equal(afterRef.status, 'RECEIVED')
 
-    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
-    assert.equal(detail.body.data.stats.availableBalance, 0)
-    assert.equal(detail.body.data.stats.totalPaid, 200)
+    const accepted = await agent.get('/api/marketer/me')
+    assert.equal(accepted.body.data.stats.availableBalance, 0)
+    assert.equal(accepted.body.data.stats.payoutRequested, 0)
+    assert.equal(accepted.body.data.stats.totalPaid, 200)
   })
 
   it('marketer can dispute a payout and admin can cancel it', async () => {
     const { admin, user } = await primeMarketerAndDeliver('dispute-visitor')
+    const agent = await marketerAgent(user)
 
     const payout = await admin.post('/api/admin/payouts').send({
       marketerId: user._id,
@@ -415,17 +421,21 @@ describe('payout workflow', () => {
     assert.equal(payout.status, 201)
     const payoutId = payout.body.data._id
 
-    const agent = await marketerAgent(user)
     const disputed = await agent.post(`/api/marketer/payments/${payoutId}/report-not-received`)
     assert.equal(disputed.status, 200)
     assert.equal(disputed.body.data.payout.status, 'disputed')
+
+    // The disputed commissions return to available — the balance never dropped.
+    const disputedStats = await agent.get('/api/marketer/me')
+    assert.equal(disputedStats.body.data.stats.availableBalance, 200)
+    assert.equal(disputedStats.body.data.stats.payoutRequested, 0)
 
     const cancelled = await admin.patch(`/api/admin/payouts/${payoutId}`).send({ action: 'cancel' })
     assert.equal(cancelled.status, 200)
     assert.equal(cancelled.body.data.status, 'cancelled')
 
-    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
-    assert.equal(detail.body.data.stats.availableBalance, 200)
+    const after = await agent.get('/api/marketer/me')
+    assert.equal(after.body.data.stats.availableBalance, 200)
   })
 
   it('a marketer cannot confirm another marketer payout', async () => {
@@ -444,26 +454,24 @@ describe('payout workflow', () => {
     assert.equal(res.status, 403)
   })
 
-  it('admin gathers marketer detail, commissions and referrals', async () => {
-    const { admin, user, referral } = await primeMarketerAndDeliver('admin-detail-visitor')
+  it('marketer can view their own orders, commissions and stats', async () => {
+    const { user, referral } = await primeMarketerAndDeliver('marketer-detail-visitor')
+    const agent = await marketerAgent(user)
 
-    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
-    assert.equal(detail.status, 200)
-    assert.equal(detail.body.data.commissionsCount, 1)
-    assert.equal(detail.body.data.stats.orders, 1)
+    const me = await agent.get('/api/marketer/me')
+    assert.equal(me.status, 200)
+    assert.equal(me.body.data.stats.orders, 1)
 
-    const commissions = await admin.get(`/api/admin/marketers/${user._id}/commissions`)
-    assert.equal(commissions.status, 200)
-    assert.equal(commissions.body.data.commissions.length, 1)
-
-    const referrals = await admin.get(`/api/admin/marketers/${user._id}/referrals`)
-    assert.equal(referrals.status, 200)
-    assert.equal(referrals.body.data.referrals.length, 1)
-    assert.equal(String(referrals.body.data.referrals[0]._id), String(referral._id))
-
-    const orders = await admin.get(`/api/admin/marketers/${user._id}/orders`)
+    const orders = await agent.get('/api/marketer/orders')
     assert.equal(orders.status, 200)
     assert.equal(orders.body.data.orders[0].commission.status, 'AVAILABLE')
+
+    const earnings = await agent.get('/api/marketer/earnings')
+    assert.equal(earnings.status, 200)
+    assert.equal(earnings.body.data.commissions.length, 1)
+
+    assert.equal(await Referral.countDocuments({ marketer: user._id }), 1)
+    assert.equal(String((await Referral.findOne({ marketer: user._id }))._id), String(referral._id))
   })
 
   it('refuses a payout amount that cannot exactly match available commissions', async () => {
@@ -493,20 +501,26 @@ describe('payout workflow', () => {
       return { admin, user }
     })
 
-    const stats = await admin.get(`/api/admin/marketers/${user._id}`)
+    const agent = await marketerAgent(user)
+    const stats = await agent.get('/api/marketer/me')
     assert.equal(stats.body.data.stats.availableBalance, 600)
 
     const partial = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 500, method: 'CCP' })
     assert.equal(partial.status, 400)
 
-    const after = await admin.get(`/api/admin/marketers/${user._id}`)
+    const after = await agent.get('/api/marketer/me')
     assert.equal(after.body.data.stats.availableBalance, 600)
-    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'PAYMENT_SENT' }), 0)
+    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'PAYOUT_REQUESTED' }), 0)
 
     const full = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 600, method: 'CCP' })
     assert.equal(full.status, 201)
     assert.equal(full.body.data.amount, 600)
-    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'PAYMENT_SENT' }), 2)
+    assert.equal(await Commission.countDocuments({ marketer: user._id, status: 'PAYOUT_REQUESTED' }), 2)
+
+    // Even after the payout is recorded the balance is untouched until accept.
+    const pending = await agent.get('/api/marketer/me')
+    assert.equal(pending.body.data.stats.availableBalance, 600)
+    assert.equal(pending.body.data.stats.payoutRequested, 600)
   })
 
   it('admin cannot confirm a payout; a payout can only be confirmed once', async () => {
@@ -523,6 +537,11 @@ describe('payout workflow', () => {
     const first = await agent.post(`/api/marketer/payments/${payoutId}/confirm-received`)
     assert.equal(first.status, 200)
     assert.equal(first.body.data.payout.status, 'received')
+
+    const statsAfter = (await agent.get('/api/marketer/me')).body.data.stats
+    assert.equal(statsAfter.availableBalance, 0)
+    assert.equal(statsAfter.payoutRequested, 0)
+    assert.equal(statsAfter.totalPaid, 200)
 
     const second = await agent.post(`/api/marketer/payments/${payoutId}/confirm-received`)
     assert.equal(second.status, 400)

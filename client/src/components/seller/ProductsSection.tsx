@@ -61,6 +61,10 @@ export default function SellerProductsSection() {
     fetchProducts()
   }, [page, search, statusFilter])
 
+  useEffect(() => {
+    if (error) window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [error])
+
   const handleCreate = () => {
     setEditingProduct(null)
     setModalOpen(true)
@@ -142,12 +146,12 @@ export default function SellerProductsSection() {
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
+          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
           <Input
             placeholder={t('common.search')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="pl-10"
+            className="ps-10"
           />
         </div>
         <Select

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Gift, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -16,7 +16,6 @@ function parsePct(value: string): number | null {
 export default function RewardsSection() {
   const { t } = useLanguage()
   const { data, loading, error, reload } = useAsync(() => api.getAdminRewards())
-  const [enabled, setEnabled] = useState<boolean | null>(null)
   const [drafts, setDrafts] = useState<Record<string, { on: boolean; normal: string; special: string }>>({})
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
@@ -24,21 +23,6 @@ export default function RewardsSection() {
   const refresh = () => {
     setDrafts({})
     void reload()
-  }
-
-  const toggleSystem = async () => {
-    if (enabled === null || !data) return
-    setBusyKey('__system__')
-    setNotice('')
-    try {
-      await api.updateRewardSettings({ rewardSystemEnabled: !enabled })
-      setEnabled(null)
-      refresh()
-    } catch (err) {
-      setNotice(getErrorMessage(err))
-    } finally {
-      setBusyKey(null)
-    }
   }
 
   const saveCategory = async (cat: api.RewardCategoryRecord) => {
@@ -73,41 +57,9 @@ export default function RewardsSection() {
   if (loading) return <Loader />
   if (error) return <ErrorNote message={error} />
 
-  const systemOn = enabled ?? data!.settings.rewardSystemEnabled
-
   return (
     <div className="space-y-5">
       {notice && <ErrorNote message={notice} />}
-
-      <div className="rounded-2xl border border-line bg-surface p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-600">
-              <Gift size={20} />
-            </span>
-            <div>
-              <h3 className="text-sm font-bold text-ink-900">{t('admin.rewards.systemTitle')}</h3>
-              <p className="text-xs text-ink-500">
-                {data!.settings.rewardSystemEnabled ? t('admin.rewards.systemOn') : t('admin.rewards.systemOff')}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void toggleSystem()}
-            disabled={busyKey === '__system__'}
-            className={systemOn ? 'btn-ghost text-red-700' : 'btn-primary'}
-          >
-            {busyKey === '__system__'
-              ? t('common.saving')
-              : systemOn
-                ? t('admin.rewards.disableSystem')
-                : t('admin.rewards.enableSystem')}
-          </button>
-        </div>
-      </div>
-
-      <p className="text-xs leading-relaxed text-ink-500">{t('admin.rewards.systemDesc')}</p>
 
       <Table headers={[t('admin.rewards.category'), t('admin.rewards.enabled'), t('admin.rewards.normalPercent'), t('admin.rewards.specialPercent')]}>
         {(data?.categories ?? []).map((c) => {

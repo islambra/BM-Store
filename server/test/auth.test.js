@@ -186,9 +186,10 @@ describe('authentication', () => {
     assert.equal(bad.status, 401)
   })
 
-  it('rejects /me without a session', async () => {
+  it('returns user:null from /me without a session', async () => {
     const res = await request(app).get('/api/auth/me')
-    assert.equal(res.status, 401)
+    assert.equal(res.status, 200)
+    assert.equal(res.body?.data?.user, null)
   })
 
   it('logs out and clears sessions', async () => {
@@ -197,6 +198,7 @@ describe('authentication', () => {
     const res = await agent.post('/api/auth/logout')
     assert.equal(res.status, 200)
     const me = await agent.get('/api/auth/me')
-    assert.equal(me.status, 401)
+    assert.equal(me.status, 200)
+    assert.equal(me.body?.data?.user, null)
   })
 })

@@ -50,7 +50,7 @@ export default function ImageUploader({ label, multiple = false, max, value, onC
   }
 
   const thumb = (src: string, index: number, removeable = true) => (
-    <div key={src + index} className="group relative h-16 w-16 overflow-hidden rounded-xl border border-line">
+    <div key={src + index} className="group relative h-24 w-24 overflow-hidden rounded-xl border border-line">
       <img src={src} alt={`${label ?? t('common.uploadImage')} ${index + 1}`} className="h-full w-full object-cover" />
       {removeable && (
         <button
@@ -72,7 +72,7 @@ export default function ImageUploader({ label, multiple = false, max, value, onC
       disabled={busy || atMax}
       title={label ?? t('common.uploadImage')}
       className={`flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-line-strong text-ink-400 transition-colors hover:border-brand-400 hover:bg-brand-50 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50 ${
-        compact ? 'h-12 px-4 text-sm font-semibold' : 'h-16 w-16'
+        compact ? 'h-12 px-4 text-sm font-semibold' : 'h-24 w-24'
       }`}
     >
       {busy ? <LoaderCircle size={18} className="animate-spin" /> : <ImagePlus size={18} />}

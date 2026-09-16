@@ -23,6 +23,9 @@ const safeUser = (u) => ({
   avatar: u.avatar || null,
   phone: u.phone || null,
   createdAt: u.createdAt,
+  ...(u.role === 'ADMIN'
+    ? { ccp: u.ccp || null, ccpKey: u.ccpKey || null, baridiMob: u.baridiMob || null }
+    : {}),
 })
 
 const normalizePhone = (value) => String(value ?? '').trim().replace(/[^+\d\s-]/g, '').replace(/[\s-]+/g, '')
@@ -121,16 +124,37 @@ export const refresh = asyncHandler(async (req, res) => {
 })
 
 export const me = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id).select('-passwordHash').lean()
-  if (!user) return sendError(res, 'Account not found', 401)
-  return sendSuccess(res, { user: safeUser(user) })
+  if (req.user) {
+    const user = await User.findById(req.user._id).select('-passwordHash').lean()
+    if (!user) return sendSuccess(res, { user: null })
+    return sendSuccess(res, { user: safeUser(user) })
+  }
+
+  // No valid access token. If a valid refresh cookie exists, silently rotate the
+  // session so signed-in users are restored without a 401 roundtrip. Otherwise
+  // treat as a guest (user:null) so logged-out visitors get no auth errors.
+  const refreshToken = req.cookies?.[REFRESH_COOKIE]
+  if (refreshToken) {
+    try {
+      const payload = verifyRefreshToken(refreshToken)
+      const user = await User.findById(payload.sub).select('-passwordHash').lean()
+      if (user) {
+        res.cookie(ACCESS_COOKIE, signAccessToken(user), accessCookieOptions)
+        res.cookie(REFRESH_COOKIE, signRefreshToken(user), refreshCookieOptions)
+        return sendSuccess(res, { user: safeUser(user) })
+      }
+    } catch {
+      /* expired/invalid refresh — fall through to guest */
+    }
+  }
+  return sendSuccess(res, { user: null })
 })
 
 export const updateMe = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id)
   if (!user) return sendError(res, 'Account not found', 401)
 
-  const { name, phone, avatar } = req.body ?? {}
+  const { name, phone, avatar, ccp, ccpKey, baridiMob } = req.body ?? {}
   if (name !== undefined) user.name = String(name).trim()
   if (phone !== undefined) {
     const phoneKey = normalizePhone(phone)
@@ -140,6 +164,11 @@ export const updateMe = asyncHandler(async (req, res) => {
     user.phone = phoneKey
   }
   if (avatar !== undefined) user.avatar = String(avatar).trim() || undefined
+  if (user.role === 'ADMIN') {
+    if (ccp !== undefined) user.ccp = String(ccp).trim() || undefined
+    if (ccpKey !== undefined) user.ccpKey = String(ccpKey).trim() || undefined
+    if (baridiMob !== undefined) user.baridiMob = String(baridiMob).trim() || undefined
+  }
 
   await user.save()
   return sendSuccess(res, { user: safeUser(user) }, 'Profile updated')
@@ -215,7 +244,7 @@ export const becomeMarketer = asyncHandler(async (req, res) => {
 })
 
 export const registerMarketer = asyncHandler(async (req, res) => {
-  const { name, phone, password, bio, avatar, baridiMob, ccp, ccpKey } = req.body ?? {}
+  const { name, phone, password, baridiMob, ccp, ccpKey } = req.body ?? {}
 
   if (!name?.trim() || !phone?.trim() || !password) {
     return sendError(res, 'Full name, phone number and password are required', 400)
@@ -243,8 +272,6 @@ export const registerMarketer = asyncHandler(async (req, res) => {
           user: existing._id,
           publicName: existing.name,
           referralCode: code,
-          avatar: String(avatar ?? '').trim() || undefined,
-          bio: String(bio ?? '').trim() || undefined,
           payoutDetails: {
             ccp: String(ccp ?? '').trim() || undefined,
             baridiMob: String(baridiMob ?? '').trim() || undefined,
@@ -285,8 +312,6 @@ export const registerMarketer = asyncHandler(async (req, res) => {
     user: user._id,
     publicName: user.name,
     referralCode: code,
-    avatar: String(avatar ?? '').trim() || undefined,
-    bio: String(bio ?? '').trim() || undefined,
     payoutDetails: {
       ccp: String(ccp ?? '').trim() || undefined,
       baridiMob: String(baridiMob ?? '').trim() || undefined,

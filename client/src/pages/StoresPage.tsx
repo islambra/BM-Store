@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Search, Store, MapPin, Package, Map, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { listPublicStores } from '../services/api'
 import { getErrorMessage } from '../services/api'
+import { storeVisitUrl } from '../utils/storeUrl'
 import PageHeader from '../components/common/PageHeader'
 import EmptyState from '../components/common/EmptyState'
 import { Input } from '../components/common/FormControls'
@@ -67,12 +67,12 @@ export default function StoresPage() {
 
       <div className="mt-6 mb-8">
         <div className="relative max-w-xl">
-          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" aria-hidden="true" />
+          <Search className="absolute start-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" aria-hidden="true" />
           <Input
             placeholder={t('stores.search')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="pl-10"
+            className="ps-10"
           />
         </div>
       </div>
@@ -93,7 +93,7 @@ export default function StoresPage() {
         <>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {stores.map((store) => (
-              <Link key={store._id} to={`/store/${store.slug}`} className="group rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-brand-300 hover:shadow-lg">
+              <a key={store._id} href={storeVisitUrl(store.slug)} className="group rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-brand-300 hover:shadow-lg">
                 <div className="relative aspect-square overflow-hidden rounded-xl bg-ink-900/5">
                   {store.logo ? (
                     <img src={store.logo} alt={store.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -125,7 +125,7 @@ export default function StoresPage() {
                     </span>
                   </div>
                 </div>
-              </Link>
+              </a>
             ))}
           </div>
 

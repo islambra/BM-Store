@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Store, Package, Search, Eye, EyeOff, ArrowRight, ArrowLeft, LoaderCircle } from 'lucide-react'
+import { Store, Package, Search, Lock, Mail, Phone, User, Eye, EyeOff, ArrowRight, ArrowLeft, LoaderCircle } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useAuth } from '../context/AuthContext'
 import { getErrorMessage, registerSeller, loginSeller } from '../services/api'
-import { Label, Input } from '../components/common/FormControls'
+import { Field, Input } from '../components/common/FormControls'
 import AuthLayout from '../components/auth/AuthLayout'
 
 type Mode = 'login' | 'register'
@@ -85,6 +85,17 @@ export default function SellerAuthPage({ mode }: { mode: Mode }) {
     { icon: Search, title: t('seller.benefit11') },
   ]
 
+  const pwToggler = (visible: boolean, onToggle: () => void) => (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={visible ? t('auth.hidePassword') : t('auth.showPassword')}
+      className="absolute end-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-900/5 hover:text-ink-900 focus-visible:outline-none focus-visible:shadow-focus"
+    >
+      {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+    </button>
+  )
+
   return (
     <AuthLayout
       eyebrow={t('brand.storeName')}
@@ -109,40 +120,41 @@ export default function SellerAuthPage({ mode }: { mode: Mode }) {
     >
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {isRegister && (
-          <>
-            <div>
-              <Label htmlFor="fullName">{t('seller.fullName')}</Label>
-              <Input
-                id="fullName"
-                name="fullName"
-                type="text"
-                value={formData.fullName}
-                onChange={handleChange}
-                placeholder={t('auth.fullName')}
-                required
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <Label htmlFor="email">{t('seller.email')}</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder={t('auth.email')}
-                required
-                disabled={loading}
-              />
-            </div>
-          </>
+          <Field id="fullName" label={t('seller.fullName')} required>
+            <Input
+              id="fullName"
+              icon={User}
+              name="fullName"
+              type="text"
+              value={formData.fullName}
+              onChange={handleChange}
+              placeholder={t('auth.fullName')}
+              required
+              disabled={loading}
+            />
+          </Field>
         )}
 
-        <div>
-          <Label htmlFor="phone">{t(isRegister ? 'seller.phone' : 'seller.phoneOrEmail')}</Label>
+        {isRegister && (
+          <Field id="email" label={t('seller.email')} required>
+            <Input
+              id="email"
+              icon={Mail}
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder={t('auth.email')}
+              required
+              disabled={loading}
+            />
+          </Field>
+        )}
+
+        <Field id="phone" label={t(isRegister ? 'seller.phone' : 'seller.phoneOrEmail')} required>
           <Input
             id="phone"
+            icon={Phone}
             name="phone"
             type="text"
             inputMode={isRegister ? 'tel' : undefined}
@@ -152,59 +164,41 @@ export default function SellerAuthPage({ mode }: { mode: Mode }) {
             required
             disabled={loading}
           />
-        </div>
+        </Field>
 
-        <div>
-          <Label htmlFor="password">{t('seller.password')}</Label>
-          <div className="relative">
-            <Input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              value={formData.password}
-              onChange={handleChange}
-              placeholder={t('auth.password')}
-              required
-              disabled={loading}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-900"
-              aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-        </div>
+        <Field id="password" label={t('seller.password')} required>
+          <Input
+            id="password"
+            icon={Lock}
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            value={formData.password}
+            onChange={handleChange}
+            placeholder={t('auth.password')}
+            required
+            disabled={loading}
+            trailing={pwToggler(showPassword, () => setShowPassword(!showPassword))}
+          />
+        </Field>
 
         {isRegister && (
-          <div>
-            <Label htmlFor="confirmPassword">{t('seller.confirmPassword')}</Label>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type={showConfirmPassword ? 'text' : 'password'}
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                placeholder={t('auth.confirmPassword')}
-                required
-                disabled={loading}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-900"
-                aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}
-              >
-                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+          <Field id="confirmPassword" label={t('seller.confirmPassword')} required>
+            <Input
+              id="confirmPassword"
+              icon={Lock}
+              name="confirmPassword"
+              type={showConfirmPassword ? 'text' : 'password'}
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              placeholder={t('auth.confirmPassword')}
+              required
+              disabled={loading}
+              trailing={pwToggler(showConfirmPassword, () => setShowConfirmPassword(!showConfirmPassword))}
+            />
+          </Field>
         )}
 
-        <button type="submit" className="btn-dark w-full py-3" disabled={loading}>
+        <button type="submit" className="btn-primary w-full py-3" disabled={loading}>
           {loading ? (
             <LoaderCircle size={17} className="animate-spin" />
           ) : isRegister ? (

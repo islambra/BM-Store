@@ -27,14 +27,19 @@ Rules:
   call the API. Language switching and page views never call the API.
 - Empty optional fields are skipped; non-Arabic (Latin-script) strings pass
   through unchanged without an API call.
-- When Google credentials are **not configured** and Arabic content is
-  submitted, handlers return `502` with a clean message
-  (`Could not translate content. Please try again.`) — no fake/dummy translation
-  is stored. Latin-script content continues to be stored as-is.
+- When Google credentials are **not configured**, Arabic content is auto-
+  translated to English via the free MyMemory public API (no key required).
+  If the free fallback also fails, the Arabic content is stored as-is with a
+  warning log so admin operations never block. Latin-script content is always
+  stored as-is.
+- Set `TRANSLATION_FALLBACK=off` to disable the free fallback and restore the
+  previous strict behaviour (Google Cloud only; handlers return `502` for
+  untranslatable Arabic).
 - Required env vars, see `server/.env.example`:
   `GOOGLE_CLOUD_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS` (local) and/or
   `GOOGLE_CLOUD_CREDENTIALS_JSON` (inline service-account JSON for production
-  secrets). Credentials must never be shipped to the client.
+  secrets). Credentials must never be shipped to the client. Optional
+  `MYMEMORY_EMAIL` raises the fallback provider's per-day quota.
 - Existing records with Arabic but missing English are repaired manually via
   `npm run translate:existing` (`server/scripts/translateExistingContent.js`).
   It never runs on startup and never overwrites existing English.
@@ -101,6 +106,33 @@ extra-activate a store manually. Stripe-less: renewal is admin-approved
 `store.status` ∈ `pending | active | expired | suspended | rejected | deleted`.
 `store` shape returned to the seller includes `{id, slug, status, plan,
 subscriptionEndDate, ...}`.
+
+### Public stores & subdomain URLs
+
+Seller storefronts are served on **their own subdomain**, not a `/store/:slug`
+path. The client detects the subdomain from the hostname and renders the store
+page; the store's slug is sent to `GET /stores/:slug` as usual.
+
+| Method | Path                        | Note                                            | Returns |
+| ------ | --------------------------- | ----------------------------------------------- | ------- |
+| GET    | `/stores`                   | `?page&limit&q&wilaya&city` (active, valid subscriptions) | `{stores, page, limit, total, pages}` |
+| GET    | `/stores/:slug`             | store storefront bundle                         | `{store, categories, specialOffers, newProducts, bestSelling, allProducts}` |
+| GET    | `/stores/:slug/categories`  | store categories with `productCount`            | `{categories}` |
+| GET    | `/stores/:slug/subscription`| store + subscription status (expiry, days left) | `{store}` |
+| GET    | `/stores/categories/search` | `?q`; categories across all active stores       | `{categories:[{category, store, productCount}]}` |
+
+URL format (configurable, never hardcoded):
+
+- Development: `http://{slug}.localhost:5173` — base domain `STORE_BASE_DOMAIN`
+  (server) / `VITE_STORE_BASE_DOMAIN` (client), default `localhost`.
+- Production: `https://{slug}.{baseDomain}` — set `STORE_BASE_DOMAIN` /
+  `VITE_STORE_BASE_DOMAIN` to the production base domain (e.g. `bmstore.com`).
+
+The server accepts any subdomain of `STORE_BASE_DOMAIN` as a CORS origin (in
+addition to `CLIENT_ORIGIN`), so the public storefront can call `/api/*` from
+`https://{slug}.{baseDomain}`. Legacy `/store/:slug` links redirect to the
+subdomain URL. The main site (never a store subdomain) is derived from
+`VITE_APP_URL` or the current origin.
 
 ## Public catalog
 
@@ -225,7 +257,7 @@ double-credit.
 | POST   | `/marketer/payments/:id/report-not-received` | owner (marketer) only; single atomic `sent` → `disputed` transition | `{payout}` |
 
 `profile` is `{id, publicName, bio, avatar, referralCode, referralLink, status, payoutDetails, totalEarnings, createdAt, user:{id, name, email, phone, avatar}}`.
-`stats` is `{visits, customers, orders, deliveredOrders, pendingEarnings, availableBalance, payoutRequested, paymentSent, totalPaid, disputed, cancelled, totalEarnings}`. Money is integer DZD, computed server-side only. `totalEarnings` counts only earned (delivered) commissions — `PENDING` and `CANCELLED` are excluded.
+`stats` is `{visits, customers, orders, deliveredOrders, pendingEarnings, availableBalance, payoutRequested, paymentSent, totalPaid, disputed, cancelled, totalEarnings}`. Money is integer DZD, computed server-side only. `totalEarnings` counts only earned (delivered) commissions — `PENDING` and `CANCELLED` are excluded. `availableBalance` includes commissions reserved in a payout that the marketer has not yet confirmed (`PAYOUT_REQUESTED`); it drops only on `RECEIVED` (marketer accepts the payment).
 
 ## Referral tracking (public)
 
@@ -257,12 +289,7 @@ confirmation. The old per-product reward system (`Reward` model,
 | Method | Path                       | Note                                        | Returns |
 | ------ | -------------------------- | ------------------------------------------- | ------- |
 | GET    | `/admin/users`             | `?role&q&page&limit`; each user includes `orderCount` and `totalSpent`; when `role` is omitted, SELLER and ADMIN accounts are excluded (customers only) | `{users, page, limit, total, pages}` |
-| GET    | `/admin/marketers`         | marketers + profile + computed stats (incl. `availableBalance`, phone) | `{marketers}` |
-| GET    | `/admin/marketers/:id`     | profile + stats + `commissionsCount` + payouts + referral link | `{profile, stats, commissionsCount, payouts, referralLink}` |
-| GET    | `/admin/marketers/:id/orders`      | `?page&limit&status`; referred orders w/ commission | `{orders, page, limit, total, pages}` |
-| GET    | `/admin/marketers/:id/commissions` | commissions (order populated)             | `{commissions}` |
-| GET    | `/admin/marketers/:id/referrals`   | referral visits for the marketer          | `{referrals}` |
-| GET    | `/admin/marketers/:id/payouts`     | payouts for the marketer                  | `{payouts}` |
+| GET    | `/admin/marketers`         | marketers + profile + computed stats (incl. `availableBalance`, phone). Per-marketer detail (orders/commissions/referrals/payouts) is **marketer-only** via `/marketer/*` | `{marketers}` |
 | PATCH  | `/admin/marketers/:id/status` | `{status: active\|suspended}`            | `{marketing}` |
 | DELETE | `/admin/marketers/:id`     | deletes user + profile + referrals + commissions + payouts | `{id}` |
 | GET    | `/admin/orders`            |                                             | `{orders}` |
@@ -283,9 +310,9 @@ confirmation. The old per-product reward system (`Reward` model,
 | POST   | `/admin/banners`           | requires only `image` (plus optional `link`, `order`, `active`); max 5 active | `{banner}` (201) |
 | PATCH  | `/admin/banners/:id`       | `{active:true}` blocked when at max         | `{banner}` |
 | DELETE | `/admin/banners/:id`       |                                             | – |
-| POST   | `/admin/payouts`           | `{marketerId, amount, method(CCP\|BaridiMob), reference?, notes?}`; amount ≤ marketer's `availableBalance`; claims `AVAILABLE` commissions FIFO by **atomic** conditional updates so concurrent payouts never double-claim; `amount` must exactly equal the sum of the claimed commissions (commissions are per-order records — no partial splits; a non-matching amount → 400 and nothing is changed) | `{payout}` (201) |
+| POST   | `/admin/payouts`           | `{marketerId, amount, method(CCP\|BaridiMob), reference?, notes?}`; amount ≤ the marketer's **unreserved** (`AVAILABLE`) commissions; claims them FIFO by **atomic** conditional updates into `PAYOUT_REQUESTED` so concurrent payouts never double-claim; `amount` must exactly equal the sum of the claimed commissions (commissions are per-order records — no partial splits; a non-matching amount → 400 and nothing is changed). The marketer's `availableBalance` is **not** reduced here — only when the marketer confirms receipt | `{payout}` (201) |
 | GET    | `/admin/payouts`           | `?marketer&status` (sent\|received\|disputed\|cancelled); payouts populated with marketer | `{payouts}` |
-| PATCH  | `/admin/payouts/:id`       | `{action: 'cancel'}` — allowed from `sent`/`disputed`; commissions restored to `AVAILABLE` with `paidAt` cleared | `{payout}` |
+| PATCH  | `/admin/payouts/:id`       | `{action: 'cancel'}` — allowed from `sent`/`disputed`; reserved commissions restored to `AVAILABLE` | `{payout}` |
 | GET    | `/admin/seller/sellers`    | `?q&page&limit`; `q` matches name/email/phone; each seller includes `stats {totalProducts, totalOrders}`; store populated with `daysRemaining` (expiry countdown) and `isExpired` | `{sellers, page, pages, total}` |
 | GET    | `/admin/seller/sellers/:id` | a single seller with their store                           | `{seller, store}` |
 | DELETE | `/admin/seller/sellers/:id` | deletes the seller account + linked User + store request + store + products + categories + orders + uploaded images | `{id}` |

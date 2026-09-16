@@ -5,8 +5,11 @@ import App from './App'
 
 vi.mock('./services/api', () => ({
   getMe: () => Promise.reject(new Error('no session')),
-  trackReferral: () => Promise.resolve({ referralId: 'x' }),
+  isSessionKnownDead: () => false,
+  markSessionAlive: () => {},
+  markSessionDead: () => {},
   getErrorMessage: (e: unknown) => (e instanceof Error ? e.message : 'error'),
+  trackReferral: () => Promise.resolve({ referralId: 'x' }),
   default: {},
 }))
 

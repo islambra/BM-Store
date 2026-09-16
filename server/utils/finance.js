@@ -21,7 +21,11 @@ const bucket = (commissions) => {
         out.availableBalance += amount
         break
       case 'PAYOUT_REQUESTED':
+        // Reserved for a payout but not yet accepted by the marketer — it still
+        // counts towards the available balance. The balance only decreases when
+        // the marketer confirms receipt of the payment (RECEIVED).
         out.payoutRequested += amount
+        out.availableBalance += amount
         break
       case 'PAYMENT_SENT':
         out.paymentSent += amount

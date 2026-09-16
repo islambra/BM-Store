@@ -13,6 +13,7 @@ import { Alert } from '../../components/common/FormControls'
 import ImageUploader from '../../components/common/ImageUploader'
 import EmptyState from '../../components/common/EmptyState'
 import SectionHeader from '../../components/common/SectionHeader'
+import { storeUrl, storeDomainSuffix } from '../../utils/storeUrl'
 
 type RequestState = 'loading' | 'none' | 'pending' | 'approved' | 'rejected'
 
@@ -30,6 +31,11 @@ const wilayas = [
 export default function StoreRequestSection() {
   const { t } = useLanguage()
   const [state, setState] = useState<RequestState>('loading')
+  const [paymentInfo, setPaymentInfo] = useState<{
+    ccp?: string | null
+    ccpKey?: string | null
+    baridiMob?: string | null
+  } | null>(null)
   const [request, setRequest] = useState<{
     storeName: string
     slug: string
@@ -45,6 +51,7 @@ export default function StoreRequestSection() {
     getMyStoreRequest()
       .then((res) => {
         if (!alive) return
+        setPaymentInfo(res.paymentInfo ?? null)
         if (!res.storeRequest) {
           setState('none')
         } else if (res.storeRequest.status === 'approved') {
@@ -92,7 +99,7 @@ export default function StoreRequestSection() {
               <p className="text-sm font-semibold text-ink-900">{t('seller.requestPending')}</p>
               <div className="mt-3 space-y-2 text-sm text-ink-600">
                 <p><span className="font-medium text-ink-700">{t('seller.storeName')}:</span> {request.storeName}</p>
-                <p><span className="font-medium text-ink-700">{t('seller.storeUrl')}:</span> {request.slug}.bmstore.com</p>
+                <p><span className="font-medium text-ink-700">{t('seller.storeUrl')}:</span> {storeUrl(request.slug)}</p>
                 <p><span className="font-medium text-ink-700">{t('seller.subscriptionPlan')}:</span> {t(request.subscriptionPlan === 'monthly' ? 'seller.monthlyPlan' : 'seller.yearlyPlan')}</p>
                 <p><span className="font-medium text-ink-700">{t('seller.paymentProof')}:</span> {request.expectedAmount.toLocaleString()} DA</p>
               </div>
@@ -118,7 +125,7 @@ export default function StoreRequestSection() {
             </span>
           </Alert>
         )}
-        <StoreRequestForm />
+        <StoreRequestForm paymentInfo={paymentInfo} />
       </div>
     )
   }
@@ -126,12 +133,14 @@ export default function StoreRequestSection() {
   return (
     <div className="space-y-6">
       <SectionHeader title={t('seller.storeRequest')} subtitle={t('seller.storeRequestSubtitle')} />
-      <StoreRequestForm />
+      <StoreRequestForm paymentInfo={paymentInfo} />
     </div>
   )
 }
 
-function StoreRequestForm() {
+function StoreRequestForm({ paymentInfo }: {
+  paymentInfo: { ccp?: string | null; ccpKey?: string | null; baridiMob?: string | null } | null
+}) {
   const { t } = useLanguage()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -314,7 +323,7 @@ function StoreRequestForm() {
               className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2.5 text-sm font-medium text-ink-700 placeholder:text-ink-400 focus:outline-none"
             />
             <span className="shrink-0 border-l border-line bg-ink-900/5 px-3 py-2.5 text-sm font-medium text-ink-500">
-              .bmstore.com
+              {storeDomainSuffix()}
             </span>
           </div>
           {slug && (
@@ -335,11 +344,27 @@ function StoreRequestForm() {
       <div className="rounded-2xl border border-line bg-surface p-6 space-y-4">
         <div>
           <Label>{t('seller.paymentInstructions')}</Label>
-          <div className="mt-2 rounded-xl bg-ink-900/5 p-4 text-sm text-ink-600 space-y-1">
+          <div className="mt-2 rounded-xl bg-ink-900/5 p-4 text-sm text-ink-600 space-y-1.5">
             <p>{t('seller.paymentInstructionsDesc')}</p>
-            <p className="font-semibold text-ink-800">{t('seller.ccpDetails')}</p>
-            <p className="font-semibold text-ink-800">{t('seller.baridiMobDetails')}</p>
-            <p className="mt-2 font-bold text-brand-700">
+            <div className="flex flex-wrap gap-x-6 gap-y-1.5 pt-1">
+              <div>
+                <p className="font-semibold text-ink-800">
+                  {t('seller.ccp')}: <span className="font-mono">{paymentInfo?.ccp || t('seller.paymentNotSet')}</span>
+                </p>
+                {paymentInfo?.ccpKey && (
+                  <p className="text-xs text-ink-500">
+                    {t('seller.ccpKey')}: <span className="font-mono">{paymentInfo.ccpKey}</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="font-semibold text-ink-800">
+                  {t('seller.baridiMob')}:{' '}
+                  <span className="font-mono">{paymentInfo?.baridiMob || t('seller.paymentNotSet')}</span>
+                </p>
+              </div>
+            </div>
+            <p className="pt-1.5 font-bold text-brand-700">
               {t('seller.subscriptionPlan')}: {amount} DA
             </p>
           </div>

@@ -57,14 +57,15 @@ export default function Home() {
   )
 
   return (
-    <div className="container-app pt-4 sm:pt-6">
-      {/* Promotional slider */}
-      <section aria-label="Promotions">
+    <div>
+      {/* Promotional slider — full width */}
+      <div className="mt-4 sm:mt-6">
         <HeroSlider />
-      </section>
+      </div>
 
-      {/* Offers */}
-      <section className="mt-11 sm:mt-14" aria-label={t('home.offers')}>
+      <div className="container-app pt-6 sm:pt-8">
+        {/* Offers */}
+        <section className="mt-11 sm:mt-14" aria-label={t('home.offers')}>
         <SectionHeader
           title={t('home.offers')}
           subtitle={t('home.offersSub')}
@@ -99,6 +100,7 @@ export default function Home() {
 
       {/* Latest Posts */}
       <HomePostsSection />
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as api from '../services/api'
+import { isSessionKnownDead, markSessionAlive } from '../services/api'
 import type { User, RegisterMarketerInput } from '../services/api'
 
 interface AuthContextValue {
@@ -25,9 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
+    if (isSessionKnownDead()) {
+      setUser(null)
+      setLoading(false)
+      return
+    }
     api
       .getMe()
       .then(({ user }) => {
+        markSessionAlive()
         if (active) setUser(user)
       })
       .catch(() => {

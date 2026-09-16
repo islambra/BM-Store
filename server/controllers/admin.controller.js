@@ -5,13 +5,7 @@ import Commission from '../models/Commission.js'
 import Payout from '../models/Payout.js'
 import Order from '../models/Order.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
-import { appBaseUrl } from '../utils/referral.js'
-import { commissionBuckets } from '../utils/finance.js'
-import {
-  buildMarketerStats,
-  profileSummary,
-  attachCommissionStatus,
-} from './marketer.controller.js'
+import { buildMarketerStats } from './marketer.controller.js'
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -20,7 +14,7 @@ export const getUsers = asyncHandler(async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = {}
   if (req.query.role) query.role = req.query.role
-  else query.role = { $nin: ['ADMIN', 'SELLER'] }
+  else query.role = { $nin: ['ADMIN', 'SELLER', 'MARKETER'] }
   if (req.query.q) {
     const safe = escapeRegex(req.query.q.trim())
     query.$or = [
@@ -89,93 +83,6 @@ export const getMarketers = asyncHandler(async (req, res) => {
   return sendSuccess(res, { marketers: items })
 })
 
-export const getMarketerDetail = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).select('-passwordHash').lean()
-  if (!user || user.role !== 'MARKETER') return sendError(res, 'Marketer not found', 404)
-
-  const profile = await MarketerProfile.findOne({ user: user._id }).lean()
-  if (!profile) return sendError(res, 'Marketer profile not found', 404)
-
-  const [stats, payouts, accruals] = await Promise.all([
-    buildMarketerStats(user._id),
-    Payout.find({ marketer: user._id }).sort({ createdAt: -1 }).select('-recordedBy').lean(),
-    Commission.countDocuments({ marketer: user._id }),
-  ])
-
-  return sendSuccess(res, {
-    profile: profileSummary(profile, user),
-    stats,
-    commissionsCount: accruals,
-    payouts,
-    referralLink: `${appBaseUrl()}/?ref=${profile.referralCode}`,
-  })
-})
-
-export const getMarketerOrders = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).select('_id role').lean()
-  if (!user || user.role !== 'MARKETER') return sendError(res, 'Marketer not found', 404)
-
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
-  const query = { marketer: user._id }
-  if (req.query.status) query.status = req.query.status
-
-  const [orders, total] = await Promise.all([
-    Order.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .select('orderRef status items subtotal discountPercent discountAmount delivery total createdAt referredBy')
-      .lean(),
-    Order.countDocuments(query),
-  ])
-
-  const items = await attachCommissionStatus(user._id, orders)
-  return sendSuccess(res, { orders: items, page, limit, total, pages: Math.ceil(total / limit) })
-})
-
-export const getMarketerCommissions = asyncHandler(async (req, res) => {
-  const marketer = req.params.id
-  const user = await User.findById(marketer).select('_id role').lean()
-  if (!user || user.role !== 'MARKETER') return sendError(res, 'Marketer not found', 404)
-
-  const commissions = await Commission.find({ marketer })
-    .populate('order', 'orderRef total createdAt')
-    .select('-marketer')
-    .sort({ createdAt: -1 })
-    .lean()
-
-  return sendSuccess(res, { commissions })
-})
-
-export const getMarketerReferrals = asyncHandler(async (req, res) => {
-  const marketer = req.params.id
-  const user = await User.findById(marketer).select('_id role').lean()
-  if (!user || user.role !== 'MARKETER') return sendError(res, 'Marketer not found', 404)
-
-  const referrals = await Referral.find({ marketer })
-    .populate('customer', 'name')
-    .select('-__v')
-    .sort({ createdAt: -1 })
-    .limit(200)
-    .lean()
-
-  return sendSuccess(res, { referrals })
-})
-
-export const getMarketerPayouts = asyncHandler(async (req, res) => {
-  const marketer = req.params.id
-  const user = await User.findById(marketer).select('_id role').lean()
-  if (!user || user.role !== 'MARKETER') return sendError(res, 'Marketer not found', 404)
-
-  const payouts = await Payout.find({ marketer })
-    .sort({ createdAt: -1 })
-    .select('-recordedBy')
-    .lean()
-
-  return sendSuccess(res, { payouts })
-})
-
 export const updateMarketerStatus = asyncHandler(async (req, res) => {
   const { status } = req.body
   if (status !== 'active' && status !== 'suspended') {
@@ -229,7 +136,13 @@ export const recordPayout = asyncHandler(async (req, res) => {
   const amt = round2(amount)
   if (!Number.isFinite(amt) || amt <= 0) return sendError(res, 'Invalid payout amount', 400)
 
-  const available = (await commissionBuckets(marketerId)).availableBalance
+  // The payable pool is only unreserved (AVAILABLE) commissions. Commissions
+  // already reserved in a pending payout (PAYOUT_REQUESTED) still show in the
+  // marketer's balance but cannot be claimed a second time.
+  const payable = await Commission.find({ marketer: user._id, status: 'AVAILABLE' })
+    .select('amount')
+    .lean()
+  const available = Math.round(payable.reduce((sum, c) => sum + c.amount, 0) * 100) / 100
   if (amt > available) {
     return sendError(res, `Amount exceeds the marketer's available balance (${available})`, 400)
   }
@@ -240,17 +153,20 @@ export const recordPayout = asyncHandler(async (req, res) => {
     .lean()
 
   const now = new Date()
-  const setSent = (id) =>
+  // Claim available commissions into PAYOUT_REQUESTED. This reserves them for
+  // the payout WITHOUT touching the marketer's available balance — the balance
+  // only decreases when the marketer confirms receipt of the payment.
+  const setPending = (id) =>
     Commission.findOneAndUpdate(
       { _id: id, marketer: marketerId, status: 'AVAILABLE' },
-      { $set: { status: 'PAYMENT_SENT', paidAt: now } },
+      { $set: { status: 'PAYOUT_REQUESTED' } },
       { new: true }
     )
   const restore = (ids) =>
     ids.length
       ? Commission.updateMany(
-          { _id: { $in: ids }, status: 'PAYMENT_SENT' },
-          { $set: { status: 'AVAILABLE', paidAt: null } }
+          { _id: { $in: ids }, status: 'PAYOUT_REQUESTED' },
+          { $set: { status: 'AVAILABLE' } }
         )
       : Promise.resolve()
 
@@ -263,7 +179,7 @@ export const recordPayout = asyncHandler(async (req, res) => {
     if (remaining <= 0) break
     const cAmount = round2(c.amount)
     if (cAmount > remaining) continue
-    if (await setSent(c._id)) {
+    if (await setPending(c._id)) {
       claimed.push(c._id)
       remaining = round2(remaining - cAmount)
     }
@@ -285,7 +201,7 @@ export const recordPayout = asyncHandler(async (req, res) => {
     if (match) {
       const ids = match.map((i) => commissions[sorted[i].idx]._id)
       const ok = []
-      for (const id of ids) if (await setSent(id)) ok.push(id)
+      for (const id of ids) if (await setPending(id)) ok.push(id)
       if (ok.length === ids.length) {
         claimed = ok
         remaining = 0
@@ -336,8 +252,8 @@ export const updatePayoutStatus = asyncHandler(async (req, res) => {
 
   if (payout.commissions?.length) {
     await Commission.updateMany(
-      { _id: { $in: payout.commissions }, status: { $in: ['PAYMENT_SENT', 'DISPUTED'] } },
-      { $set: { status: 'AVAILABLE', paidAt: null } }
+      { _id: { $in: payout.commissions }, status: 'PAYOUT_REQUESTED' },
+      { $set: { status: 'AVAILABLE' } }
     )
   }
 

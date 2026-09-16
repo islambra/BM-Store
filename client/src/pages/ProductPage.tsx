@@ -10,6 +10,7 @@ import {
   PackageX,
   LogIn,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useCatalog } from '../context/CatalogContext'
@@ -20,7 +21,7 @@ import { loadProduct, loadProductsPage } from '../services/catalog'
 import { getErrorMessage } from '../services/api'
 import type { Product } from '../types'
 import ProductCard from '../components/product/ProductCard'
-import Price, { formatPrice } from '../components/common/Price'
+import { formatPrice } from '../components/common/Price'
 import Breadcrumb from '../components/common/Breadcrumb'
 import EmptyState from '../components/common/EmptyState'
 import { Alert } from '../components/common/FormControls'
@@ -160,7 +161,7 @@ export default function ProductPage() {
   }
 
   return (
-    <div className="container-app pt-4 sm:pt-6">
+    <div className="container-app pt-4 sm:pt-8">
       <Breadcrumb
         items={[
           { label: t('nav.categories'), to: '/categories' },
@@ -170,38 +171,46 @@ export default function ProductPage() {
       />
 
       {error && (
-        <div className="mt-4 rounded-xl border border-danger-100 bg-danger-50 p-4">
+        <div className="mt-4">
           <Alert tone="error">{error}</Alert>
         </div>
       )}
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-2 lg:gap-10">
+      <div className="mt-5 grid gap-8 lg:grid-cols-2 lg:gap-12">
         {/* Gallery */}
-        <div>
-          <div className="relative overflow-hidden rounded-3xl border border-line bg-surface">
+        <div className="min-w-0">
+          <div className="group relative overflow-hidden rounded-3xl border border-line bg-surface shadow-soft">
             {product.isSpecialOffer && product.discount > 0 && (
-              <span className="absolute start-4 top-4 z-10 badge bg-accent-500 text-white">
+              <span className="absolute start-4 top-4 z-10 inline-flex items-center rounded-lg bg-accent-500 px-2.5 py-1.5 text-sm font-extrabold text-white shadow-lift">
                 -{product.discount}%
               </span>
+            )}
+            {product.stock <= 0 && (
+              <div className="absolute inset-0 z-10 grid place-items-center bg-surface/60 backdrop-blur-[2px]">
+                <span className="badge bg-red-600 px-3.5 py-1.5 text-sm text-white">{t('product.outOfStock')}</span>
+              </div>
             )}
             <div className="aspect-square lg:aspect-[4/3]">
               <img
                 src={product.images[mainImage] ?? product.image}
                 alt={name}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
               />
             </div>
           </div>
           {product.images.length > 1 && (
-            <div className="mt-2.5 flex gap-3 overflow-x-auto no-scrollbar">
+            <div className="no-scrollbar mt-3 flex gap-3 overflow-x-auto pb-1">
               {product.images.map((src, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setMainImage(i)}
                   aria-label={t('product.imageLabel', { index: i + 1 })}
-                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all ${
-                    mainImage === i ? 'border-brand-600' : 'border-transparent hover:border-ink-900/20'
+                  title={t('product.imageLabel', { index: i + 1 })}
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all sm:h-20 sm:w-20 ${
+                    mainImage === i
+                      ? 'border-brand-600 shadow-focused'
+                      : 'border-transparent opacity-70 hover:border-brand-300 hover:opacity-100'
                   }`}
                 >
                   <img src={src} alt="" className="h-full w-full object-cover" />
@@ -212,21 +221,23 @@ export default function ProductPage() {
         </div>
 
         {/* Info */}
-        <div className="flex flex-col">
-          <span className="text-xs font-bold uppercase tracking-wider text-brand-600">
-            {category ? (
-              <button type="button" onClick={() => navigate(`/category/${category.slug}`)} className="hover:underline">
-                {localizedName(category, lang)}
-              </button>
-            ) : (
-              localizeCategory(product.categoryName || product.category)
-            )}
-          </span>
-          <h1 className="mt-1.5 text-xl font-extrabold leading-tight tracking-tight text-ink-900 sm:text-2xl">
+        <div className="flex flex-col lg:sticky lg:top-6 lg:self-start">
+          {category ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/category/${category.slug}`)}
+              className="-mx-2 -my-1 self-start rounded-lg px-2 py-1 transition-colors hover:bg-brand-50"
+            >
+              <span className="eyebrow">{localizedName(category, lang)}</span>
+            </button>
+          ) : (
+            <span className="eyebrow">{localizeCategory(product.categoryName || product.category)}</span>
+          )}
+          <h1 className="mt-2 text-2xl font-extrabold leading-tight tracking-tight text-ink-900 text-balance sm:text-3xl">
             {name}
           </h1>
 
-          <div className="mt-2.5 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {product.stock > 0 ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
                 <Check size={13} />
@@ -235,25 +246,34 @@ export default function ProductPage() {
             ) : (
               <span className="badge bg-red-50 text-red-600">{t('product.outOfStock')}</span>
             )}
-          </div>
-
-          <div className="mt-4 flex items-end gap-3">
-            <Price
-              value={product.price}
-              compareAt={product.isSpecialOffer ? product.oldPrice : undefined}
-              size="lg"
-            />
-            {product.isSpecialOffer && product.oldPrice && (
-              <span className="text-sm font-semibold text-brand-600">
-                {t('product.save', { amount: formatPrice(product.oldPrice - product.price, lang) })}
-              </span>
+            {product.stock > 0 && product.stock <= 10 && (
+              <span className="badge bg-amber-50 text-amber-700">{t('product.stockLeft', { count: product.stock })}</span>
             )}
           </div>
 
-          {description && <p className="mt-4 text-sm leading-relaxed text-ink-700">{description}</p>}
+          {/* Price panel */}
+          <div className="mt-5 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-5">
+              <div className="flex flex-wrap items-baseline gap-x-3">
+                <span className="text-3xl font-extrabold tracking-tight text-ink-900">{formatPrice(product.price, lang)}</span>
+                {product.isSpecialOffer && product.oldPrice && product.oldPrice > product.price && (
+                  <span className="text-lg font-medium text-ink-400 line-through">{formatPrice(product.oldPrice, lang)}</span>
+                )}
+              </div>
+              {product.isSpecialOffer && product.oldPrice && product.oldPrice > product.price && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-accent-500/10 px-3 py-1.5 text-sm font-bold text-accent-700">
+                  <Sparkles size={15} />
+                  {t('product.save', { amount: formatPrice(product.oldPrice - product.price, lang) })}
+                </span>
+              )}
+            </div>
+            {product.isSpecialOffer && <div className="h-1 w-full bg-gradient-to-r from-accent-400 to-brand-500" />}
+          </div>
+
+          {description && <p className="mt-5 text-sm leading-relaxed text-ink-700">{description}</p>}
 
           {/* Actions */}
-          <div className="mt-5 space-y-3">
+          <div className="mt-6 space-y-3">
             <div className="flex items-center gap-3">
               <div className="flex items-center rounded-xl border border-line bg-surface">
                 <button
@@ -280,10 +300,10 @@ export default function ProductPage() {
                 type="button"
                 onClick={() => toggleWishlist(product.id)}
                 aria-label={t('common.wishlist')}
-                className={`inline-flex h-[50px] w-[50px] items-center justify-center rounded-xl border transition-colors ${
+                className={`inline-flex h-12 w-12 items-center justify-center rounded-xl border transition-colors ${
                   wished
                     ? 'border-red-200 bg-red-50 text-red-500'
-                    : 'border-line bg-surface text-ink-500 hover:text-red-500'
+                    : 'border-line bg-surface text-ink-500 hover:border-red-200 hover:text-red-500'
                 }`}
               >
                 <Heart size={20} fill={wished ? 'currentColor' : 'none'} />

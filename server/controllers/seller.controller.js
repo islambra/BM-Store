@@ -4,6 +4,7 @@ import User from '../models/User.js'
 import Store from '../models/Store.js'
 import StoreRequest from '../models/StoreRequest.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
+import { getAdminPaymentInfo } from '../utils/paymentInfo.js'
 import {
   setAuthCookies,
   clearAuthCookies,
@@ -290,9 +291,9 @@ export const getMyStoreRequest = asyncHandler(async (req, res) => {
   if (!seller) return sendError(res, 'Seller profile not found', 401)
 
   const storeRequest = await StoreRequest.findOne({ seller: seller._id }).sort({ createdAt: -1 }).lean()
-  if (!storeRequest) return sendSuccess(res, { storeRequest: null })
+  if (!storeRequest) return sendSuccess(res, { storeRequest: null, paymentInfo: await getAdminPaymentInfo() })
 
-  return sendSuccess(res, { storeRequest })
+  return sendSuccess(res, { storeRequest, paymentInfo: await getAdminPaymentInfo() })
 })
 
 export const checkSlugAvailability = asyncHandler(async (req, res) => {

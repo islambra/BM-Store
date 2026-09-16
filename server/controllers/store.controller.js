@@ -6,9 +6,9 @@ import Order from '../models/Order.js'
 import Seller from '../models/Seller.js'
 import StoreRequest from '../models/StoreRequest.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
-import { translateArabicFieldsToEnglish } from '../services/translationService.js'
 import { deleteGridFSByUrl } from '../utils/gridfs.js'
 import { reverseOrderEffects } from './order.controller.js'
+import { getAdminPaymentInfo } from '../utils/paymentInfo.js'
 
 // Helper to get seller from request
 async function getSellerFromReq(req) {
@@ -162,9 +162,10 @@ export const createMyProduct = asyncHandler(async (req, res) => {
   if (store.status !== 'active') return sendError(res, 'Store must be active to create products', 400)
 
   const body = req.body ?? {}
-  const arabicName = String(body.nameAr ?? body.name ?? '').trim()
-  if (!arabicName || !Number.isFinite(Number(body.price)) || !String(body.category ?? '').trim()) {
-    return sendError(res, 'Name (Arabic), price and category are required', 400)
+  const arabicName = String(body.nameAr ?? '').trim()
+  const englishName = String(body.name ?? '').trim()
+  if (!arabicName || !englishName || !Number.isFinite(Number(body.price)) || !String(body.category ?? '').trim()) {
+    return sendError(res, 'Product name (Arabic and English), price and category are required', 400)
   }
 
   const invalidOffer = validateSellerOffer(body)
@@ -175,24 +176,11 @@ export const createMyProduct = asyncHandler(async (req, res) => {
     return sendError(res, 'Maximum 5 images allowed', 400)
   }
 
-  const fieldsToTranslate = { nameAr: arabicName }
-  if (body.descriptionAr) fieldsToTranslate.descriptionAr = String(body.descriptionAr).trim()
-
-  let translations
-  try {
-    translations = await translateArabicFieldsToEnglish(fieldsToTranslate)
-  } catch (err) {
-    console.error('[Seller Product] Translation failed during creation:', err.message)
-    return sendError(res, 'Could not translate content. Please try again.', 502)
-  }
-
   const data = pickSellerProductFields(body)
-  data.name = translations.nameAr || arabicName
+  data.name = englishName
   data.nameAr = arabicName
-  if (translations.descriptionAr) {
-    data.description = translations.descriptionAr
-    data.descriptionAr = fieldsToTranslate.descriptionAr
-  }
+  if (body.descriptionAr !== undefined) data.descriptionAr = String(body.descriptionAr).trim() || undefined
+  if (body.description !== undefined) data.description = String(body.description).trim() || undefined
   delete data.nameFr
   delete data.descriptionFr
 
@@ -236,23 +224,10 @@ export const updateMyProduct = asyncHandler(async (req, res) => {
 
   const data = pickSellerProductFields(req.body ?? {}, product)
 
-  const fieldsToTranslate = {}
-  if (data.nameAr !== undefined && data.nameAr !== product.nameAr) fieldsToTranslate.nameAr = String(data.nameAr).trim()
-  if (data.descriptionAr !== undefined && data.descriptionAr !== product.descriptionAr) {
-    const trimmed = String(data.descriptionAr).trim()
-    if (trimmed) fieldsToTranslate.descriptionAr = trimmed
-  }
-
-  if (Object.keys(fieldsToTranslate).length > 0) {
-    try {
-      const translations = await translateArabicFieldsToEnglish(fieldsToTranslate)
-      if (translations.nameAr) data.name = translations.nameAr
-      if (translations.descriptionAr) data.description = translations.descriptionAr
-    } catch (err) {
-      console.error('[Seller Product] Translation failed during update:', err.message)
-      return sendError(res, 'Could not translate content. Please try again.', 502)
-    }
-  }
+  if (data.nameAr !== undefined) data.nameAr = String(data.nameAr).trim() || product.nameAr
+  if (data.name !== undefined) data.name = String(data.name).trim() || product.name
+  if (data.descriptionAr !== undefined) data.descriptionAr = String(data.descriptionAr).trim()
+  if (data.description !== undefined) data.description = String(data.description).trim()
 
   delete data.nameFr
   delete data.descriptionFr
@@ -367,24 +342,28 @@ export const createMyCategory = asyncHandler(async (req, res) => {
     .replace(/^-+|-+$/g, '')
     .slice(0, 50) || 'category'
 
-  let slug = slugBase
-  let counter = 1
-  while (await Category.exists({ store: store._id, slug })) {
-    slug = `${slugBase}-${counter}`
-    counter++
-  }
-
-  const category = await Category.create({
+  const base = {
     store: store._id,
     name: name.trim(),
     nameAr: nameAr.trim(),
     nameFr: nameFr?.trim(),
-    slug,
     image,
     icon,
     order: Number(order) || 0,
     active: true,
-  })
+  }
+
+  let slug = slugBase
+  let category = null
+  for (let counter = 1; counter < 50 && !category; counter += 1) {
+    try {
+      category = await Category.create({ ...base, slug })
+    } catch (err) {
+      if (err?.code !== 11000) throw err
+      slug = counter === 1 ? `${slugBase}-1` : `${slugBase}-${counter}`
+    }
+  }
+  if (!category) category = await Category.create({ ...base, slug: `${slugBase}-${Date.now()}` })
 
   return sendSuccess(res, category, 'Category created', 201)
 })
@@ -413,7 +392,7 @@ export const updateMyCategory = asyncHandler(async (req, res) => {
   if (slug !== undefined) {
     const newSlug = String(slug).toLowerCase().trim()
     if (newSlug !== category.slug) {
-      const exists = await Category.exists({ store: store._id, slug: newSlug, _id: { $ne: category._id } })
+      const exists = await Category.exists({ slug: newSlug, _id: { $ne: category._id } })
       if (exists) return sendError(res, 'This slug is already in use', 400)
       category.slug = newSlug
     }
@@ -632,6 +611,7 @@ export const getMySubscription = asyncHandler(async (req, res) => {
       daysRemaining: Math.max(0, daysRemaining),
       isExpiringSoon: daysRemaining > 0 && daysRemaining <= 7,
     },
+    paymentInfo: await getAdminPaymentInfo(),
   })
 })
 

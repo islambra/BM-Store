@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { MapPin, Phone, Package, Star, Flame, Tag, Search, SlidersHorizontal, ChevronLeft, ChevronRight, AlertCircle, Link2 } from 'lucide-react'
+import { MapPin, Phone, Package, Star, Flame, Tag, Search, SlidersHorizontal, ChevronLeft, ChevronRight, AlertCircle, Link2, ArrowLeft, ArrowRight } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { getPublicStore, getErrorMessage, type SellerProductPayload } from '../services/api'
 import { localizedName, localizedText } from '../utils/localize'
-import { storeUrl } from '../utils/storeUrl'
+import { mainSiteUrl, storeUrl, storeVisitUrl, storeDomainSuffix } from '../utils/storeUrl'
 import { cn } from '../utils/cn'
 import EmptyState from '../components/common/EmptyState'
 import SectionHeader from '../components/common/SectionHeader'
 import Breadcrumb from '../components/common/Breadcrumb'
+import LanguageSwitcher from '../components/common/LanguageSwitcher'
 import ProductCard from '../components/product/ProductCard'
 import { Input, Select } from '../components/common/FormControls'
 import { ProductCardSkeleton } from '../components/common/Skeletons'
@@ -50,9 +51,11 @@ const toProduct = (p: SellerProductPayload): Product => ({
   slug: (p as unknown as { slug?: string }).slug || p._id,
 })
 
-export default function StorePage() {
-  const { slug } = useParams()
+export default function StorePage({ slug: hostSlug }: { slug?: string } = {}) {
+  const { slug: routeSlug } = useParams()
+  const slug = hostSlug ?? routeSlug
   const { t, lang } = useLanguage()
+  const BackIcon = lang === 'ar' ? ArrowRight : ArrowLeft
 
   const [loading, setLoading] = useState(true)
   const [store, setStore] = useState<Store | null>(null)
@@ -157,6 +160,19 @@ export default function StorePage() {
   const name = localizedName(store, lang)
   const description = localizedText(store, lang)
 
+  const goBack = () => {
+    try {
+      const referrer = document.referrer ? new URL(document.referrer) : null
+      if (referrer && referrer.origin !== window.location.origin) {
+        window.location.href = referrer.href
+        return
+      }
+    } catch {
+      /* ignore malformed referrer */
+    }
+    window.location.href = mainSiteUrl('/')
+  }
+
   const tabs: { key: TabKey; label: string; icon: typeof Tag; count: number }[] = [
     { key: 'offers', label: t('seller.store.specialOffers'), icon: Tag, count: specialOffers.length },
     { key: 'new', label: t('seller.store.newProducts'), icon: Star, count: newProducts.length },
@@ -186,7 +202,20 @@ export default function StorePage() {
 
   return (
     <div className="container-app pt-4 sm:pt-6">
-      <Breadcrumb items={[{ label: t('nav.stores'), to: '/stores' }, { label: name }]} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={goBack}
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm"
+          >
+            <BackIcon size={16} />
+            {t('common.back')}
+          </button>
+          <Breadcrumb items={[{ label: t('nav.stores'), to: '/stores' }, { label: name }]} />
+        </div>
+        <LanguageSwitcher />
+      </div>
 
       {/* Store hero */}
       <section className="relative mt-4 overflow-hidden rounded-3xl text-white shadow-lift" aria-label={name}>
@@ -240,14 +269,14 @@ export default function StorePage() {
                 {store.productCount} {t('common.products')}
               </span>
               <a
-                href={storeUrl(store.slug)}
+                href={storeVisitUrl(store.slug)}
                 target="_blank"
                 rel="noopener noreferrer"
                 title={storeUrl(store.slug)}
                 className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/15 backdrop-blur transition-colors hover:bg-white/20"
               >
                 <Link2 size={13} />
-                <span dir="ltr">/{store.slug}</span>
+                <span dir="ltr">{store.slug}{storeDomainSuffix()}</span>
               </a>
             </div>
           </div>

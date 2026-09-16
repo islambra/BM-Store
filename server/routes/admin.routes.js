@@ -5,11 +5,6 @@ import * as banner from '../controllers/banner.controller.js'
 import {
   getUsers,
   getMarketers,
-  getMarketerDetail,
-  getMarketerOrders,
-  getMarketerCommissions,
-  getMarketerReferrals,
-  getMarketerPayouts,
   updateMarketerStatus,
   recordPayout,
   updatePayoutStatus,
@@ -47,11 +42,6 @@ router.get('/users', getUsers)
 router.delete('/users/:id', adminDeleteUser)
 
 router.get('/marketers', getMarketers)
-router.get('/marketers/:id', getMarketerDetail)
-router.get('/marketers/:id/orders', getMarketerOrders)
-router.get('/marketers/:id/commissions', getMarketerCommissions)
-router.get('/marketers/:id/referrals', getMarketerReferrals)
-router.get('/marketers/:id/payouts', getMarketerPayouts)
 router.delete('/marketers/:id', adminDeleteMarketer)
 router.patch('/marketers/:id/status', updateMarketerStatus)
 

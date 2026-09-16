@@ -54,23 +54,6 @@ export default function CategoriesSection() {
   return (
     <div className="space-y-5">
       {notice && <ErrorNote message={notice} />}
-      <Table headers={[t('admin.category.nameAr')]}>
-        {(data ?? []).map((c) => (
-          <tr key={String(c._id)} className="hover:bg-canvas">
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-3">
-                <img src={c.image} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
-                <p className="font-semibold text-ink-900">{c.nameAr ?? c.name}</p>
-              </div>
-            </td>
-            <td className="px-4 py-3 text-end">
-              <button type="button" onClick={() => setDeleting(String(c._id))} className="icon-btn text-red-700" aria-label={t('common.remove')}>
-                <Trash2 size={17} />
-              </button>
-            </td>
-          </tr>
-        ))}
-      </Table>
       <div className="rounded-2xl border border-line bg-surface p-6">
         <h3 className="flex items-center gap-2 text-sm font-bold text-ink-900">
           <Plus size={16} className="text-brand-600" />
@@ -88,6 +71,23 @@ export default function CategoriesSection() {
           {busy ? t('common.saving') : t('admin.category.create')}
         </button>
       </div>
+      <Table headers={[t('admin.category.nameAr')]}>
+        {(data ?? []).map((c) => (
+          <tr key={String(c._id)} className="hover:bg-canvas">
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <img src={c.image} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                <p className="font-semibold text-ink-900">{c.nameAr ?? c.name}</p>
+              </div>
+            </td>
+            <td className="px-4 py-3 text-end">
+              <button type="button" onClick={() => setDeleting(String(c._id))} className="icon-btn text-red-700" aria-label={t('common.remove')}>
+                <Trash2 size={17} />
+              </button>
+            </td>
+          </tr>
+        ))}
+      </Table>
       <ConfirmDialog
         open={Boolean(deleting)}
         title={t('admin.deleteCategoryTitle')}

@@ -257,17 +257,6 @@ export default function SellerCategoriesSection() {
               />
             </div>
 
-            <div>
-              <Label htmlFor="order">{t('seller.categories.order')}</Label>
-              <Input
-                id="order"
-                name="order"
-                type="number"
-                value={formData.order}
-                onChange={(e) => setFormData({ ...formData, order: Number(e.target.value) || 0 })}
-              />
-            </div>
-
             <div className="flex justify-end gap-3 pt-4 border-t border-line">
               <Button type="button" variant="ghost" onClick={() => setModalOpen(false)} disabled={loading}>
                 {t('common.cancel')}

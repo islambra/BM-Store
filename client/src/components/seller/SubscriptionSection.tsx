@@ -21,6 +21,11 @@ export default function SellerSubscriptionSection() {
     daysRemaining: number
     isExpiringSoon: boolean
   } | null>(null)
+  const [paymentInfo, setPaymentInfo] = useState<{
+    ccp?: string | null
+    ccpKey?: string | null
+    baridiMob?: string | null
+  } | null>(null)
   const [renewalPlan, setRenewalPlan] = useState<'monthly' | 'yearly'>('monthly')
   const [paymentProof, setPaymentProof] = useState<File | null>(null)
   const [paymentProofUrl, setPaymentProofUrl] = useState<string | null>(null)
@@ -32,7 +37,10 @@ export default function SellerSubscriptionSection() {
 
     getMySubscription()
       .then((res) => {
-        if (alive && res.subscription) setSubscription(res.subscription)
+        if (alive && res.subscription) {
+          setSubscription(res.subscription)
+          setPaymentInfo(res.paymentInfo ?? null)
+        }
       })
       .catch((err) => {
         if (alive) setError(getErrorMessage(err))
@@ -269,7 +277,7 @@ export default function SellerSubscriptionSection() {
                     setPaymentProofUrl(URL.createObjectURL(file))
                   }
                 }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer"
               />
               <div className={`relative rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
                 paymentProof ? 'border-brand-600 bg-brand-50' : 'border-line hover:border-brand-300'
@@ -311,11 +319,26 @@ export default function SellerSubscriptionSection() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl bg-brand-50 p-4">
             <p className="font-medium text-brand-700">{t('seller.ccp')}</p>
-            <p className="mt-1 font-mono text-lg text-brand-900">{t('seller.ccpDetails')}</p>
+            {paymentInfo?.ccp ? (
+              <>
+                <p className="mt-1 font-mono text-lg text-brand-900">{paymentInfo.ccp}</p>
+                {paymentInfo.ccpKey && (
+                  <p className="mt-1 text-xs text-brand-600">
+                    {t('seller.ccpKey')}: <span className="font-mono">{paymentInfo.ccpKey}</span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-brand-600">{t('seller.paymentNotSet')}</p>
+            )}
           </div>
           <div className="rounded-xl bg-brand-50 p-4">
             <p className="font-medium text-brand-700">{t('seller.baridiMob')}</p>
-            <p className="mt-1 font-mono text-lg text-brand-900">{t('seller.baridiMobDetails')}</p>
+            {paymentInfo?.baridiMob ? (
+              <p className="mt-1 font-mono text-lg text-brand-900">{paymentInfo.baridiMob}</p>
+            ) : (
+              <p className="mt-1 text-sm text-brand-600">{t('seller.paymentNotSet')}</p>
+            )}
           </div>
         </div>
       </div>

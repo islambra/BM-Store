@@ -25,7 +25,6 @@ export default function PayoutsSection() {
   const [marketerId, setMarketerId] = useState('')
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<'CCP' | 'BaridiMob'>('CCP')
-  const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -36,6 +35,12 @@ export default function PayoutsSection() {
     () => (marketers.data?.marketers ?? []).map((m) => ({ value: m.id, label: m.profile?.publicName ?? m.name })),
     [marketers.data]
   )
+
+  useEffect(() => {
+    if (!marketers.loading && marketerOptions.length > 0 && !marketerId) {
+      setMarketerId(marketerOptions[0].value)
+    }
+  }, [marketers.loading, marketerOptions, marketerId])
   const balanceOf = (id: string) => {
     const m = (marketers.data?.marketers ?? []).find((x) => x.id === id)
     return m?.stats?.availableBalance ?? 0
@@ -86,12 +91,10 @@ export default function PayoutsSection() {
         marketerId,
         amount: value,
         method,
-        reference: reference.trim() || undefined,
         notes: notes.trim() || undefined,
       })
       setNotice(t('admin.payouts.recorded'))
       setAmount('')
-      setReference('')
       setNotes('')
       void reload()
       void marketers.reload()
@@ -153,9 +156,6 @@ export default function PayoutsSection() {
               ]}
             />
           </Field>
-          <Field label={t('admin.payouts.reference')}>
-            <Input dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="—" />
-          </Field>
           <Field label={t('admin.payouts.notes')}>
             <Input dir="ltr" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('admin.payouts.notesPlaceholder')} />
           </Field>
@@ -204,7 +204,7 @@ export default function PayoutsSection() {
         </div>
       ) : (
         <Table
-          headers={[t('admin.payouts.marketer'), t('admin.payouts.amount'), t('admin.payouts.method'), t('admin.payouts.reference'), t('admin.payouts.status'), t('admin.payouts.date')]}
+          headers={[t('admin.payouts.marketer'), t('admin.payouts.amount'), t('admin.payouts.method'), t('admin.payouts.status'), t('admin.payouts.date')]}
         >
           {payouts.map((p) => (
             <tr key={p._id} className="hover:bg-canvas">
@@ -213,7 +213,6 @@ export default function PayoutsSection() {
               <td className="px-4 py-3">
                 <Badge tone={p.method === 'CCP' ? 'ok' : 'warn'}>{p.method}</Badge>
               </td>
-              <td className="px-4 py-3 text-ink-500">{p.reference ?? '—'}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <PayoutStatusBadge status={p.status} />

@@ -23,8 +23,6 @@ export function profileSummary(profile, user, extra = {}) {
   return {
     id: profile._id,
     publicName: profile.publicName,
-    bio: profile.bio,
-    avatar: profile.avatar,
     referralCode: profile.referralCode,
     referralLink: referralLink(profile.referralCode),
     status: profile.status,
@@ -57,7 +55,7 @@ export const updateMarketerProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id)
   if (!user) return sendError(res, 'Account not found', 401)
 
-  const { name, phone, publicName, bio, avatar, payoutDetails } = req.body ?? {}
+  const { name, phone, publicName, payoutDetails } = req.body ?? {}
 
   if (name !== undefined) user.name = String(name).trim() || user.name
   if (phone !== undefined) {
@@ -67,12 +65,9 @@ export const updateMarketerProfile = asyncHandler(async (req, res) => {
     if (clash) return sendError(res, 'An account with this phone number already exists', 409)
     user.phone = phoneKey
   }
-  if (avatar !== undefined) user.avatar = String(avatar).trim() || undefined
   await user.save()
 
   if (publicName !== undefined) profile.publicName = String(publicName).trim()
-  if (bio !== undefined) profile.bio = String(bio).trim()
-  if (avatar !== undefined) profile.avatar = String(avatar).trim() || undefined
   if (payoutDetails !== undefined) {
     if (payoutDetails.ccp !== undefined) profile.payoutDetails.ccp = String(payoutDetails.ccp).trim()
     if (payoutDetails.ccpKey !== undefined) profile.payoutDetails.ccpKey = String(payoutDetails.ccpKey).trim()
@@ -186,7 +181,7 @@ export const confirmPayoutReceived = asyncHandler(async (req, res) => {
 
   if (payout.commissions?.length) {
     await Commission.updateMany(
-      { _id: { $in: payout.commissions }, status: 'PAYMENT_SENT' },
+      { _id: { $in: payout.commissions }, status: 'PAYOUT_REQUESTED' },
       { $set: { status: 'RECEIVED', paidAt: payout.confirmedAt } }
     )
   }
@@ -211,9 +206,11 @@ export const reportPayoutNotReceived = asyncHandler(async (req, res) => {
   }
 
   if (payout.commissions?.length) {
+    // The payment never arrived, so the commissions return to the marketer's
+    // available balance — the balance was never reduced for this payout.
     await Commission.updateMany(
-      { _id: { $in: payout.commissions }, status: 'PAYMENT_SENT' },
-      { $set: { status: 'DISPUTED' } }
+      { _id: { $in: payout.commissions }, status: 'PAYOUT_REQUESTED' },
+      { $set: { status: 'AVAILABLE' } }
     )
   }
 

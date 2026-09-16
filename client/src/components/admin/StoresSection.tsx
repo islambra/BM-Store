@@ -7,6 +7,7 @@ import { Badge, ErrorNote, Loader, Table } from './adminShared'
 import { Input } from '../common/FormControls'
 import EmptyState from '../common/EmptyState'
 import ConfirmDialog from '../common/ConfirmDialog'
+import { storeVisitUrl, storeDomainSuffix } from '../../utils/storeUrl'
 
 const LIMIT = 15
 
@@ -99,12 +100,11 @@ export default function StoresSection() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-ink-600">{t('admin.stores.search')}</p>
         <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+<Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
           <Input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            placeholder={t('admin.stores.search')}
-            className="pl-9"
+            className="ps-9"
           />
         </div>
       </div>
@@ -129,7 +129,17 @@ export default function StoresSection() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-ink-500">{sellerName(s)}</td>
-                <td className="px-4 py-3 font-mono text-xs text-ink-500" dir="ltr">/{s.slug}</td>
+                <td className="px-4 py-3">
+                  <a
+                    href={storeVisitUrl(s.slug)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs text-brand-700 hover:text-brand-800 hover:underline"
+                    dir="ltr"
+                  >
+                    {s.slug}{storeDomainSuffix()}
+                  </a>
+                </td>
                 <td className="px-4 py-3">{s.subscriptionPlan ? t(s.subscriptionPlan === 'monthly' ? 'seller.monthlyPlan' : 'seller.yearlyPlan') : '—'}</td>
                 <td className="px-4 py-3">
                   <Badge tone={storeTone(s.status)}>{storeStatusLabel(s.status, t)}</Badge>

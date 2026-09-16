@@ -31,6 +31,12 @@ async function createCustomerAgent() {
   return agent
 }
 
+async function marketerAgent(marketerUser) {
+  const agent = request.agent(app)
+  await agent.post('/api/auth/login').send({ phone: marketerUser.phone, password: 'Secret@1234' })
+  return agent
+}
+
 describe('orders', () => {
   before(connectTest)
   after(disconnectTest)
@@ -426,9 +432,9 @@ describe('admin marketer management', () => {
     assert.equal(delivered.status, 200)
     assert.equal((await Commission.countDocuments({ order: orderId, status: 'AVAILABLE' })), 1)
 
-    const detail = await admin.get(`/api/admin/marketers/${user._id}`)
-    assert.equal(detail.status, 200)
-    assert.equal(detail.body.data.stats.availableBalance, 200)
+    const me = await (await marketerAgent(user)).get('/api/marketer/me')
+    assert.equal(me.status, 200)
+    assert.equal(me.body.data.stats.availableBalance, 200)
 
     const payout = await admin.post('/api/admin/payouts').send({
       marketerId: user._id,
@@ -518,14 +524,15 @@ describe('admin order workflow + single commission', () => {
     }
 
     assert.equal(await Commission.countDocuments({ order: id, status: 'AVAILABLE' }), 1)
-    const detail = await admin.get(`/api/admin/marketers/${marketerUser._id}`)
+    const marketer = await marketerAgent(marketerUser)
+    const detail = await marketer.get('/api/marketer/me')
     assert.equal(detail.body.data.stats.availableBalance, 200)
 
     // Re-delivering must fail and must not duplicate the commission.
     const again = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'delivered' })
     assert.equal(again.status, 400)
     assert.equal(await Commission.countDocuments({ order: id }), 1)
-    const detail2 = await admin.get(`/api/admin/marketers/${marketerUser._id}`)
+    const detail2 = await marketer.get('/api/marketer/me')
     assert.equal(detail2.body.data.stats.availableBalance, 200)
 
     // The customer sees the final status.
@@ -642,7 +649,7 @@ describe('admin + seller order deletion', () => {
     assert.equal(await Commission.countDocuments({ order: id, status: 'AVAILABLE' }), 0)
     assert.equal(await Commission.countDocuments({ order: id, status: 'CANCELLED' }), 1)
     assert.equal((await MarketerProfile.findById(profile._id)).totalEarnings, 0)
-    const after = await admin.get(`/api/admin/marketers/${marketerUser._id}`)
+    const after = await (await marketerAgent(marketerUser)).get('/api/marketer/me')
     assert.equal(after.body.data.stats.availableBalance, 0)
   })
 

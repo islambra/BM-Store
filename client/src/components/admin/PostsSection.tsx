@@ -81,64 +81,87 @@ export default function PostsSection() {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {posts.map((post) => (
-            <div key={post._id} className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-4">
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-canvas">
-                {post.mediaType === 'video' && post.video ? (
-                  <div className="flex h-full w-full items-center justify-center bg-ink-900/5">
-                    <Video size={20} className="text-ink-400" />
-                  </div>
-                ) : post.images.length > 0 ? (
-                  <img src={post.images[0]} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-ink-900/5">
-                    <ImagePlus size={20} className="text-ink-300" />
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink-900">
-                  {lang === 'ar' ? (post.textAr || post.textEn || '—') : (post.textEn || post.textAr || '—')}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-ink-400">
-                  {post.productId?.name ?? t('admin.post.noProduct')}
-                </p>
-              </div>
-
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  post.status === 'published'
-                    ? 'bg-success-50 text-success-700'
-                    : 'bg-ink-900/5 text-ink-500'
-                }`}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {posts.map((post) => {
+            const title = lang === 'ar' ? (post.textAr || post.textEn || '—') : (post.textEn || post.textAr || '—')
+            const isPublished = post.status === 'published'
+            return (
+              <article
+                key={post._id}
+                className="group overflow-hidden rounded-2xl border border-line bg-surface transition-[border-color,box-shadow] hover:border-ink-900/20 hover:shadow-soft"
               >
-                {post.status === 'published' ? t('admin.post.published') : t('admin.post.draft')}
-              </span>
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-canvas">
+                  {post.mediaType === 'video' && post.video ? (
+                    <div className="relative h-full w-full">
+                      <video src={post.video} className="h-full w-full object-cover" />
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-ink-900/25">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-ink-900 shadow-md">
+                          <Video size={18} />
+                        </span>
+                      </span>
+                    </div>
+                  ) : post.images.length > 0 ? (
+                    <img
+                      src={post.images[0]}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-ink-900/5">
+                      <ImagePlus size={28} className="text-ink-300" />
+                    </div>
+                  )}
 
-              <span className="hidden shrink-0 text-xs text-ink-400 sm:block">
-                {new Date(post.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en')}
-              </span>
+                  <span
+                    className={`absolute start-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold shadow-sm backdrop-blur ${
+                      isPublished ? 'text-success-700' : 'text-ink-600'
+                    }`}
+                  >
+                    {post.mediaType === 'video' ? <Video size={12} /> : <ImagePlus size={12} />}
+                    {isPublished ? t('admin.post.published') : t('admin.post.draft')}
+                  </span>
+                  {post.images.length > 1 && (
+                    <span className="absolute end-2.5 top-2.5 rounded-md bg-ink-900/75 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      +{post.images.length - 1}
+                    </span>
+                  )}
+                </div>
 
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => void togglePublish(post)}
-                  className="icon-btn text-brand-600"
-                  title={post.status === 'published' ? t('admin.post.unpublish') : t('admin.post.publish')}
-                >
-                  {post.status === 'published' ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-                <button type="button" onClick={() => openEdit(post)} className="icon-btn text-ink-500">
-                  <Pencil size={17} />
-                </button>
-                <button type="button" onClick={() => setDeleteTarget(post)} className="icon-btn text-red-600">
-                  <Trash2 size={17} />
-                </button>
-              </div>
-            </div>
-          ))}
+                <div className="space-y-3 p-4">
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-sm font-semibold leading-snug text-ink-900">
+                      {title}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-ink-400">
+                      {post.productId?.name ?? t('admin.post.noProduct')}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
+                    <span className="text-xs text-ink-400">
+                      {new Date(post.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en')}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void togglePublish(post)}
+                        className="icon-btn hover:bg-success-50 text-brand-600"
+                        title={isPublished ? t('admin.post.unpublish') : t('admin.post.publish')}
+                      >
+                        {isPublished ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                      <button type="button" onClick={() => openEdit(post)} className="icon-btn hover:bg-ink-900/5 text-ink-500">
+                        <Pencil size={17} />
+                      </button>
+                      <button type="button" onClick={() => setDeleteTarget(post)} className="icon-btn hover:bg-danger-50 text-red-600">
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            )
+          })}
         </div>
       )}
 
@@ -221,12 +244,15 @@ function PostFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-[5vh] sm:pt-[10vh]" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-[5vh] sm:px-6 sm:pt-[8vh]"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-2xl rounded-2xl border border-line bg-surface p-6 shadow-xl animate-in zoom-in-95"
+        className="flex max-h-[calc(100dvh-5vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-xl animate-in zoom-in-95 sm:max-h-[calc(100dvh-8vh-3rem)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-5 pb-4 pt-5 sm:px-6 sm:pt-6">
           <h3 className="text-lg font-bold text-ink-900">
             {mode === 'create' ? t('admin.post.create') : t('admin.post.edit')}
           </h3>
@@ -235,21 +261,21 @@ function PostFormModal({
           </button>
         </div>
 
-        {error && <p role="alert" className="mt-3 text-sm font-medium text-danger-600">{error}</p>}
-        {notice && <p className="mt-3 text-sm font-medium text-success-600">{notice}</p>}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:px-6">
+          {error && <p role="alert" className="rounded-xl bg-danger-50 px-3 py-2 text-sm font-medium text-danger-600">{error}</p>}
+          {notice && <p className="rounded-xl bg-success-50 px-3 py-2 text-sm font-medium text-success-600">{notice}</p>}
 
-        <div className="mt-5 space-y-4">
           <Field label={t('admin.post.textAr')} required>
             <Textarea value={textAr} onChange={(e) => setTextAr(e.target.value)} rows={3} placeholder={t('admin.post.textArPh')} className="text-end" dir="rtl" />
           </Field>
 
           <Field label={t('admin.post.mediaType')}>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setMediaType('images')}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  mediaType === 'images' ? 'bg-brand-600 text-white' : 'bg-ink-900/5 text-ink-600 hover:bg-ink-900/10'
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+                  mediaType === 'images' ? 'bg-brand-600 text-white shadow-sm' : 'bg-ink-900/5 text-ink-600 hover:bg-ink-900/10'
                 }`}
               >
                 <ImagePlus size={16} />
@@ -258,8 +284,8 @@ function PostFormModal({
               <button
                 type="button"
                 onClick={() => setMediaType('video')}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  mediaType === 'video' ? 'bg-brand-600 text-white' : 'bg-ink-900/5 text-ink-600 hover:bg-ink-900/10'
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+                  mediaType === 'video' ? 'bg-brand-600 text-white shadow-sm' : 'bg-ink-900/5 text-ink-600 hover:bg-ink-900/10'
                 }`}
               >
                 <Video size={16} />
@@ -277,7 +303,7 @@ function PostFormModal({
           <ProductSelectField initialProduct={post?.productId ?? null} onChange={setProductId} />
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-3">
+        <div className="flex items-center justify-end gap-3 border-t border-line bg-surface px-5 py-4 sm:px-6">
           <button type="button" onClick={onClose} className="btn-secondary">
             {t('common.cancel')}
           </button>

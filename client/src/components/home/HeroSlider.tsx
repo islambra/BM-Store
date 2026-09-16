@@ -70,7 +70,7 @@ export default function HeroSlider() {
       role="region"
       aria-roledescription="carousel"
       aria-label="Promotions"
-      className="group relative overflow-hidden rounded-2xl bg-ink-900 sm:rounded-3xl"
+      className="group relative overflow-hidden bg-ink-900"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -79,16 +79,16 @@ export default function HeroSlider() {
       onTouchEnd={onTouchEnd}
     >
       <div
-        className="flex w-full transition-transform duration-500 ease-out"
+        className="flex w-full items-start transition-transform duration-500 ease-out"
         style={{ transform: `translateX(${(isRtl ? 1 : -1) * index * 100}%)` }}
       >
         {slides.map((s) => (
-          <div key={s.id} className="relative w-full shrink-0 overflow-hidden">
+          <div key={s.id} className="relative w-full shrink-0">
             <img
               src={s.image}
               alt=""
               loading={s.id === slides[0]?.id ? 'eager' : 'lazy'}
-              className="block w-full max-h-64 object-cover sm:max-h-80 lg:max-h-96"
+              className="block h-auto w-full"
             />
           </div>
         ))}

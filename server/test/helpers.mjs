@@ -1,4 +1,10 @@
 import 'dotenv/config'
+
+// Keep tests deterministic: never hit the free translation fallback over the
+// network. Google Cloud credentials are also absent in the test environment,
+// so Arabic content is stored as-is (existing behaviour covered by tests).
+process.env.TRANSLATION_FALLBACK = 'off'
+
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 import User from '../models/User.js'

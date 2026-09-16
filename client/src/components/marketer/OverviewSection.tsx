@@ -53,7 +53,7 @@ export default function OverviewSection() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MarketerStatCard accent icon={Wallet} label={t('marketer.availableBalance')} value={fmt(stats.availableBalance)} hint={t('marketer.withdrawHint')} />
         <MarketerStatCard icon={Wallet} label={t('marketer.pendingEarnings')} value={fmt(stats.pendingEarnings)} />
-        <MarketerStatCard icon={CreditCard} label={t('marketer.paymentSent')} value={fmt(stats.paymentSent)} />
+        <MarketerStatCard icon={CreditCard} label={t('marketer.payoutRequested')} value={fmt(stats.payoutRequested)} />
         <MarketerStatCard icon={Wallet} label={t('marketer.totalPaid')} value={fmt(stats.totalPaid)} hint={t('marketer.paidHint', { paid: fmt(stats.totalPaid) })} />
       </div>
 

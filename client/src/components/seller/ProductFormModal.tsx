@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { X, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, ShoppingBag, X } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { listMyCategories } from '../../services/api'
 import { getErrorMessage } from '../../services/api'
-import { Input, Textarea, Select, Label, Button } from '../../components/common/FormControls'
+import { Alert, Input, Textarea, Select, Button } from '../../components/common/FormControls'
 import ImageUploader from '../../components/common/ImageUploader'
+import { formatPrice } from '../common/Price'
 
 interface ProductFormModalProps {
   open: boolean
@@ -30,62 +31,51 @@ interface ProductFormModalProps {
 }
 
 export default function ProductFormModal({ open, onClose, product, onSubmit }: ProductFormModalProps) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
+  const bodyRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [images, setImages] = useState<string[]>([])
-  const [mainImageIndex, setMainImageIndex] = useState(0)
   const [categories, setCategories] = useState<{ _id: string; slug: string; name: string; nameAr?: string }[]>([])
   const [formData, setFormData] = useState({
     name: '',
     nameAr: '',
-    nameFr: '',
     description: '',
     descriptionAr: '',
-    descriptionFr: '',
     price: 0,
     oldPrice: '',
     category: '',
     stock: 0,
     isSpecialOffer: false,
-    status: 'active',
   })
 
   useEffect(() => {
     if (product) {
       setFormData({
-        name: product.name,
-        nameAr: product.nameAr || '',
-        nameFr: product.nameFr || '',
+        name: product.name || '',
+        nameAr: product.nameAr || product.name || '',
         description: product.description || '',
-        descriptionAr: product.descriptionAr || '',
-        descriptionFr: product.descriptionFr || '',
+        descriptionAr: product.descriptionAr || product.description || '',
         price: product.price,
         oldPrice: product.oldPrice?.toString() || '',
         category: product.category,
         stock: product.stock,
         isSpecialOffer: product.isSpecialOffer,
-        status: product.status,
       })
-      setImages(product.images || [])
-      setMainImageIndex(0)
+      setImages((product.images ?? []).filter(Boolean).slice(0, 5))
     } else {
       setFormData({
         name: '',
         nameAr: '',
-        nameFr: '',
         description: '',
         descriptionAr: '',
-        descriptionFr: '',
         price: 0,
         oldPrice: '',
         category: '',
         stock: 0,
         isSpecialOffer: false,
-        status: 'active',
       })
       setImages([])
-      setMainImageIndex(0)
     }
   }, [product])
 
@@ -97,44 +87,35 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
     }
   }, [open])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target
-    if (type === 'checkbox') {
-      setFormData((prev) => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }))
-    } else if (type === 'number') {
-      setFormData((prev) => ({ ...prev, [name]: Number(value) || 0 }))
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }))
-    }
-  }
-
-  const handleRemoveImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index))
-    if (mainImageIndex >= index && mainImageIndex > 0) {
-      setMainImageIndex((prev) => prev - 1)
-    }
+  const fail = (message: string) => {
+    setError(message)
+    bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.nameAr?.trim()) {
-      setError(t('seller.products.nameArRequired'))
+      fail(t('seller.products.nameArRequired'))
+      return
+    }
+    if (!formData.name?.trim()) {
+      fail(t('seller.products.nameEnRequired'))
       return
     }
     if (!formData.price || formData.price <= 0) {
-      setError(t('seller.products.priceRequired'))
+      fail(t('seller.products.priceRequired'))
       return
     }
     if (!formData.category) {
-      setError(t('seller.products.categoryRequired'))
+      fail(t('seller.products.categoryRequired'))
       return
     }
     if (formData.isSpecialOffer && (!formData.oldPrice || Number(formData.oldPrice) <= formData.price)) {
-      setError(t('seller.products.oldPriceRequired'))
+      fail(t('seller.products.oldPriceRequired'))
       return
     }
     if (images.length === 0) {
-      setError(t('seller.products.imageRequired'))
+      fail(t('seller.products.imageRequired'))
       return
     }
 
@@ -142,16 +123,24 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
     setError('')
 
     const data = {
-      ...formData,
-      images,
-      oldPrice: formData.isSpecialOffer && formData.oldPrice ? Number(formData.oldPrice) : undefined,
+      name: formData.name.trim(),
+      nameAr: formData.nameAr.trim(),
+      description: formData.description.trim() || undefined,
+      descriptionAr: formData.descriptionAr.trim() || undefined,
+      price: Number(formData.price),
+      oldPrice: formData.isSpecialOffer && Number(formData.oldPrice) > 0 ? Number(formData.oldPrice) : undefined,
+      category: formData.category,
+      isSpecialOffer: formData.isSpecialOffer,
+      stock: product ? formData.stock : (formData.stock || 100),
+      image: images[0],
+      images: images.slice(0, 5),
     }
 
     try {
       await onSubmit(data)
       onClose()
     } catch (err) {
-      setError(getErrorMessage(err))
+      fail(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -159,165 +148,102 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
 
   if (!open) return null
 
+  const priceLabel = formData.isSpecialOffer ? t('admin.product.newPrice') : t('seller.products.price')
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/50">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-xl animate-slide-up">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-5 py-4 rounded-t-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-ink-900/50 sm:p-4">
+      <div className="flex flex-col w-full max-w-2xl max-h-[min(92vh,calc(100dvh-1.5rem))] overflow-hidden rounded-2xl bg-surface shadow-xl animate-slide-up">
+        <div className="z-10 flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 py-4 sm:px-5">
           <div>
-            <h2 className="text-lg font-bold text-ink-900">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-ink-900">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                <ShoppingBag size={18} />
+              </span>
               {product ? t('seller.products.edit') : t('seller.products.add')}
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
               {product ? t('seller.products.editDesc') : t('seller.products.addDesc')}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="icon-btn text-ink-400 hover:text-ink-900" aria-label={t('common.close')}>
+          <button type="button" onClick={onClose} className="icon-btn shrink-0 text-ink-400 hover:text-ink-900" aria-label={t('common.close')}>
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 p-5">
-          {error && <div className="rounded-xl bg-danger-50 p-3 text-sm text-danger-600">{error}</div>}
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div ref={bodyRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
+            {error && (
+              <Alert tone="error">
+                <span className="inline-flex items-start gap-2">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  {error}
+                </span>
+              </Alert>
+            )}
 
-          {/* Media */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-ink-400">{t('seller.products.media')}</h3>
             <div>
-              <Label>{t('seller.products.images')}</Label>
-              <div className="mt-2 space-y-3">
-                <ImageUploader
-                  value={images[mainImageIndex] || ''}
-                  onChange={(url) => {
-                    const newImages = [...images]
-                    newImages[mainImageIndex] = String(url)
-                    setImages(newImages)
-                  }}
-                  accept="image/*"
-                />
-                {images.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto">
-                    {images.map((src, i) => (
-                      <div key={i} className="relative h-16 w-16 shrink-0 rounded-lg overflow-hidden">
-                        <img src={src} alt="" className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveImage(i)}
-                          className="absolute top-1 right-1 rounded-full bg-red-500 p-1 text-white"
-                          aria-label={t('common.remove')}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMainImageIndex(i)}
-                          className={`absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            mainImageIndex === i ? 'bg-brand-600 text-white' : 'bg-ink-900/50 text-white'
-                          }`}
-                        >
-                          {mainImageIndex === i ? t('seller.products.mainImage') : t('seller.products.setMain')}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p className="text-xs text-ink-500">{t('seller.products.maxImages')}</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-400">{t('admin.product.type')}</p>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {[
+                  { value: false, label: t('admin.product.normal'), sub: t('admin.product.normalSub') },
+                  { value: true, label: t('admin.product.offer'), sub: t('admin.product.offerSub') },
+                ].map((opt) => (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, isSpecialOffer: opt.value }))}
+                    className={`rounded-2xl border p-4 text-start transition-all ${
+                      formData.isSpecialOffer === opt.value
+                        ? 'border-brand-600 bg-brand-50 shadow-sm'
+                        : 'border-line bg-surface hover:border-brand-300'
+                    }`}
+                  >
+                    <p className={`text-sm font-bold ${formData.isSpecialOffer === opt.value ? 'text-brand-700' : 'text-ink-900'}`}>
+                      {opt.label}
+                    </p>
+                    <p className="mt-0.5 text-xs text-ink-500">{opt.sub}</p>
+                  </button>
+                ))}
               </div>
             </div>
-          </section>
 
-          {/* Names */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-ink-400">{t('seller.products.names')}</h3>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <Label htmlFor="nameAr">{t('seller.products.nameAr')} *</Label>
+                <label className="block text-sm font-medium text-ink-700" htmlFor="nameAr">
+                  {t('seller.products.nameAr')} *
+                </label>
                 <Input
+                  dir="rtl"
                   id="nameAr"
-                  name="nameAr"
                   value={formData.nameAr}
-                  onChange={handleChange}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, nameAr: e.target.value }))}
                   placeholder={t('seller.products.nameArPlaceholder')}
                   className="mt-1.5"
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="name">{t('seller.products.nameEnLabel')}</Label>
+                <label className="block text-sm font-medium text-ink-700" htmlFor="name">
+                  {t('seller.products.nameEnLabel')} *
+                </label>
                 <Input
+                  dir="ltr"
                   id="name"
-                  name="name"
                   value={formData.name}
-                  onChange={handleChange}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder={t('seller.products.namePlaceholder')}
-                  className="mt-1.5"
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="descriptionAr">{t('seller.products.descriptionAr')}</Label>
-                <Textarea
-                  id="descriptionAr"
-                  name="descriptionAr"
-                  value={formData.descriptionAr}
-                  onChange={handleChange}
-                  rows={3}
-                  className="mt-1.5"
-                  placeholder={t('seller.products.descriptionArPlaceholder')}
-                />
-              </div>
-              <div>
-                <Label htmlFor="description">{t('seller.products.descriptionEnLabel')}</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  rows={3}
-                  className="mt-1.5"
-                  placeholder={t('seller.products.descriptionPlaceholder')}
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Pricing & stock */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-ink-400">{t('seller.products.pricing')}</h3>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <Label htmlFor="price">{t('seller.products.price')} *</Label>
-                <Input
-                  id="price"
-                  name="price"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={formData.price}
-                  onChange={handleChange}
                   className="mt-1.5"
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="stock">{t('seller.products.stock')}</Label>
-                <Input
-                  id="stock"
-                  name="stock"
-                  type="number"
-                  min="0"
-                  value={formData.stock}
-                  onChange={handleChange}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="category">{t('seller.products.category')} *</Label>
+                <label className="block text-sm font-medium text-ink-700" htmlFor="category">
+                  {t('seller.products.category')} *
+                </label>
                 <Select
                   id="category"
-                  name="category"
                   value={formData.category}
-                  onChange={handleChange}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
                   className="mt-1.5"
                   required
                 >
@@ -327,42 +253,118 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
                   ))}
                 </Select>
               </div>
-            </div>
-
-            <div className="rounded-xl border border-line bg-canvas p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-ink-900">{t('seller.products.typeOffer')}</p>
-                  <p className="text-xs text-ink-500">{t('seller.products.typeOfferDesc')}</p>
-                </div>
-                <input
-                  type="checkbox"
-                  name="isSpecialOffer"
-                  checked={formData.isSpecialOffer}
-                  onChange={handleChange}
-                  className="h-5 w-5 rounded border-line text-brand-600 focus:ring-brand-500"
+              <div>
+                <label className="block text-sm font-medium text-ink-700" htmlFor="price">
+                  {priceLabel} *
+                </label>
+                <Input
+                  id="price"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.price || ''}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value === '' ? 0 : Number(e.target.value) || 0 }))}
+                  className="mt-1.5"
+                  required
                 />
               </div>
               {formData.isSpecialOffer && (
-                <div className="mt-3">
-                  <Label htmlFor="oldPrice">{t('seller.products.oldPrice')}</Label>
+                <div>
+                  <label className="block text-sm font-medium text-ink-700" htmlFor="oldPrice">
+                    {t('seller.products.oldPrice')} *
+                  </label>
                   <Input
                     id="oldPrice"
-                    name="oldPrice"
                     type="number"
                     min="0"
                     step="1"
                     value={formData.oldPrice}
-                    onChange={handleChange}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, oldPrice: e.target.value }))}
+                    placeholder={t('admin.product.oldPricePh')}
                     className="mt-1.5"
                   />
-                  <p className="mt-1.5 text-xs text-ink-500">{t('seller.products.oldPriceHint')}</p>
                 </div>
               )}
             </div>
-          </section>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-line">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-ink-700" htmlFor="descriptionAr">
+                  {t('seller.products.descriptionAr')}
+                </label>
+                <Textarea
+                  dir="rtl"
+                  id="descriptionAr"
+                  rows={3}
+                  value={formData.descriptionAr}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, descriptionAr: e.target.value }))}
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink-700" htmlFor="description">
+                  {t('seller.products.descriptionEnLabel')}
+                </label>
+                <Textarea
+                  dir="ltr"
+                  id="description"
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  className="mt-1.5"
+                  placeholder={t('seller.products.descriptionPlaceholder')}
+                />
+              </div>
+            </div>
+
+            {formData.isSpecialOffer && (() => {
+              const price = Number(formData.price)
+              const oldPrice = Number(formData.oldPrice)
+              const pct = oldPrice > price && price > 0 ? Math.round(((oldPrice - price) / oldPrice) * 100) : null
+              return (
+                <div className="rounded-2xl border border-accent-100 bg-accent-50/50 p-4 text-sm">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-ink-400">{t('seller.products.oldPrice')}</p>
+                      <p className="mt-0.5 font-semibold text-ink-700">
+                        {oldPrice > 0 ? formatPrice(oldPrice, lang) : '—'}
+                      </p>
+                    </div>
+                    <span className="text-ink-300">→</span>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-ink-400">{t('admin.product.newPrice')}</p>
+                      <p className="mt-0.5 font-semibold text-ink-900">{price > 0 ? formatPrice(price, lang) : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-ink-400">{t('admin.product.discount')}</p>
+                      <p className={`mt-0.5 font-extrabold ${pct ? 'text-accent-600' : 'text-ink-400'}`}>
+                        {pct ? `-${pct}%` : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  {!pct && <p className="mt-2 text-xs text-danger-600">{t('seller.products.oldPriceRequired')}</p>}
+                </div>
+              )
+            })()}
+
+            <div>
+              <span className="block text-sm font-medium text-ink-700">
+                {t('seller.products.images')} (max 5)
+              </span>
+              <div className="mt-1.5">
+                <ImageUploader
+                  multiple
+                  max={5}
+                  label={t('seller.products.images')}
+                  value={images}
+                  onChange={(v) => setImages(v as string[])}
+                  accept="image/*"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-col-reverse gap-2.5 border-t border-line bg-surface px-4 py-3.5 sm:flex-row sm:items-center sm:justify-end sm:px-5">
             <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
               {t('common.cancel')}
             </Button>

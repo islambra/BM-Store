@@ -60,7 +60,6 @@ export default function PaymentsSection() {
                 </div>
                 <span className="text-xs text-ink-400">
                   {t(`marketer.method${p.method === 'CCP' ? 'CCP' : 'BaridiMob'}`)}
-                  {p.reference ? ` · ${p.reference}` : ''}
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
