@@ -45,4 +45,3 @@ describe('App routing', () => {
     expect(await screen.findByRole('button', { name: 'Open chat' })).toBeInTheDocument()
   })
 })
-)
