@@ -34,3 +34,5 @@ Thumbs.db
 
 # Vite
 client/*.local
+# Chatbot Python virtual environment
+chatbot/.venv/

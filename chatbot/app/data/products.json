@@ -1,0 +1,129 @@
+{
+  "store": {
+    "name": "نور الأناقة",
+    "city": "الجزائر",
+    "currency": "DZD"
+  },
+  "products": [
+    {
+      "id": "caf-001",
+      "name": "قفطان ملكي ذهبي",
+      "name_darija": "قفطان ملكي بالذهبي",
+      "category": "قفطان",
+      "description": "قفطان مطرز باليد، مناسب للأعراس والمناسبات.",
+      "price_mad": 1800,
+      "colors": ["ذهبي", "أخضر"],
+      "sizes": {"S": 2, "M": 4, "L": 3, "XL": 1},
+      "tags": ["عرس", "سهرة", "مطرز"],
+      "image": "https://images.unsplash.com/photo-1595777457583-95e05950ad71?w=600"
+    },
+    {
+      "id": "caf-002",
+      "name": "قفطان عصري أسود",
+      "name_darija": "قفطان أسود عصري",
+      "category": "قفطان",
+      "description": "قفطان قصة عصرية، خفيف وأنيق للسهرات.",
+      "price_mad": 1200,
+      "colors": ["أسود"],
+      "sizes": {"S": 1, "M": 2, "L": 2, "XL": 0},
+      "tags": ["سهرة", "عصري"],
+      "image": "https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=600"
+    },
+    {
+      "id": "jel-001",
+      "name": "جلابة صيفية بيضاء",
+      "name_darija": "جلابة بيضاء للصيف",
+      "category": "جلابة",
+      "description": "جلابة قطن خفيفة، مريحة للمدينة والبحر.",
+      "price_mad": 450,
+      "colors": ["أبيض", "بيج"],
+      "sizes": {"S": 5, "M": 6, "L": 4, "XL": 3},
+      "tags": ["صيفي", "يومي"],
+      "image": "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600"
+    },
+    {
+      "id": "jel-002",
+      "name": "جلابة شتوية صوف",
+      "name_darija": "جلابة دالصوف للبرد",
+      "category": "جلابة",
+      "description": "جلابة دافئة بالصوف، ألوان ترابية.",
+      "price_mad": 690,
+      "colors": ["بني", "رمادي"],
+      "sizes": {"S": 0, "M": 2, "L": 3, "XL": 2},
+      "tags": ["شتوي", "دافئ"],
+      "image": "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=600"
+    },
+    {
+      "id": "bab-001",
+      "name": "بلغة جلد تقليدية",
+      "name_darija": "بلغة جلد أصلي",
+      "category": "أحذية",
+      "description": "بلغة فاس من الجلد الطبيعي، صناعة يدوية.",
+      "price_mad": 220,
+      "colors": ["أحمر", "أصفر", "أسود"],
+      "sizes": {"36": 2, "37": 3, "38": 4, "39": 2, "40": 1},
+      "tags": ["تقليدي", "جلد"],
+      "image": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600"
+    },
+    {
+      "id": "bag-001",
+      "name": "حقيبة يد مطرزة",
+      "name_darija": "ساك مطروز",
+      "category": "حقائب",
+      "description": "حقيبة يد صغيرة بتطريز مغربي.",
+      "price_mad": 650,
+      "colors": ["أحمر", "ذهبي"],
+      "sizes": {"one": 8},
+      "tags": ["مطرز", "سهرة"],
+      "image": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600"
+    },
+    {
+      "id": "sha-001",
+      "name": "شال حرير",
+      "name_darija": "شال حرير",
+      "category": "إكسسوارات",
+      "description": "شال حرير خفيف، ينفع مع القفطان والجلابة.",
+      "price_mad": 180,
+      "colors": ["وردي", "ذهبي", "أخضر"],
+      "sizes": {"one": 12},
+      "tags": ["حرير", "هدية"],
+      "image": "https://images.unsplash.com/photo-1601924994987-69e26d2ea909?w=600"
+    },
+    {
+      "id": "jew-001",
+      "name": "خلخال فضة يدوي",
+      "name_darija": "خلخال فضة",
+      "category": "مجوهرات",
+      "description": "خلخال فضة صناعة تقليدية من تيزنيت.",
+      "price_mad": 350,
+      "colors": ["فضة"],
+      "sizes": {"one": 6},
+      "tags": ["فضة", "تقليدي", "هدية"],
+      "image": "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=600"
+    },
+    {
+      "id": "aba-001",
+      "name": "عباءة سهرة مطرزة",
+      "name_darija": "عباءة دالسهرة",
+      "category": "عباءة",
+      "description": "عباءة طويلة للتفاصيل الدقيقة والمناسبات.",
+      "price_mad": 2100,
+      "colors": ["كحلي", "أسود"],
+      "sizes": {"S": 1, "M": 1, "L": 0, "XL": 1},
+      "tags": ["سهرة", "فاخر"],
+      "image": "https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=600"
+    },
+    {
+      "id": "pan-001",
+      "name": "سروال شلحة",
+      "name_darija": "سروال شلحة",
+      "category": "ملابس",
+      "description": "سروال فضفاض مريح، قطن.",
+      "price_mad": 280,
+      "colors": ["أبيض", "أسود", "زيتوني"],
+      "sizes": {"S": 4, "M": 5, "L": 5, "XL": 2},
+      "tags": ["يومي", "مريح"],
+      "image": "https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=600"
+    }
+  ]
+}

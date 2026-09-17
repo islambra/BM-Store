@@ -1,0 +1,1 @@
+"""Boutique Darija shopping assistant."""
