@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.catalog import MockCatalog
-from app.gemini_chat import catalog_fallback
+from app.gemini_chat import catalog_fallback, is_product_query, prefetch_catalog
 from app.tools import dispatch
 
 
@@ -37,10 +37,26 @@ def test_fallback_survives_catalog_outage():
     result = catalog_fallback("واش كاين؟", BrokenCatalog())
     assert result["products"] == []
     assert result["message"]
+    assert "timings" in result
+
+
+def test_product_query_detection():
+    assert is_product_query("سلام") is False
+    assert is_product_query("واش كاين منتجات؟") is True
+    assert is_product_query("واش كاين فواكه مجففة؟") is True
+
+
+def test_prefetch_uses_catalog():
+    catalog = MockCatalog()
+    products, tool_name = prefetch_catalog("واش كاين فواكه مجففة؟", catalog)
+    assert tool_name in {"search_products", "list_products"}
+    assert products
 
 
 if __name__ == "__main__":
     test_fallback_lists_products()
     test_dispatch_does_not_crash_on_catalog_error()
     test_fallback_survives_catalog_outage()
+    test_product_query_detection()
+    test_prefetch_uses_catalog()
     print("chat fallback: ok")

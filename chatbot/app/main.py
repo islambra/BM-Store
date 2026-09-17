@@ -102,6 +102,7 @@ def chat(req: ChatRequest):
         "message": result["message"],
         "data": {"products": result.get("products") or []},
         "tools": result.get("tools") or [],
+        "timings": result.get("timings") or {},
         "handoff": handoff,
     }
 
