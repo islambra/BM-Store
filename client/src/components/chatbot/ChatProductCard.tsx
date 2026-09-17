@@ -3,7 +3,6 @@ import { useLanguage } from '../../context/LanguageContext'
 import { formatPrice } from '../common/Price'
 import { localizedName } from '../../utils/localize'
 import { normalizeChatProduct } from '../../utils/chatProduct'
-import type { ChatProduct } from '../../utils/chatProduct'
 
 export default function ChatProductCard({
   product,
@@ -44,18 +43,16 @@ export default function ChatProductCard({
         {!sizeLabel && item.stock != null ? (
           <p className="mt-1 text-[10px] text-ink-500">{t('chat.stock', { count: item.stock })}</p>
         ) : null}
-        <AskButton item={item} displayName={displayName} onAsk={onAsk} />
+        <AskButton displayName={displayName} onAsk={onAsk} />
       </div>
     </article>
   )
 }
 
 function AskButton({
-  item,
   displayName,
   onAsk,
 }: {
-  item: ChatProduct
   displayName: string
   onAsk?: (text: string) => void
 }) {
@@ -64,7 +61,7 @@ function AskButton({
   return (
     <button
       type="button"
-      onClick={() => onAsk(t('chat.askAbout', { name: displayName, id: item.id }))}
+      onClick={() => onAsk(t('chat.askAbout', { name: displayName }))}
       className="mt-2 w-full rounded-lg bg-ink-900 py-1.5 text-xs text-white hover:bg-ink-700"
     >
       {t('chat.askCta')}
