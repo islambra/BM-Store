@@ -36,6 +36,7 @@ import SellerAuthPage from './pages/SellerAuthPage'
 import StoresPage from './pages/StoresPage'
 import StorePage from './pages/StorePage'
 import { getStoreSlugFromHost, mainSiteUrl, storeVisitUrl } from './utils/storeUrl'
+import ChatWidget from './components/chatbot/ChatWidget'
 
 // Full-navigation redirects (cross-origin) to the main site or a store subdomain.
 function RedirectToMain() {
@@ -187,6 +188,7 @@ export default function App() {
               ) : (
                 <MainRoutes />
               )}
+              <ChatWidget />
             </AuthProvider>
           </StoreProvider>
         </CatalogProvider>

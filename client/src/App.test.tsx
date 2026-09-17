@@ -38,4 +38,11 @@ describe('App routing', () => {
     render(<App />)
     expect(screen.getByText('404')).toBeInTheDocument()
   })
+
+  it('shows the chatbot bubble on marketplace pages', async () => {
+    window.history.replaceState({}, '', '/')
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'Open chat' })).toBeInTheDocument()
+  })
 })
+)
