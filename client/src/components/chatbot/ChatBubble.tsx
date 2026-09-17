@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import axios from 'axios'
 import { MessageCircle, Send, X } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
-import { createChatSession, sendChatMessage } from '../../services/chatbot'
+import { sendChatMessage } from '../../services/chatbot'
 import type { ChatHandoff } from '../../services/chatbot'
 import ChatProductCard from './ChatProductCard'
 import TypingIndicator from './TypingIndicator'
@@ -18,6 +18,7 @@ export default function ChatBubble() {
   const { t, dir } = useLanguage()
   const [open, setOpen] = useState(false)
   const sessionRef = useRef<string | null>(null)
+  const sendingRef = useRef(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,45 +30,29 @@ export default function ChatBubble() {
     if (open) endRef.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [messages, loading, open])
 
-  const ensureSession = async () => {
-    if (sessionRef.current) return sessionRef.current
-    const session = await createChatSession()
-    sessionRef.current = session.sessionId
-    setMessages((prev) =>
-      prev.length
-        ? prev
-        : [
-            {
-              id: 'welcome',
-              type: 'bot',
-              content: t('chat.welcome'),
-            },
-          ],
-    )
-    return session.sessionId
-  }
-
-  const handleToggle = async () => {
+  const handleToggle = () => {
     const next = !open
     setOpen(next)
-    if (next && !sessionRef.current) {
-      try {
-        await ensureSession()
-      } catch {
-        setMessages([{ id: 'err', type: 'bot', content: t('chat.offline') }])
-      }
+    if (next && messages.length === 0) {
+      setMessages([
+        {
+          id: 'welcome',
+          type: 'bot',
+          content: t('chat.welcome'),
+        },
+      ])
     }
   }
 
   const handleSend = async (text?: string) => {
     const content = (text ?? draft).trim()
-    if (!content || loading) return
+    if (!content || sendingRef.current) return
+    sendingRef.current = true
     setDraft('')
     setMessages((prev) => [...prev, { id: `u-${Date.now()}`, type: 'user', content }])
     setLoading(true)
     try {
-      const sid = await ensureSession()
-      const response = await sendChatMessage(content, sid)
+      const response = await sendChatMessage(content, sessionRef.current)
       if (response.sessionId) sessionRef.current = response.sessionId
       setMessages((prev) => [
         ...prev,
@@ -88,6 +73,7 @@ export default function ChatBubble() {
       }
       setMessages((prev) => [...prev, { id: `e-${Date.now()}`, type: 'bot', content: fallback }])
     } finally {
+      sendingRef.current = false
       setLoading(false)
     }
   }
@@ -192,7 +178,7 @@ export default function ChatBubble() {
 
       <button
         type="button"
-        onClick={() => void handleToggle()}
+        onClick={handleToggle}
         className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-ink-900 text-white shadow-lift hover:bg-ink-700"
         aria-label={open ? t('chat.close') : t('chat.open')}
         aria-expanded={open}

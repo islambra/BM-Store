@@ -30,8 +30,10 @@ export async function createChatSession(): Promise<ChatSession> {
   return response.data
 }
 
-export async function sendChatMessage(message: string, sessionId: string): Promise<ChatResponse> {
-  const response = await chatbotApi.post<ChatResponse>('/api/chat', { message, sessionId })
+export async function sendChatMessage(message: string, sessionId?: string | null): Promise<ChatResponse> {
+  const body: { message: string; sessionId?: string } = { message }
+  if (sessionId) body.sessionId = sessionId
+  const response = await chatbotApi.post<ChatResponse>('/api/chat', body)
   return response.data
 }
 
