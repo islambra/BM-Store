@@ -5,7 +5,6 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
-from google.genai import errors as genai_errors
 
 from app.catalog import Catalog, get_catalog
 from app.config import GEMINI_API_KEY, GEMINI_MODEL
@@ -73,14 +72,59 @@ def _response_text(response) -> str:
     return "".join(chunks).strip()
 
 
+def _is_transient(exc: BaseException) -> bool:
+    message = str(exc)
+    return any(
+        token in message
+        for token in ("RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE", "429", "500", "503", "timeout", "Timeout")
+    )
+
+
+def catalog_fallback(user_message: str, catalog: Catalog) -> dict:
+    query = (user_message or "").strip()
+    products: list[dict] = []
+    try:
+        if query:
+            products = catalog.search_products(query=query)
+        if not products:
+            products = catalog.list_products()
+    except Exception:
+        products = []
+    products = products[:6]
+    if products:
+        names = "، ".join(
+            (item.get("name_darija") or item.get("name") or "").strip()
+            for item in products
+            if (item.get("name_darija") or item.get("name"))
+        )
+        message = f"هادي بعض المنتجات لي كاينين دوكا: {names}. واش تحبي نزيد نفصل؟"
+        tools = [{"name": "search_products", "args": {"query": query}}]
+    else:
+        message = "سمح لي، ما قدرت نجاوب دوكا. عاودي السؤال."
+        tools = []
+    return {
+        "message": message,
+        "products": products,
+        "tools": tools,
+        "handoff": None,
+    }
+
+
 def run_turn(
     user_message: str,
     history: Optional[list[dict]] = None,
     catalog: Optional[Catalog] = None,
 ) -> dict:
     catalog = catalog or get_catalog()
+    try:
+        return _run_gemini_turn(user_message, history or [], catalog)
+    except Exception:
+        return catalog_fallback(user_message, catalog)
+
+
+def _run_gemini_turn(user_message: str, history: list[dict], catalog: Catalog) -> dict:
     client = _client()
-    contents = _history_to_contents(history or [])
+    contents = _history_to_contents(history)
     contents.append(types.Content(role="user", parts=[types.Part(text=user_message)]))
 
     config = types.GenerateContentConfig(
@@ -97,7 +141,7 @@ def run_turn(
     for _ in range(5):
         response = None
         last_error = None
-        for attempt in range(4):
+        for attempt in range(3):
             try:
                 response = client.models.generate_content(
                     model=GEMINI_MODEL,
@@ -105,22 +149,24 @@ def run_turn(
                     config=config,
                 )
                 break
-            except genai_errors.ClientError as exc:
+            except Exception as exc:
                 last_error = exc
-                message = str(exc)
-                if "RESOURCE_EXHAUSTED" in message or "429" in message:
-                    time.sleep(3 * (attempt + 1))
+                if _is_transient(exc) and attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
                     continue
                 raise
         if response is None:
-            raise last_error
+            raise last_error or RuntimeError("Gemini returned no response")
         calls = _extract_function_calls(response)
         if not calls:
             text = _response_text(response)
             break
 
-        model_content = response.candidates[0].content
-        contents.append(model_content)
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates or not getattr(candidates[0], "content", None):
+            text = _response_text(response)
+            break
+        contents.append(candidates[0].content)
 
         fn_response_parts = []
         for call in calls:

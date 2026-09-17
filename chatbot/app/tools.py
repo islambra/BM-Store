@@ -73,28 +73,31 @@ def tool_declarations() -> list[dict]:
 
 def dispatch(catalog: Catalog, name: str, args: Optional[dict[str, Any]] = None) -> dict:
     args = args or {}
-    if name == "search_products":
-        products = catalog.search_products(
-            query=args.get("query") or "",
-            category=args.get("category"),
-            max_price_mad=args.get("max_price_mad"),
-            color=args.get("color"),
-            size=args.get("size"),
-        )
-        return {"count": len(products), "products": products}
-    if name == "get_product":
-        product = catalog.get_product(args.get("product_id") or "")
-        if not product:
-            return {"found": False, "error": "المنتج غير موجود"}
-        return {"found": True, "product": product}
-    if name == "list_products":
-        products = catalog.list_products(category=args.get("category"))
-        return {"count": len(products), "products": products}
-    if name == "check_stock":
-        return catalog.check_stock(args.get("product_id") or "", args.get("size"))
-    if name == "request_human_handoff":
-        return handoff_payload(args.get("reason") or "طلب الزبون", args.get("summary") or "")
-    return {"error": f"أداة غير معروفة: {name}"}
+    try:
+        if name == "search_products":
+            products = catalog.search_products(
+                query=args.get("query") or "",
+                category=args.get("category"),
+                max_price_mad=args.get("max_price_mad"),
+                color=args.get("color"),
+                size=args.get("size"),
+            )
+            return {"count": len(products), "products": products}
+        if name == "get_product":
+            product = catalog.get_product(args.get("product_id") or "")
+            if not product:
+                return {"found": False, "error": "المنتج غير موجود"}
+            return {"found": True, "product": product}
+        if name == "list_products":
+            products = catalog.list_products(category=args.get("category"))
+            return {"count": len(products), "products": products}
+        if name == "check_stock":
+            return catalog.check_stock(args.get("product_id") or "", args.get("size"))
+        if name == "request_human_handoff":
+            return handoff_payload(args.get("reason") or "طلب الزبون", args.get("summary") or "")
+        return {"error": f"أداة غير معروفة: {name}"}
+    except Exception as exc:
+        return {"error": f"فشل الكتالوج: {exc.__class__.__name__}"}
 
 
 def collect_products(tool_results: list[dict]) -> list[dict]:

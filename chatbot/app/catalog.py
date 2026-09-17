@@ -213,12 +213,12 @@ class ApiCatalog(Catalog):
             return response.json()
 
     def _all_products(self, extra_params: Optional[dict] = None) -> list[dict]:
-        params = {"limit": 100, "page": 1}
+        params = {"limit": 50, "page": 1}
         if extra_params:
             params.update({k: v for k, v in extra_params.items() if v not in (None, "")})
         first = self._get("/products", params=params)
         items = list(_extract_products(first))
-        pages = _page_count(first)
+        pages = min(_page_count(first), 2)
         for page in range(2, pages + 1):
             params["page"] = page
             payload = self._get("/products", params=params)
