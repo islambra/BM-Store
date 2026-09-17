@@ -1228,7 +1228,7 @@ export interface PostRecord {
     oldPrice?: number
     isSpecialOffer?: boolean
     discount?: number
-  }
+  } | null
   status: 'draft' | 'published'
   likesCount?: number
   commentsCount?: number

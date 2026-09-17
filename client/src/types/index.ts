@@ -133,7 +133,7 @@ export interface Post {
   mediaType: 'images' | 'video'
   images: string[]
   video?: string | null
-  productId: PostProduct
+  productId: PostProduct | null
   status: 'draft' | 'published'
   createdAt: string
   updatedAt: string

@@ -17,7 +17,7 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
   const rtl = lang === 'ar'
   const ArrowIcon = rtl ? ArrowLeft : ArrowRight
   const text = rtl ? (post.textAr || post.textEn) : (post.textEn || post.textAr)
-  const productName = rtl ? (post.product.nameAr || post.product.name) : post.product.name
+  const productName = post.product ? (rtl ? (post.product.nameAr || post.product.name) : post.product.name) : ''
   const title = text?.split('\n')[0] || t('posts.newPost')
 
   const [liked, setLiked] = useState(post.userLiked)
@@ -106,31 +106,35 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
             </p>
           )}
 
-          {/* Linked product — labelled section, fully clickable */}
-          <p className="mb-1 mt-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">{t('posts.featuredProduct')}</p>
-          <Link
-            to={`/product/${post.product.slug}`}
-            className="flex items-center gap-2.5 rounded-xl border border-line bg-canvas px-2.5 py-2 transition-colors duration-200 hover:border-brand-300 hover:bg-brand-50/50"
-          >
-            <img
-              src={post.product.image}
-              alt={productName}
-              className="h-10 w-10 shrink-0 rounded-lg object-cover"
-              loading="lazy"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-bold leading-tight text-ink-900">{productName}</p>
-              <div className="mt-0.5 flex items-baseline gap-1.5 leading-tight">
-                <span className="text-[13px] font-bold text-brand-700">
-                  {formatPrice(post.product.price, lang)}
-                </span>
-                {post.product.isSpecialOffer && post.product.oldPrice && post.product.oldPrice > post.product.price && (
-                  <span className="text-[11px] text-ink-400 line-through">{formatPrice(post.product.oldPrice, lang)}</span>
-                )}
-              </div>
-            </div>
-            <ArrowIcon size={15} className="shrink-0 text-ink-300 transition-colors group-hover:text-brand-600" />
-          </Link>
+          {/* Linked product — labelled section, fully clickable (optional on posts) */}
+          {post.product && (
+            <>
+              <p className="mb-1 mt-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">{t('posts.featuredProduct')}</p>
+              <Link
+                to={`/product/${post.product.slug}`}
+                className="flex items-center gap-2.5 rounded-xl border border-line bg-canvas px-2.5 py-2 transition-colors duration-200 hover:border-brand-300 hover:bg-brand-50/50"
+              >
+                <img
+                  src={post.product.image}
+                  alt={productName}
+                  className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                  loading="lazy"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-bold leading-tight text-ink-900">{productName}</p>
+                  <div className="mt-0.5 flex items-baseline gap-1.5 leading-tight">
+                    <span className="text-[13px] font-bold text-brand-700">
+                      {formatPrice(post.product.price, lang)}
+                    </span>
+                    {post.product.isSpecialOffer && post.product.oldPrice && post.product.oldPrice > post.product.price && (
+                      <span className="text-[11px] text-ink-400 line-through">{formatPrice(post.product.oldPrice, lang)}</span>
+                    )}
+                  </div>
+                </div>
+                <ArrowIcon size={15} className="shrink-0 text-ink-300 transition-colors group-hover:text-brand-600" />
+              </Link>
+            </>
+          )}
 
           {/* Like count — small, subtle, above the action row */}
           {likesCount > 0 && (

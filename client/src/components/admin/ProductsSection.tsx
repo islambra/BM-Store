@@ -216,8 +216,8 @@ export default function ProductsSection() {
       {modalOpen && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center p-3 sm:items-center sm:p-6">
           <div className="absolute inset-0 animate-fade-in bg-ink-900/60 backdrop-blur-md" onClick={closeModal} />
-          <div className="relative max-h-[92vh] w-full max-w-2xl animate-pop overflow-hidden rounded-3xl bg-surface shadow-lift">
-            <div className="flex items-start justify-between gap-3 border-b border-line bg-canvas/60 px-6 py-4">
+          <div className="relative flex max-h-[92vh] w-full max-w-2xl animate-pop flex-col overflow-hidden rounded-3xl bg-surface shadow-lift">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-canvas/60 px-6 py-4">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-bold text-ink-900">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
@@ -234,7 +234,7 @@ export default function ProductsSection() {
               </button>
             </div>
 
-            <div className="max-h-[calc(92vh-8rem)] space-y-5 overflow-y-auto px-6 py-5">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
               {formError && <Alert tone="danger">{formError}</Alert>}
 
               <div>
@@ -338,7 +338,7 @@ export default function ProductsSection() {
               </Field>
             </div>
 
-            <div className="flex flex-col-reverse gap-2.5 border-t border-line bg-canvas/60 px-6 py-3.5 sm:flex-row sm:justify-end">
+            <div className="flex shrink-0 flex-col-reverse gap-2.5 border-t border-line bg-canvas/60 px-6 py-3.5 sm:flex-row sm:justify-end">
               <button type="button" onClick={closeModal} disabled={formBusy} className="btn-ghost sm:w-auto">
                 {t('common.cancel')}
               </button>

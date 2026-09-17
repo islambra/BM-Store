@@ -181,7 +181,7 @@ export interface PostItem {
   mediaType: 'images' | 'video'
   images: string[]
   video?: string | null
-  product: {
+  product?: {
     id: string
     name: string
     nameAr?: string
@@ -198,8 +198,7 @@ export interface PostItem {
   createdAt: string
 }
 
-export function toPost(r: PostRecord): PostItem | null {
-  if (!r.productId) return null
+export function toPost(r: PostRecord): PostItem {
   const p = r.productId
   return {
     id: r._id,
@@ -208,17 +207,19 @@ export function toPost(r: PostRecord): PostItem | null {
     mediaType: r.mediaType,
     images: r.images ?? [],
     video: r.video,
-    product: {
-      id: p._id,
-      name: p.name,
-      nameAr: p.nameAr,
-      slug: p.slug,
-      image: p.image,
-      price: p.price,
-      oldPrice: p.oldPrice,
-      isSpecialOffer: p.isSpecialOffer,
-      discount: p.discount,
-    },
+    product: p
+      ? {
+          id: p._id,
+          name: p.name,
+          nameAr: p.nameAr,
+          slug: p.slug,
+          image: p.image,
+          price: p.price,
+          oldPrice: p.oldPrice,
+          isSpecialOffer: p.isSpecialOffer,
+          discount: p.discount,
+        }
+      : undefined,
     likesCount: r.likesCount ?? 0,
     commentsCount: r.commentsCount ?? 0,
     userLiked: r.userLiked ?? false,
@@ -228,13 +229,13 @@ export function toPost(r: PostRecord): PostItem | null {
 
 export async function loadHomePosts(): Promise<PostItem[]> {
   const records = await getPublishedPostsHome()
-  return records.map(toPost).filter(Boolean) as PostItem[]
+  return records.map(toPost)
 }
 
 export async function loadPostsPage(page = 1, limit = 6): Promise<{ posts: PostItem[]; total: number; pages: number }> {
   const res = await getPublishedPosts({ page, limit })
   return {
-    posts: res.posts.map(toPost).filter(Boolean) as PostItem[],
+    posts: res.posts.map(toPost),
     total: res.total,
     pages: res.pages,
   }
