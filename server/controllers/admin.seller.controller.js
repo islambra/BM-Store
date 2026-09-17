@@ -188,12 +188,15 @@ export const adminApproveStoreRequest = asyncHandler(async (req, res) => {
   if (request.status !== 'pending') return sendError(res, 'Request has already been processed', 400)
 
   if (request.isRenewal) {
-    // Renewal request - extend subscription
+    // Renewal request - extend subscription. Any unexpired time left on the
+    // current plan is carried over and added on top of the new plan period.
     const store = await Store.findById(request.store)
     if (!store) return sendError(res, 'Store not found', 404)
 
-    const startDate = new Date()
-    const endDate = new Date(startDate)
+    const now = new Date()
+    const currentEnd = store.subscriptionEndDate ? new Date(store.subscriptionEndDate) : null
+    const startDate = now
+    const endDate = new Date(currentEnd && currentEnd > now ? currentEnd : now)
     if (request.subscriptionPlan === 'monthly') {
       endDate.setMonth(endDate.getMonth() + 1)
     } else {

@@ -81,6 +81,45 @@ function RejectModal({
   )
 }
 
+function ProofModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const { t } = useLanguage()
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [onClose])
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('admin.storeRequests.proof')}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    >
+      <div className="absolute inset-0 animate-fade-in bg-ink-900/80 backdrop-blur-lg" onClick={onClose} />
+      <div className="relative flex w-full max-w-3xl animate-pop flex-col overflow-hidden rounded-3xl border border-white/10 bg-surface shadow-lift">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+          <h2 className="text-base font-bold text-ink-900">{t('admin.storeRequests.proof')}</h2>
+          <button type="button" onClick={onClose} aria-label={t('common.close')} className="btn-ghost btn-sm inline-flex items-center gap-1">
+            <X size={16} />
+            {t('common.close')}
+          </button>
+        </div>
+        <div className="max-h-[75vh] overflow-auto bg-canvas/60 p-4">
+          <img src={url} alt={t('admin.storeRequests.proof')} className="mx-auto max-h-[70vh] w-auto rounded-xl object-contain" />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 export default function StoreRequestsSection() {
   const { t } = useLanguage()
   const [requests, setRequests] = useState<api.AdminStoreRequestRecord[]>([])
@@ -91,6 +130,7 @@ export default function StoreRequestsSection() {
   const [pages, setPages] = useState(0)
   const [toApprove, setToApprove] = useState<api.AdminStoreRequestRecord | null>(null)
   const [toReject, setToReject] = useState<api.AdminStoreRequestRecord | null>(null)
+  const [proofUrl, setProofUrl] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -186,7 +226,7 @@ export default function StoreRequestsSection() {
                     {r.paymentProof && (
                       <button
                         type="button"
-                        onClick={() => window.open(r.paymentProof, '_blank', 'noopener,noreferrer')}
+                        onClick={() => setProofUrl(r.paymentProof)}
                         className="btn-secondary"
                       >
                         {t('admin.storeRequests.proof')}
@@ -247,6 +287,8 @@ export default function StoreRequestsSection() {
           onCancel={() => { setToReject(null); setRejectReason('') }}
         />
       )}
+
+      {proofUrl && <ProofModal url={proofUrl} onClose={() => setProofUrl(null)} />}
     </div>
   )
 }

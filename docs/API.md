@@ -256,6 +256,7 @@ double-credit.
 | GET    | `/marketer/payments`    | payouts for this marketer                                    | `{payouts}` |
 | POST   | `/marketer/payments/:id/confirm-received` | owner (marketer) only; single atomic `sent` → `received` transition (repeat → 400) | `{payout}` |
 | POST   | `/marketer/payments/:id/report-not-received` | owner (marketer) only; single atomic `sent` → `disputed` transition | `{payout}` |
+| DELETE | `/marketer/payments/:id` | owner (marketer) only; hard-deletes the payout. A `sent` payout's reserved commissions return to `AVAILABLE`; `received` commissions stay paid | – |
 
 `profile` is `{id, publicName, bio, avatar, referralCode, referralLink, status, payoutDetails, totalEarnings, createdAt, user:{id, name, email, phone, avatar}}`.
 `stats` is `{visits, customers, orders, deliveredOrders, pendingEarnings, availableBalance, payoutRequested, paymentSent, totalPaid, disputed, cancelled, totalEarnings}`. Money is integer DZD, computed server-side only. `totalEarnings` counts only earned (delivered) commissions — `PENDING` and `CANCELLED` are excluded. `availableBalance` includes commissions reserved in a payout that the marketer has not yet confirmed (`PAYOUT_REQUESTED`); it drops only on `RECEIVED` (marketer accepts the payment).
@@ -293,7 +294,7 @@ confirmation. The old per-product reward system (`Reward` model,
 | GET    | `/admin/marketers`         | marketers + profile + computed stats (incl. `availableBalance`, phone). Per-marketer detail (orders/commissions/referrals/payouts) is **marketer-only** via `/marketer/*` | `{marketers}` |
 | PATCH  | `/admin/marketers/:id/status` | `{status: active\|suspended}`            | `{marketing}` |
 | DELETE | `/admin/marketers/:id`     | deletes user + profile + referrals + commissions + payouts | `{id}` |
-| GET    | `/admin/orders`            |                                             | `{orders}` |
+| GET    | `/admin/orders`            | `?status&ownerType`; `ownerType=BM` returns BM Store orders only (`store: null`), `ownerType=SELLER` returns seller-store orders only; omitted returns all | `{orders}` |
 | PATCH  | `/admin/orders/:id/status` | enforces the order state machine            | `{order}` |
 | GET    | `/admin/products`          | `?page&limit&q&category&isActive`           | `{products}` |
 | POST   | `/admin/products`          | `{nameAr, descriptionAr?, price, oldPrice?, category, image?, images?, isSpecialOffer?}`; Arabic text auto-translated to English (name → `name`, description → `description`); special offer requires `oldPrice > price`; `images` capped at 5 | `{product}` (201) |

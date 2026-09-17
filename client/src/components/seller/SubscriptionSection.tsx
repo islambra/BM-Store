@@ -223,6 +223,12 @@ export default function SellerSubscriptionSection() {
         <h3 className="text-lg font-semibold text-ink-900">{t('seller.subscription.renew')}</h3>
         <p className="mt-1 text-sm text-ink-500">{t('seller.subscription.renewDesc')}</p>
 
+        {subscription.daysRemaining > 0 && (
+          <div className="mt-3">
+            <Alert tone="info">{t('seller.subscription.carryOver', { days: subscription.daysRemaining })}</Alert>
+          </div>
+        )}
+
         <form onSubmit={handleRenewalSubmit} className="mt-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-ink-700 mb-2">{t('seller.subscription.plan')}</label>

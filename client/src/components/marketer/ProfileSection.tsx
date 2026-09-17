@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CreditCard, KeyRound, Phone, ShieldCheck, Smartphone, UserRound, Wallet } from 'lucide-react'
+import { CreditCard, KeyRound, Phone, ShieldCheck, Smartphone, Wallet } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -106,18 +106,6 @@ export default function ProfileSection() {
           </Field>
           <Field label={t('marketer.phone')}>
             <Input icon={Phone} dir="ltr" value={state.phone} onChange={(e) => setForm((s) => ({ ...s, ...state, phone: e.target.value }))} />
-          </Field>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-line bg-surface p-6">
-        <h3 className="flex items-center gap-2 text-sm font-bold text-ink-900">
-          <UserRound size={16} className="text-brand-600" />
-          {t('marketer.publicProfile')}
-        </h3>
-        <div className="mt-4 grid gap-3">
-          <Field label={t('marketer.publicName')}>
-            <Input value={state.publicName} onChange={(e) => setForm((s) => ({ ...s, ...state, publicName: e.target.value }))} />
           </Field>
         </div>
       </div>

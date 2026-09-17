@@ -51,7 +51,7 @@ function actionsFor(status: string): StatusAction[] {
 
 export default function OrdersSection() {
   const { t, lang } = useLanguage()
-  const { data, loading, error, reload } = useAsync(() => api.getAdminOrders())
+  const { data, loading, error, reload } = useAsync(() => api.getAdminOrders({ ownerType: 'BM' }))
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [pending, setPending] = useState<{ order: api.AdminOrderRecord; action: StatusAction } | null>(null)

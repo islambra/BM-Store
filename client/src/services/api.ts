@@ -513,6 +513,10 @@ export function reportPayoutNotReceived(id: string) {
   return post<{ payout: MarketerPayoutRecord }>(`/marketer/payments/${id}/report-not-received`)
 }
 
+export function deleteMarketerPayout(id: string) {
+  return remove<null>(`/marketer/payments/${id}`)
+}
+
 // ---- seller ----------------------------------------------------------------
 
 export interface SellerProfilePayload {
@@ -1079,8 +1083,9 @@ export function updateMarketerStatus(id: string, status: 'active' | 'suspended')
   return patch<Record<string, unknown>>(`/admin/marketers/${id}/status`, { status })
 }
 
-export function getAdminOrders() {
-  return get<Page & { orders: AdminOrderRecord[] }>('/admin/orders')
+export function getAdminOrders(params?: { ownerType?: 'BM' | 'SELLER' }) {
+  const q = params?.ownerType ? `?ownerType=${params.ownerType}` : ''
+  return get<Page & { orders: AdminOrderRecord[] }>(`/admin/orders${q}`)
 }
 
 export function updateAdminOrderStatus(id: string, status: string) {

@@ -454,6 +454,61 @@ describe('payout workflow', () => {
     assert.equal(res.status, 403)
   })
 
+  it('marketer deletes a pending payout and its reserved commissions return to available', async () => {
+    const { admin, user } = await primeMarketerAndDeliver('delete-sent-visitor')
+    const agent = await marketerAgent(user)
+
+    const payout = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 200, method: 'CCP' })
+    assert.equal(payout.status, 201)
+    const payoutId = payout.body.data._id
+
+    const before = await agent.get('/api/marketer/me')
+    assert.equal(before.body.data.stats.payoutRequested, 200)
+
+    const deleted = await agent.delete(`/api/marketer/payments/${payoutId}`)
+    assert.equal(deleted.status, 200)
+    assert.equal(await Payout.countDocuments({ _id: payoutId }), 0)
+
+    const commission = await Commission.findOne({ marketer: user._id }).lean()
+    assert.equal(commission.status, 'AVAILABLE')
+
+    const after = await agent.get('/api/marketer/me')
+    assert.equal(after.body.data.stats.payoutRequested, 0)
+    assert.equal(after.body.data.stats.availableBalance, 200)
+  })
+
+  it('deleting a received payout keeps its commissions paid', async () => {
+    const { admin, user } = await primeMarketerAndDeliver('delete-received-visitor')
+    const agent = await marketerAgent(user)
+
+    const payout = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 200, method: 'CCP' })
+    const payoutId = payout.body.data._id
+    const confirmed = await agent.post(`/api/marketer/payments/${payoutId}/confirm-received`)
+    assert.equal(confirmed.status, 200)
+
+    const deleted = await agent.delete(`/api/marketer/payments/${payoutId}`)
+    assert.equal(deleted.status, 200)
+    assert.equal(await Payout.countDocuments({ _id: payoutId }), 0)
+
+    const commission = await Commission.findOne({ marketer: user._id }).lean()
+    assert.equal(commission.status, 'RECEIVED')
+    const stats = await agent.get('/api/marketer/me')
+    assert.equal(stats.body.data.stats.totalPaid, 200)
+    assert.equal(stats.body.data.stats.availableBalance, 0)
+  })
+
+  it('a marketer cannot delete another marketer payout', async () => {
+    const { admin, user } = await primeMarketerAndDeliver('delete-owner-visitor')
+    const payout = await admin.post('/api/admin/payouts').send({ marketerId: user._id, amount: 200, method: 'CCP' })
+    const payoutId = payout.body.data._id
+
+    const intruder = await createUser({ role: 'MARKETER' })
+    const intruderAgent = await marketerAgent(intruder)
+    const res = await intruderAgent.delete(`/api/marketer/payments/${payoutId}`)
+    assert.equal(res.status, 403)
+    assert.equal(await Payout.countDocuments({ _id: payoutId }), 1)
+  })
+
   it('marketer can view their own orders, commissions and stats', async () => {
     const { user, referral } = await primeMarketerAndDeliver('marketer-detail-visitor')
     const agent = await marketerAgent(user)

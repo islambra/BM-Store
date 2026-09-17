@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, HandCoins, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, HandCoins, Trash2, TriangleAlert } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
@@ -13,7 +13,7 @@ import { ErrorNote, Loader } from '../admin/adminShared'
 export default function PaymentsSection() {
   const { t, lang } = useLanguage()
   const { data, loading, error, reload } = useAsync(() => api.getMarketerPayments())
-  const [action, setAction] = useState<{ payout: api.MarketerPayoutRecord; kind: 'confirm' | 'dispute' } | null>(null)
+  const [action, setAction] = useState<{ payout: api.MarketerPayoutRecord; kind: 'confirm' | 'dispute' | 'delete' } | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -30,8 +30,10 @@ export default function PaymentsSection() {
     try {
       if (action.kind === 'confirm') {
         await api.confirmPayoutReceived(String(action.payout._id))
-      } else {
+      } else if (action.kind === 'dispute') {
         await api.reportPayoutNotReceived(String(action.payout._id))
+      } else {
+        await api.deleteMarketerPayout(String(action.payout._id))
       }
       setAction(null)
       void reload()
@@ -67,22 +69,32 @@ export default function PaymentsSection() {
                   {new Date(p.sentAt ?? p.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US')}
                   {p.notes ? ` · ${p.notes}` : ''}
                 </p>
-                {p.status === 'sent' && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={() => setAction({ payout: p, kind: 'confirm' })} className="btn-primary btn-sm">
-                      <CheckCircle2 size={14} />
-                      {t('marketer.confirmReceived')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAction({ payout: p, kind: 'dispute' })}
-                      className="btn-secondary btn-sm text-danger-700"
-                    >
-                      <TriangleAlert size={14} />
-                      {t('marketer.notReceived')}
-                    </button>
-                  </div>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {p.status === 'sent' && (
+                    <>
+                      <button type="button" onClick={() => setAction({ payout: p, kind: 'confirm' })} className="btn-primary btn-sm">
+                        <CheckCircle2 size={14} />
+                        {t('marketer.confirmReceived')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAction({ payout: p, kind: 'dispute' })}
+                        className="btn-secondary btn-sm text-danger-700"
+                      >
+                        <TriangleAlert size={14} />
+                        {t('marketer.notReceived')}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAction({ payout: p, kind: 'delete' })}
+                    className="btn-ghost btn-sm text-danger-700"
+                  >
+                    <Trash2 size={14} />
+                    {t('marketer.deletePayment')}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -91,12 +103,30 @@ export default function PaymentsSection() {
 
       <ConfirmDialog
         open={Boolean(action)}
-        title={action?.kind === 'confirm' ? t('marketer.confirmReceivedTitle') : t('marketer.notReceivedTitle')}
-        description={action?.kind === 'confirm' ? t('marketer.confirmReceivedDesc') : t('marketer.notReceivedDesc')}
-        confirmLabel={action?.kind === 'confirm' ? t('marketer.confirmReceived') : t('marketer.notReceived')}
+        title={
+          action?.kind === 'confirm'
+            ? t('marketer.confirmReceivedTitle')
+            : action?.kind === 'dispute'
+              ? t('marketer.notReceivedTitle')
+              : t('marketer.deletePaymentTitle')
+        }
+        description={
+          action?.kind === 'confirm'
+            ? t('marketer.confirmReceivedDesc')
+            : action?.kind === 'dispute'
+              ? t('marketer.notReceivedDesc')
+              : t('marketer.deletePaymentDesc')
+        }
+        confirmLabel={
+          action?.kind === 'confirm'
+            ? t('marketer.confirmReceived')
+            : action?.kind === 'dispute'
+              ? t('marketer.notReceived')
+              : t('marketer.deletePayment')
+        }
         cancelLabel={t('common.cancel')}
         busy={busy}
-        danger={action?.kind === 'dispute'}
+        danger={action?.kind !== 'confirm'}
         onConfirm={() => void runAction()}
         onCancel={() => setAction(null)}
       />

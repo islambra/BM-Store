@@ -3,9 +3,11 @@ import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import app from '../app.js'
-import { connectTest, disconnectTest } from './helpers.mjs'
+import { connectTest, disconnectTest, createAdmin, uniquePhone } from './helpers.mjs'
 import Product from '../models/Product.js'
 import Category from '../models/Category.js'
+import Seller from '../models/Seller.js'
+import Store from '../models/Store.js'
 
 describe('public stores: BM Store is NOT a seller store', () => {
   before(connectTest)
@@ -48,5 +50,59 @@ describe('public stores: BM Store is NOT a seller store', () => {
       .expect((res) => {
         assert.ok(Array.isArray(res.body.data.stores))
       })
+  })
+})
+
+describe('seller subscription renewal', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  async function adminAgent() {
+    const { phone, password } = await createAdmin()
+    const agent = request.agent(app)
+    await agent.post('/api/auth/login').send({ phone, password })
+    return agent
+  }
+
+  it('adds the remaining unexpired days on top of the new plan period', async () => {
+    const number = uniquePhone()
+    await request(app).post('/api/seller/register').send({
+      fullName: 'Renew Seller',
+      email: `renew-${number}@test.dev`,
+      phone: number,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    const sellerAgent = request.agent(app)
+    const login = await sellerAgent.post('/api/seller/login').send({ phone: number, password: 'Secret@1234' })
+    assert.equal(login.status, 200)
+
+    const seller = await Seller.findOne({ phone: number }).lean()
+    const oldEnd = new Date(Date.now() + 10 * 86400000)
+    const store = await Store.create({
+      seller: seller._id,
+      name: 'Renew Store',
+      slug: `renew-store-${Date.now()}`,
+      status: 'active',
+      subscriptionPlan: 'monthly',
+      subscriptionStartDate: new Date(),
+      subscriptionEndDate: oldEnd,
+    })
+
+    const submitted = await sellerAgent.post('/api/store/subscription/renew').send({
+      subscriptionPlan: 'monthly',
+      paymentProof: 'https://img/proof.jpg',
+    })
+    assert.equal(submitted.status, 201)
+    const requestId = submitted.body.data.storeRequest._id
+
+    const approved = await adminAgent().then((admin) => admin.post(`/api/admin/store-requests/${requestId}/approve`))
+    assert.equal(approved.status, 200)
+
+    const updated = await Store.findById(store._id).lean()
+    const newEnd = new Date(updated.subscriptionEndDate)
+    const days = (newEnd - Date.now()) / 86400000
+    assert.ok(days > 38 && days < 42, `expected ~40 days (10 carried over + 1 month), got ${days}`)
+    assert.ok(newEnd > oldEnd, 'new end date must be later than the old end date')
   })
 })

@@ -576,6 +576,8 @@ export const listOrders = asyncHandler(async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = {}
   if (req.query.status) query.status = req.query.status
+  if (req.query.ownerType === 'BM') query.store = null
+  else if (req.query.ownerType === 'SELLER') query.store = { $ne: null }
 
   const [orders, total] = await Promise.all([
     Order.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).populate('marketer', 'name phone').lean(),

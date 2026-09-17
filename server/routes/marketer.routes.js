@@ -9,6 +9,7 @@ import {
   getMarketerPayouts,
   confirmPayoutReceived,
   reportPayoutNotReceived,
+  deleteMarketerPayout,
 } from '../controllers/marketer.controller.js'
 
 const router = Router()
@@ -24,5 +25,6 @@ router.get('/earnings', getMarketerEarnings)
 router.get('/payments', getMarketerPayouts)
 router.post('/payments/:id/confirm-received', confirmPayoutReceived)
 router.post('/payments/:id/report-not-received', reportPayoutNotReceived)
+router.delete('/payments/:id', deleteMarketerPayout)
 
 export default router

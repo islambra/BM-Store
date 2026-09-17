@@ -716,4 +716,57 @@ describe('admin + seller order deletion', () => {
     assert.equal((await Product.findById(sellerA.product._id)).stock, 10)
     assert.equal((await Product.findById(sellerA.product._id)).confirmedSales, 0)
   })
+
+  it('filters the admin order list by BM Store vs seller stores', async () => {
+    const admin = await adminAgent()
+
+    const bmProduct = await createProduct({ name: 'BM Filter', price: 300, stock: 5 })
+    const bmOrder = await adminOrder(admin, bmProduct)
+
+    const number = uniquePhone()
+    await request(app).post('/api/seller/register').send({
+      fullName: 'Filter Seller',
+      email: `filter-${number}@test.dev`,
+      phone: number,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    const seller = await Seller.findOne({ phone: number.replace(/[\s-]+/g, '') }).lean()
+    const store = await Store.create({
+      seller: seller._id,
+      name: 'Filter Store',
+      slug: `filter-store-${Date.now()}`,
+      status: 'active',
+      subscriptionEndDate: new Date(Date.now() + 86400000 * 30),
+    })
+    const sellerProduct = await createProduct({ name: 'Seller Filter', price: 500, stock: 10 })
+    await Product.updateOne({ _id: sellerProduct._id }, { $set: { ownerType: 'SELLER', store: store._id, seller: seller._id } })
+
+    const customerPhone = uniquePhone()
+    await request(app).post('/api/auth/register').send({
+      name: 'Filter Customer',
+      phone: customerPhone,
+      password: 'Secret@1234',
+    })
+    const customer = request.agent(app)
+    await customer.post('/api/auth/login').send({ phone: customerPhone, password: 'Secret@1234' })
+    const created = await customer.post('/api/orders').send({
+      items: [{ productId: sellerProduct._id, qty: 1 }],
+      customer: customerInfo,
+    })
+    assert.equal(created.status, 201)
+    const sellerOrderId = created.body.data.order._id
+
+    const bmOnly = await admin.get('/api/admin/orders?ownerType=BM')
+    assert.equal(bmOnly.status, 200)
+    const bmIds = bmOnly.body.data.orders.map((o) => String(o._id))
+    assert.ok(bmIds.includes(String(bmOrder._id)))
+    assert.ok(!bmIds.includes(String(sellerOrderId)))
+
+    const sellerOnly = await admin.get('/api/admin/orders?ownerType=SELLER')
+    assert.equal(sellerOnly.status, 200)
+    const sellerIds = sellerOnly.body.data.orders.map((o) => String(o._id))
+    assert.ok(sellerIds.includes(String(sellerOrderId)))
+    assert.ok(!sellerIds.includes(String(bmOrder._id)))
+  })
 })

@@ -216,3 +216,27 @@ export const reportPayoutNotReceived = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, { payout }, 'Payout dispute recorded')
 })
+
+export const deleteMarketerPayout = asyncHandler(async (req, res) => {
+  // Owner-only hard delete. Deleting a `sent` payout releases its reserved
+  // commissions (PAYOUT_REQUESTED → AVAILABLE) so the balance never gets stuck;
+  // `received` commissions stay paid, and `disputed`/`cancelled` ones are
+  // already available.
+  const payout = await Payout.findOneAndDelete({ _id: req.params.id, marketer: req.user._id })
+  if (!payout) {
+    const existing = await Payout.findById(req.params.id).select('marketer').lean()
+    if (existing && !isOwner(req, existing)) {
+      return sendError(res, 'You do not have permission to perform this action', 403)
+    }
+    return sendError(res, 'Payout not found', 404)
+  }
+
+  if (payout.commissions?.length) {
+    await Commission.updateMany(
+      { _id: { $in: payout.commissions }, status: 'PAYOUT_REQUESTED' },
+      { $set: { status: 'AVAILABLE' } }
+    )
+  }
+
+  return sendSuccess(res, null, 'Payout deleted')
+})
