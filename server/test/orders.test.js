@@ -107,9 +107,9 @@ describe('orders', () => {
     assert.equal(res.body.data.order.items[0].price, 500)
   })
 
-  it('accepts any quantity (no stock tracking)', async () => {
+  it('accepts any quantity at creation (stock is only enforced on confirm)', async () => {
     const agent = await createCustomerAgent()
-    const product = await createProduct({ name: 'Open Order', price: 300 })
+    const product = await createProduct({ name: 'Open Order', price: 300, stock: 2 })
     const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 5 }],
       customer: {
@@ -343,7 +343,7 @@ describe('admin order management + product CRUD', () => {
     const admin = request.agent(app)
     await admin.post('/api/auth/login').send({ phone, password })
 
-    const product = await createProduct({ name: 'Ordered', price: 100 })
+    const product = await createProduct({ name: 'Ordered', price: 100, stock: 5 })
     const order = await admin.post('/api/orders').send({
       items: [{ productId: product._id, qty: 1 }],
       customer: { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
@@ -395,6 +395,119 @@ describe('admin order management + product CRUD', () => {
 
     const rejectedAfter = await admin.patch(`/api/admin/orders/${id}/status`).send({ status: 'rejected' })
     assert.equal(rejectedAfter.status, 400)
+  })
+})
+
+describe('stock tracking (BM Store products only)', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  const customerInfo = { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' }
+
+  async function adminAgent() {
+    const { phone, password } = await createAdmin()
+    const admin = request.agent(app)
+    await admin.post('/api/auth/login').send({ phone, password })
+    return admin
+  }
+
+  async function adminOrder(admin, product, qty = 1) {
+    const res = await admin.post('/api/orders').send({
+      items: [{ productId: product._id, qty }],
+      customer: customerInfo,
+    })
+    assert.equal(res.status, 201)
+    return res.body.data.order
+  }
+
+  it('admin product create/update persists a non-negative integer stock', async () => {
+    const admin = await adminAgent()
+
+    const created = await admin.post('/api/admin/products').send({
+      name: 'Stocked Admin Product',
+      price: 900,
+      category: 'spices',
+      stock: 25,
+    })
+    assert.equal(created.status, 201)
+    assert.equal(created.body.data.stock, 25)
+
+    const updated = await admin.patch(`/api/admin/products/${created.body.data._id}`).send({ stock: 7 })
+    assert.equal(updated.status, 200)
+    assert.equal(updated.body.data.stock, 7)
+
+    const clamped = await admin.patch(`/api/admin/products/${created.body.data._id}`).send({ stock: -3 })
+    assert.equal(clamped.status, 200)
+    assert.equal(clamped.body.data.stock, 0)
+  })
+
+  it('confirming an order decrements stock and increments confirmedSales', async () => {
+    const admin = await adminAgent()
+    const product = await createProduct({ name: 'Stocked', price: 500, stock: 10 })
+    const order = await adminOrder(admin, product, 3)
+    assert.equal((await Product.findById(product._id)).stock, 10)
+
+    const confirmed = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
+    assert.equal(confirmed.status, 200)
+    assert.equal((await Product.findById(product._id)).stock, 7)
+    assert.equal((await Product.findById(product._id)).confirmedSales, 3)
+  })
+
+  it('blocks confirming an order when stock is insufficient and leaves stock untouched', async () => {
+    const admin = await adminAgent()
+    const product = await createProduct({ name: 'Short', price: 300, stock: 2 })
+    const order = await adminOrder(admin, product, 5)
+
+    const confirmed = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
+    assert.equal(confirmed.status, 400)
+    assert.match(confirmed.body.message, /insufficient stock/i)
+    const doc = await Product.findById(product._id)
+    assert.equal(doc.stock, 2)
+    assert.equal(doc.confirmedSales, 0)
+    assert.equal((await Order.findById(order._id)).status, 'pending')
+  })
+
+  it('cancelling a confirmed order restores stock to BM Store products', async () => {
+    const admin = await adminAgent()
+    const product = await createProduct({ name: 'Restore', price: 400, stock: 6 })
+    const order = await adminOrder(admin, product, 2)
+
+    await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
+    assert.equal((await Product.findById(product._id)).stock, 4)
+
+    const cancelled = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'cancelled' })
+    assert.equal(cancelled.status, 200)
+    assert.equal((await Product.findById(product._id)).stock, 6)
+  })
+
+  it('does not decrement stock for seller products on confirm', async () => {
+    const admin = await adminAgent()
+
+    const number = uniquePhone()
+    await request(app).post('/api/seller/register').send({
+      fullName: 'Stock Seller',
+      email: `stock-${number}@test.dev`,
+      phone: number,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    const seller = await Seller.findOne({ phone: number.replace(/[\s-]+/g, '') }).lean()
+    const store = await Store.create({
+      seller: seller._id,
+      name: 'Stock Store',
+      slug: `stock-store-${Date.now()}`,
+      status: 'active',
+      subscriptionEndDate: new Date(Date.now() + 86400000 * 30),
+    })
+    const product = await createProduct({ name: 'Seller Stocked', price: 500, stock: 8 })
+    await Product.updateOne({ _id: product._id }, { $set: { ownerType: 'SELLER', store: store._id, seller: seller._id } })
+
+    const order = await adminOrder(admin, product, 2)
+    const confirmed = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
+    assert.equal(confirmed.status, 200)
+    const doc = await Product.findById(product._id)
+    assert.equal(doc.stock, 8, 'seller product stock must not change')
+    assert.equal(doc.confirmedSales, 2)
   })
 })
 
@@ -608,16 +721,18 @@ describe('admin + seller order deletion', () => {
 
   it('admin delete of a confirmed order rolls back confirmedSales', async () => {
     const admin = await adminAgent()
-    const product = await createProduct({ name: 'Del Confirmed', price: 100 })
+    const product = await createProduct({ name: 'Del Confirmed', price: 100, stock: 5 })
     const order = await adminOrder(admin, product, 3)
 
     const confirmed = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
     assert.equal(confirmed.status, 200)
     assert.equal((await Product.findById(product._id)).confirmedSales, 3)
+    assert.equal((await Product.findById(product._id)).stock, 2)
 
     const del = await admin.delete(`/api/admin/orders/${order._id}`)
     assert.equal(del.status, 200)
     assert.equal((await Product.findById(product._id)).confirmedSales, 0)
+    assert.equal((await Product.findById(product._id)).stock, 5)
     assert.equal(await Order.countDocuments({ _id: order._id }), 0)
   })
 

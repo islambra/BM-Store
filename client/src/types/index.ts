@@ -20,6 +20,7 @@ export interface Product {
   isFeatured: boolean
   isSpecialOffer?: boolean
   confirmedSales?: number
+  stock?: number
   ownerType?: 'BM_STORE' | 'SELLER'
   store?: string
   seller?: string

@@ -104,9 +104,9 @@ export async function createBanner({ titleEn = 'Banner', active = true, order = 
   })
 }
 
-export async function createProduct({ name = 'Test Product', price = 1000, slug, category = 'spices' } = {}) {
+export async function createProduct({ name = 'Test Product', price = 1000, slug, category = 'spices', stock } = {}) {
   const uniqueSlug = slug ?? `test-${Date.now()}-${Math.floor(Math.random() * 100000)}`
-  return Product.create({
+  const doc = {
     name,
     nameAr: name,
     nameFr: name,
@@ -115,5 +115,7 @@ export async function createProduct({ name = 'Test Product', price = 1000, slug,
     image: 'https://img/test.jpg',
     category,
     categoryName: category,
-  })
+  }
+  if (stock !== undefined) doc.stock = stock
+  return Product.create(doc)
 }

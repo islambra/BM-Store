@@ -11,6 +11,8 @@ import {
   LogIn,
   AlertCircle,
   Sparkles,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useCatalog } from '../context/CatalogContext'
@@ -135,9 +137,20 @@ export default function ProductPage() {
   const name = localizedName(product, lang)
   const description = localizedText(product, lang)
 
+  // Stock is tracked for BM Store (admin) products only — seller products have
+  // no stock and are always treated as available.
+  const tracksStock = product.ownerType === 'BM_STORE' || product.store == null
+  const stock = tracksStock ? Math.max(0, Math.floor(product.stock ?? 0)) : Infinity
+  const maxQty = tracksStock ? stock : Infinity
+  const outOfStock = tracksStock && stock <= 0
+
   const handleAdd = () => {
     setError('')
-    const result = addToCart(product, qty)
+    if (outOfStock) {
+      setError(t('product.outOfStock'))
+      return
+    }
+    const result = addToCart(product, Math.min(qty, maxQty))
     if (!result.success) {
       setError(result.message || '')
       return
@@ -148,7 +161,11 @@ export default function ProductPage() {
 
   const handleBuyNow = () => {
     setError('')
-    const result = addToCart(product, qty)
+    if (outOfStock) {
+      setError(t('product.outOfStock'))
+      return
+    }
+    const result = addToCart(product, Math.min(qty, maxQty))
     if (!result.success) {
       setError(result.message || '')
       return
@@ -251,7 +268,27 @@ export default function ProductPage() {
             {product.isSpecialOffer && <div className="h-1 w-full bg-gradient-to-r from-accent-400 to-brand-500" />}
           </div>
 
-          {description && <p className="mt-5 text-sm leading-relaxed text-ink-700">{description}</p>}
+{description && <p className="mt-5 text-sm leading-relaxed text-ink-700">{description}</p>}
+
+          {/* Stock status (BM Store products only) */}
+          {tracksStock && (
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              {stock > 0 ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600">
+                    <CheckCircle2 size={16} />
+                    {t('product.inStock')}
+                  </span>
+                  {stock <= 5 && <span className="text-ink-400">{t('product.stockLeft', { count: stock })}</span>}
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 font-semibold text-danger-600">
+                  <XCircle size={16} />
+                  {t('product.outOfStock')}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="mt-6 space-y-3">
@@ -267,14 +304,15 @@ export default function ProductPage() {
                   <Minus size={16} />
                 </button>
                 <span className="w-10 text-center text-sm font-bold text-ink-900">{qty}</span>
-<button
-  type="button"
-  onClick={() => setQty((q) => q + 1)}
-  className="px-3.5 py-3 text-ink-500 hover:text-ink-900"
-  aria-label={t('cart.increase')}
->
-  <Plus size={16} />
-</button>
+                <button
+                  type="button"
+                  onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+                  disabled={qty >= maxQty}
+                  className="px-3.5 py-3 text-ink-500 hover:text-ink-900 disabled:opacity-40"
+                  aria-label={t('cart.increase')}
+                >
+                  <Plus size={16} />
+                </button>
               </div>
               <button
                 type="button"
@@ -290,14 +328,15 @@ export default function ProductPage() {
               </button>
             </div>
             <div className="flex gap-3">
-              <button type="button" onClick={handleAdd} className="btn-secondary flex-1 py-3.5">
+              <button type="button" onClick={handleAdd} disabled={outOfStock} className="btn-secondary flex-1 py-3.5 disabled:cursor-not-allowed disabled:opacity-50">
                 {added ? <Check size={18} /> : <ShoppingCart size={18} />}
                 {t('common.addToCart')}
               </button>
               <button
                 type="button"
                 onClick={handleBuyNow}
-                className="btn-primary flex-1 py-3.5"
+                disabled={outOfStock}
+                className="btn-primary flex-1 py-3.5 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('common.buyNow')}
               </button>

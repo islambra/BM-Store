@@ -51,6 +51,7 @@ export function toProduct(r: ProductRecord): Product {
     isFeatured: r.isFeatured ?? false,
     isSpecialOffer: r.isSpecialOffer ?? false,
     confirmedSales: r.confirmedSales ?? 0,
+    stock: r.stock ?? 0,
     ownerType: r.ownerType,
     store: r.store,
     seller: r.seller,

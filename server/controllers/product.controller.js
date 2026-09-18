@@ -162,6 +162,12 @@ const pickProductFields = (body, current = null) => {
   if (body.isFeatured !== undefined) out.isFeatured = Boolean(body.isFeatured)
   if (body.price !== undefined) out.price = Number(body.price)
   if (body.isSpecialOffer !== undefined) out.isSpecialOffer = Boolean(body.isSpecialOffer)
+  if (body.stock !== undefined) {
+    // Stock is an admin-only field (BM Store products) clamped to a
+    // non-negative integer; seller products never carry it.
+    const stock = Math.trunc(Number(body.stock))
+    out.stock = Number.isFinite(stock) && stock >= 0 ? stock : 0
+  }
 
   const isOffer = out.isSpecialOffer ?? current?.isSpecialOffer ?? false
   if (body.oldPrice !== undefined) {

@@ -18,6 +18,7 @@ function emptyForm() {
     descriptionAr: '',
     price: '',
     oldPrice: '',
+    stock: '',
     images: [] as string[],
     category: '',
     isSpecialOffer: false,
@@ -84,6 +85,7 @@ export default function ProductsSection() {
       descriptionAr: p.descriptionAr ?? '',
       price: String(p.price),
       oldPrice: p.oldPrice ? String(p.oldPrice) : '',
+      stock: p.stock != null ? String(p.stock) : '',
       images: p.images ?? [],
       category: p.category,
       isSpecialOffer: p.isSpecialOffer ?? false,
@@ -102,9 +104,17 @@ export default function ProductsSection() {
   const submit = async () => {
     const price = Number(form.price)
     const oldPrice = Number(form.oldPrice)
+    const stock =
+      form.stock === '' || form.stock === undefined
+        ? 0
+        : Math.trunc(Number(form.stock))
     const images = (form.images ?? []).filter(Boolean).slice(0, 5)
     if (!form.nameAr.trim() || !form.category || !Number.isFinite(price) || price <= 0) {
       setFormError(t('common.requiredFields'))
+      return
+    }
+    if (!Number.isFinite(stock) || stock < 0) {
+      setFormError(t('admin.product.stockInvalid'))
       return
     }
     if (form.isSpecialOffer && !(oldPrice > price)) {
@@ -119,6 +129,7 @@ export default function ProductsSection() {
       descriptionAr: form.descriptionAr.trim() || undefined,
       price,
       oldPrice: form.isSpecialOffer && oldPrice > 0 ? oldPrice : undefined,
+      stock,
       image: images[0],
       images,
       category: form.category,
@@ -162,6 +173,7 @@ export default function ProductsSection() {
                 <th className="px-3 py-3 text-start">{t('admin.name')}</th>
                 <th className="px-3 py-3 text-start">{t('admin.categoryName')}</th>
                 <th className="px-3 py-3 text-start">{t('admin.price')}</th>
+                <th className="px-3 py-3 text-center">{t('admin.stock')}</th>
                 <th className="px-3 py-3 text-center">{t('admin.specialOffer')}</th>
                 <th className="px-3 py-3" />
               </tr>
@@ -182,6 +194,13 @@ export default function ProductsSection() {
                   </td>
                   <td className="px-3 py-3 text-ink-500">{p.categoryName ?? p.category}</td>
                   <td className="px-3 py-3 font-semibold text-ink-900">{formatPrice(p.price, lang)}</td>
+                  <td className="px-3 py-3 text-center">
+                    {p.stock != null && p.stock > 0 ? (
+                      <span className="font-semibold text-ink-900">{p.stock}</span>
+                    ) : (
+                      <span className="text-danger-500">{p.stock ?? 0}</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-center">
                     {p.isSpecialOffer ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-bold text-accent-600">
@@ -285,6 +304,15 @@ export default function ProductsSection() {
                 </Field>
                 <Field label={priceLabel} required>
                   <Input type="number" min={0} value={form.price} onChange={(e) => set('price', e.target.value)} />
+                </Field>
+                <Field label={t('admin.stock')}>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.stock}
+                    onChange={(e) => set('stock', e.target.value)}
+                    placeholder="0"
+                  />
                 </Field>
                 {form.isSpecialOffer && (
                   <Field label={t('admin.product.oldPrice')} required>

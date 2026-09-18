@@ -21,6 +21,9 @@ const productSchema = new mongoose.Schema(
     tags: [String],
     isFeatured: { type: Boolean, default: false, index: true },
     isSpecialOffer: { type: Boolean, default: false, index: true },
+    // Tracked for BM Store (admin) products only; seller products have no
+    // stock. Decremented on order confirm, restored on cancel / hard delete.
+    stock: { type: Number, default: 0, min: 0 },
     confirmedSales: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     ownerType: { type: String, enum: OWNER_TYPES, default: 'BM_STORE', index: true },

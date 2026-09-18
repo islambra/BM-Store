@@ -509,9 +509,13 @@ export async function reverseOrderEffects(order) {
       if (!item.productId) continue
       const product = await Product.findById(item.productId).lean()
       const storeFilter = product?.store ? { store: product.store } : {}
+      const inc = { confirmedSales: -item.qty }
+      // Hard-deleting returns the confirmed/delivered units to stock for BM
+      // Store only (seller products track no stock).
+      if (product && !product.store) inc.stock = item.qty
       await Product.updateOne(
         { _id: item.productId, ...storeFilter },
-        { $inc: { confirmedSales: -item.qty } }
+        { $inc: inc }
       )
     }
   }
@@ -562,15 +566,28 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   const wasConfirmed = previousStatus !== 'confirmed' && status === 'confirmed'
   const wasDelivered = previousStatus !== 'delivered' && status === 'delivered'
 
-  // Confirming an order increments product confirmedSales (no stock tracking).
+  // Confirming an order increments product confirmedSales and, for BM Store
+  // (admin) products, decrements their stock (seller products are untouched).
+  // The whole order is validated first so a shortfall never leaves a partial
+  // decrement behind.
   if (wasConfirmed) {
-    for (const item of order.items) {
-      if (!item.productId) continue
+    const items = order.items.filter((i) => i.productId)
+    for (const item of items) {
+      const product = await Product.findById(item.productId).lean()
+      if (!product || product.store) continue
+      const available = Number(product.stock) || 0
+      if (item.qty > available) {
+        return sendError(res, `Insufficient stock for "${item.name}" (${available} available)`, 400)
+      }
+    }
+    for (const item of items) {
       const product = await Product.findById(item.productId).lean()
       const storeFilter = product?.store ? { store: product.store } : {}
+      const inc = { confirmedSales: item.qty }
+      if (product && !product.store) inc.stock = -item.qty
       await Product.updateOne(
         { _id: item.productId, ...storeFilter },
-        { $inc: { confirmedSales: item.qty } }
+        { $inc: inc }
       )
     }
   }
@@ -585,6 +602,18 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   if (status === 'cancelled' || status === 'rejected') {
     await cancelExistingCommission(order)
+  }
+
+  // A confirmed order that is cancelled returns its units to stock (BM Store
+  // products only; seller products track no stock).
+  if (status === 'cancelled' && previousStatus === 'confirmed') {
+    for (const item of order.items) {
+      if (!item.productId) continue
+      const product = await Product.findById(item.productId).lean()
+      if (product && !product.store) {
+        await Product.updateOne({ _id: item.productId }, { $inc: { stock: item.qty } })
+      }
+    }
   }
 
   return sendSuccess(res, { order }, 'Order status updated')
