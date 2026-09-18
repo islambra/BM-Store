@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
+import { FolderOpen, Plus, X } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { listMyCategories, createMyCategory, updateMyCategory, deleteMyCategory } from '../../services/api'
 import { getErrorMessage } from '../../services/api'
 import SectionHeader from '../../components/common/SectionHeader'
-import { Alert } from '../../components/common/FormControls'
-import { Input, Label, Button } from '../../components/common/FormControls'
+import { Input, Label, Button, Alert } from '../../components/common/FormControls'
+import EmptyState from '../../components/common/EmptyState'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import ImageUploader from '../../components/common/ImageUploader'
+import { CatalogList, CatalogRow, MediaTile, ItemText, RowActions } from './sellerShared'
 
 type Category = {
   _id: string
@@ -18,6 +19,7 @@ type Category = {
   icon?: string
   order: number
   active: boolean
+  productCount?: number
 }
 
 export default function SellerCategoriesSection() {
@@ -116,98 +118,83 @@ export default function SellerCategoriesSection() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <SectionHeader title={t('seller.categories.title')} subtitle={t('seller.categories.subtitle')} />
           <Button onClick={handleCreate}><Plus size={18} /> {t('seller.categories.add')}</Button>
         </div>
-        <div className="animate-pulse space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-ink-900/10" />
-          ))}
-        </div>
+        <CatalogList>
+          <div className="animate-pulse">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 border-b border-line px-5 py-4 last:border-b-0">
+                <div className="h-12 w-12 shrink-0 rounded-xl bg-ink-900/10" />
+                <div className="flex-1 space-y-2.5">
+                  <div className="h-4 w-1/4 rounded bg-ink-900/10" />
+                  <div className="h-3 w-1/3 rounded bg-ink-900/10" />
+                </div>
+                <div className="h-7 w-16 rounded-full bg-ink-900/10" />
+              </div>
+            ))}
+          </div>
+        </CatalogList>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <SectionHeader title={t('seller.categories.title')} subtitle={t('seller.categories.subtitle')} />
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <SectionHeader
+          title={t('seller.categories.title')}
+          subtitle={t('seller.categories.subtitle')}
+          badge={categories.length > 0 ? String(categories.length) : undefined}
+        />
         <Button onClick={handleCreate}><Plus size={18} /> {t('seller.categories.add')}</Button>
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}
 
       {categories.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface p-10 text-center">
-          <Search size={48} className="mx-auto text-ink-400" />
-          <h3 className="mt-4 text-lg font-semibold text-ink-900">{t('common.empty')}</h3>
-          <p className="mt-1 text-ink-500">{t('seller.categories.noCategories')}</p>
-          <Button className="mt-4" onClick={handleCreate}><Plus size={16} /> {t('seller.categories.add')}</Button>
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+          <EmptyState
+            icon={FolderOpen}
+            title={t('common.empty')}
+            description={t('seller.categories.noCategories')}
+            action={<Button onClick={handleCreate}><Plus size={16} /> {t('seller.categories.add')}</Button>}
+          />
         </div>
       ) : (
-        <div className="rounded-2xl border border-line bg-surface overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-line bg-ink-900/5">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.categories.name')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.categories.slug')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.categories.order')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.categories.active')}</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">{t('common.actions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {categories.map((category) => (
-                  <tr key={category._id} className="hover:bg-ink-900/5">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {category.image && (
-                          <img src={category.image} alt={category.nameAr || category.name} className="h-10 w-10 rounded-lg object-cover" />
-                        )}
-                        <div>
-                          <p className="font-medium text-ink-900">{category.nameAr || category.name}</p>
-                          <p className="text-sm text-ink-500">{category.name}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-ink-700 font-mono">{category.slug}</td>
-                    <td className="px-4 py-3 text-sm text-ink-700">{category.order}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        category.active ? 'bg-brand-50 text-brand-700' : 'bg-gray-50 text-gray-600'
-                      }`}>
-                        {category.active ? t('admin.active') : t('admin.onlyInactive')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(category)}
-                          className="icon-btn text-ink-400 hover:text-brand-600"
-                          aria-label={t('common.edit')}
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(category)}
-                          className="icon-btn text-ink-400 hover:text-danger-600"
-                          aria-label={t('common.delete')}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CatalogList>
+          {categories.map((category) => (
+            <CatalogRow key={category._id}>
+              <MediaTile src={category.image} alt={category.nameAr || category.name} icon={FolderOpen} size="md" />
+              <ItemText
+                title={category.nameAr || category.name}
+                secondary={
+                  <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 font-mono text-xs">
+                    <span dir="ltr" className="text-ink-400">{category.slug}</span>
+                  </span>
+                }
+              />
+              <div className="ms-auto flex items-center gap-4">
+                <span className="badge bg-canvas text-ink-500 tabular-nums">
+                  {t('seller.categories.productCount', { count: category.productCount ?? 0 })}
+                </span>
+                <span className={`badge ${
+                  category.active ? 'bg-brand-50 text-brand-700' : 'bg-ink-900/5 text-ink-400'
+                }`}>
+                  {category.active ? t('admin.active') : t('admin.onlyInactive')}
+                </span>
+                <RowActions
+                  onEdit={() => handleEdit(category)}
+                  onDelete={() => handleDelete(category)}
+                  editLabel={t('common.edit')}
+                  deleteLabel={t('common.delete')}
+                />
+              </div>
+            </CatalogRow>
+          ))}
+        </CatalogList>
       )}
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/50" style={{ display: modalOpen ? 'flex' : 'none' }}>
@@ -269,7 +256,7 @@ export default function SellerCategoriesSection() {
         </div>
       </div>
 
-{(() => {
+      {(() => {
         const titleVal = t('seller.categories.deleteTitle', { name: deletingCategory?.nameAr || deletingCategory?.name || '' })
         const descVal = t('seller.categories.deleteWarning', { count: 0 })
         const title = titleVal ? titleVal : ''

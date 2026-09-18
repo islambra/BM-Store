@@ -5,7 +5,10 @@ import mongoose from 'mongoose'
 import request from 'supertest'
 import app from '../app.js'
 import Category from '../models/Category.js'
-import { connectTest, disconnectTest, clearCollection, createAdmin, createCategory } from './helpers.mjs'
+import Product from '../models/Product.js'
+import Store from '../models/Store.js'
+import Seller from '../models/Seller.js'
+import { connectTest, disconnectTest, clearCollection, createAdmin, createCategory, createProduct, uniquePhone } from './helpers.mjs'
 
 // Required 8 data-driven categories with these server slugs.
 const REQUIRED = [
@@ -100,5 +103,44 @@ describe('categories', () => {
     const res = await request(app).get('/api/categories')
     const slugs = res.body.data.map((c) => c.slug).sort()
     assert.deepEqual(slugs, [...REQUIRED].sort())
+  })
+
+  it('category product counts exclude seller-store products', async () => {
+    const slug = `count-cat-${Date.now()}`
+    await createCategory({ slug, name: 'Count Cat', order: 1 })
+
+    await Product.create([
+      { slug: `cc-a-${Date.now()}`, name: 'CC A', price: 100, category: slug, categoryName: 'Count Cat', ownerType: 'BM_STORE' },
+      { slug: `cc-b-${Date.now()}`, name: 'CC B', price: 100, category: slug, categoryName: 'Count Cat', ownerType: 'BM_STORE' },
+    ])
+
+    const seller = await Seller.create({
+      user: new mongoose.Types.ObjectId(),
+      fullName: 'Count Seller',
+      email: `cnt-${Date.now()}@test.dev`,
+      phone: uniquePhone(),
+    })
+    const store = await Store.create({
+      seller: seller._id,
+      name: 'Count Store',
+      slug: `count-store-${Date.now()}`,
+      status: 'active',
+      subscriptionEndDate: new Date(Date.now() + 86400000 * 30),
+    })
+    await Product.create({
+      slug: `cc-s-${Date.now()}`,
+      name: 'CC Seller',
+      price: 100,
+      category: slug,
+      categoryName: 'Count Cat',
+      ownerType: 'SELLER',
+      store: store._id,
+      seller: seller._id,
+    })
+
+    const res = await request(app).get('/api/categories')
+    const row = res.body.data.find((c) => c.slug === slug)
+    assert.ok(row, 'category must be listed')
+    assert.equal(row.productCount, 2)
   })
 })

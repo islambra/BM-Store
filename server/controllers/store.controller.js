@@ -264,7 +264,18 @@ export const listMyCategories = asyncHandler(async (req, res) => {
   if (!store) return sendError(res, 'Store not found', 404)
 
   const categories = await Category.find({ store: store._id }).sort({ order: 1, createdAt: 1 }).lean()
-  return sendSuccess(res, { categories })
+
+  // Per-category product counts so the seller dashboard can show real numbers
+  const catSlugs = categories.map((c) => c.slug)
+  const catCounts = await Product.aggregate([
+    { $match: { store: store._id, category: { $in: catSlugs } } },
+    { $group: { _id: '$category', count: { $sum: 1 } } },
+  ])
+  const countByCat = Object.fromEntries(catCounts.map((c) => [c._id, c.count]))
+
+  return sendSuccess(res, {
+    categories: categories.map((c) => ({ ...c, productCount: countByCat[c.slug] || 0 })),
+  })
 })
 
 export const createMyCategory = asyncHandler(async (req, res) => {

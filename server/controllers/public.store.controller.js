@@ -8,6 +8,20 @@ import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+// French is no longer an active storefront language: legacy French fields are
+// stored for reference but never returned on public store routes.
+const publicProduct = (doc) => {
+  const out = { ...doc }
+  delete out.nameFr
+  delete out.descriptionFr
+  return out
+}
+const publicCategory = (doc) => {
+  const out = { ...doc }
+  delete out.nameFr
+  return out
+}
+
 // The BM Store is the platform's own storefront: its products live in the main
 // catalog (ownerType: 'BM_STORE') without a Store document. The admin does NOT
 // have a store like other sellers, so it is never listed in the public stores
@@ -156,12 +170,12 @@ export const getPublicStore = asyncHandler(async (req, res) => {
 
     return sendSuccess(res, {
       store: { ...bm, sellerName: 'BM Store', productCount: bm.productCount },
-      categories: withCounts,
-      specialOffers,
-      newProducts,
-      bestSelling,
+      categories: withCounts.map(publicCategory),
+      specialOffers: specialOffers.map(publicProduct),
+      newProducts: newProducts.map(publicProduct),
+      bestSelling: bestSelling.map(publicProduct),
       allProducts: {
-        products: allProducts,
+        products: allProducts.map(publicProduct),
         page,
         limit,
         total: allTotal,
@@ -186,6 +200,14 @@ export const getPublicStore = asyncHandler(async (req, res) => {
 
   // Get store categories
   const categories = await Category.find({ store: store._id, active: true }).sort({ order: 1 }).lean()
+
+  // Per-category product counts (mirrors the bm-store branch + getStoreCategories)
+  const catSlugs = categories.map((c) => c.slug)
+  const catCounts = await Product.aggregate([
+    { $match: { store: store._id, category: { $in: catSlugs } } },
+    { $group: { _id: '$category', count: { $sum: 1 } } },
+  ])
+  const countByCat = Object.fromEntries(catCounts.map((c) => [c._id, c.count]))
 
   // Get products
   const productQuery = { store: store._id }
@@ -250,12 +272,12 @@ export const getPublicStore = asyncHandler(async (req, res) => {
       sellerName: store.seller?.fullName || '',
       productCount: totalProducts,
     },
-    categories,
-    specialOffers,
-    newProducts,
-    bestSelling,
+    categories: categories.map((c) => publicCategory({ ...c, productCount: countByCat[c.slug] || 0 })),
+    specialOffers: specialOffers.map(publicProduct),
+    newProducts: newProducts.map(publicProduct),
+    bestSelling: bestSelling.map(publicProduct),
     allProducts: {
-      products: allProducts,
+      products: allProducts.map(publicProduct),
       page,
       limit,
       total: allTotal,
@@ -366,7 +388,7 @@ export const getStoreCategories = asyncHandler(async (req, res) => {
     productCount: countByCategory[cat.slug] || 0,
   }))
 
-  return sendSuccess(res, { categories: withCounts })
+  return sendSuccess(res, { categories: withCounts.map(publicCategory) })
 })
 
 // Check subscription status for store (used by frontend)

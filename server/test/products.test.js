@@ -2,9 +2,12 @@
 import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
+import mongoose from 'mongoose'
 import app from '../app.js'
-import { connectTest, disconnectTest, createAdmin, createProduct } from './helpers.mjs'
+import { connectTest, disconnectTest, createAdmin, createProduct, uniquePhone } from './helpers.mjs'
 import Product from '../models/Product.js'
+import Store from '../models/Store.js'
+import Seller from '../models/Seller.js'
 
 async function adminAgent() {
   const { phone, password } = await createAdmin()
@@ -233,5 +236,60 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
     const good = await agent.patch(`/api/admin/products/${id}`).send({ isSpecialOffer: true, oldPrice: 700 })
     assert.equal(good.status, 200)
     assert.equal(good.body.data.isSpecialOffer, true)
+  })
+
+  it('hides products of inactive/expired seller stores while active stores stay visible', async () => {
+    const mkSeller = async () => {
+      const seller = await Seller.create({
+        user: new mongoose.Types.ObjectId(),
+        fullName: 'Lifecycle Seller',
+        email: `lc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        phone: uniquePhone(),
+      })
+      return seller
+    }
+    const mkStore = async (status, endInDays) => {
+      const seller = await mkSeller()
+      const store = await Store.create({
+        seller: seller._id,
+        name: `Lifecycle ${status}-${Date.now()}`,
+        slug: `lifecycle-${status}-${Date.now()}`,
+        status,
+        subscriptionEndDate: new Date(Date.now() + endInDays * 86400000),
+      })
+      const product = await createProduct({ name: `Lifecycle ${status} Product`, price: 100 })
+      await Product.updateOne({ _id: product._id }, { $set: { ownerType: 'SELLER', store: store._id, seller: seller._id } })
+      return { store, product }
+    }
+
+    const active = await mkStore('active', 30)
+    const suspended = await mkStore('suspended', 30)
+    const expired = await mkStore('active', -1)
+
+    const activeList = await request(app).get('/api/products').query({ store: String(active.store._id) })
+    assert.equal(activeList.status, 200)
+    assert.ok(
+      activeList.body.data.products.some((p) => String(p._id) === String(active.product._id)),
+      'active store products must be visible'
+    )
+
+    const suspendedList = await request(app).get('/api/products').query({ store: String(suspended.store._id) })
+    assert.equal(suspendedList.status, 200)
+    assert.equal(suspendedList.body.data.total, 0)
+
+    const expiredList = await request(app).get('/api/products').query({ store: String(expired.store._id) })
+    assert.equal(expiredList.status, 200)
+    assert.equal(expiredList.body.data.total, 0)
+
+    assert.equal((await request(app).get(`/api/products/${active.product._id}`)).status, 200)
+    assert.equal((await request(app).get(`/api/products/${suspended.product._id}`)).status, 404)
+    assert.equal((await request(app).get(`/api/products/${expired.product._id}`)).status, 404)
+  })
+
+  it('treats an unknown/garbage store filter as an empty catalog', async () => {
+    const res = await request(app).get('/api/products').query({ store: 'not-an-objectid' })
+    assert.equal(res.status, 200)
+    assert.deepEqual(res.body.data.products, [])
+    assert.equal(res.body.data.total, 0)
   })
 })

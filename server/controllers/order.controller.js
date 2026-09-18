@@ -14,9 +14,12 @@ import {
 } from '../utils/customerDiscount.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 import { getDeliveryInfo } from './wilaya.controller.js'
+import { DEFAULT_DELIVERY_PRICE } from '../config/wilayas.js'
 
-export const DELIVERY_FEE = 350
+export const DELIVERY_FEE = DEFAULT_DELIVERY_PRICE
 const COMMISSION_RATE = 10
+const MAX_ORDER_ITEMS = 50
+const MAX_ITEM_QTY = 999
 
 const randomRef = () => `BM-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
 
@@ -66,28 +69,25 @@ async function resolveActiveReferral(req, referralId, visitorId) {
 
 /**
  * Validates that all items belong to the same store (or BM Store).
- * Returns the store ID if valid, or throws an error.
+ * Returns the store ID if valid, or an error. cleanItems must carry
+ * ownerType / store fields populated by priceItems.
  */
 async function validateSingleStore(cleanItems) {
   let storeId = null
   let isBmStore = false
+  const sellerStoreIds = new Set()
 
   for (const item of cleanItems) {
-    const product = await Product.findById(item.productId).lean()
-    if (!product) return { error: { message: `Product not found: ${item.productId}`, status: 404 } }
-
-    const productStoreId = product.store?.toString()
-    const productOwnerType = product.ownerType
+    const productStoreId = item.store ? String(item.store) : null
+    const productOwnerType = item.ownerType
 
     if (productOwnerType === 'BM_STORE' || !productStoreId) {
-      // This is a BM Store product
       if (storeId && storeId !== 'BM_STORE') {
         return { error: { message: 'Your cart contains products from different stores. Please complete or clear your current cart before adding products from a different store.', status: 400 } }
       }
       isBmStore = true
       storeId = 'BM_STORE'
     } else {
-      // This is a seller product
       if (isBmStore) {
         return { error: { message: 'Your cart contains products from different stores. Please complete or clear your current cart before adding products from a different store.', status: 400 } }
       }
@@ -95,12 +95,20 @@ async function validateSingleStore(cleanItems) {
         return { error: { message: 'Your cart contains products from different stores. Please complete or clear your current cart before adding products from a different store.', status: 400 } }
       }
       storeId = productStoreId
+      sellerStoreIds.add(productStoreId)
+    }
+  }
 
-      // Check if store is active and subscription is valid
-      const store = await Store.findById(productStoreId).lean()
-      if (!store) return { error: { message: `Store not found for product: ${product.name}`, status: 400 } }
+  if (sellerStoreIds.size > 0) {
+    const stores = await Store.find({ _id: { $in: [...sellerStoreIds] } }).lean()
+    const byId = new Map(stores.map((s) => [String(s._id), s]))
+    const now = new Date()
+    for (const item of cleanItems) {
+      const sid = item.store ? String(item.store) : null
+      if (!sid || item.ownerType === 'BM_STORE') continue
+      const store = byId.get(sid)
+      if (!store) return { error: { message: `Store not found for product: ${item.name}`, status: 400 } }
       if (store.status !== 'active') return { error: { message: `Store "${store.name}" is not currently accepting orders.`, status: 400 } }
-      const now = new Date()
       if (store.subscriptionEndDate && new Date(store.subscriptionEndDate) <= now) {
         return { error: { message: `Store "${store.name}" has an expired subscription.`, status: 400 } }
       }
@@ -118,26 +126,45 @@ async function validateSingleStore(cleanItems) {
  * never stacked per product.
  */
 async function priceItems(items) {
-  const cleanItems = []
+  if (!Array.isArray(items) || items.length === 0) {
+    return { error: { message: 'Order must contain at least one item', status: 400 } }
+  }
+  if (items.length > MAX_ORDER_ITEMS) {
+    return { error: { message: `An order can contain at most ${MAX_ORDER_ITEMS} items`, status: 400 } }
+  }
+
+  const parsed = []
   for (const item of items) {
     const qty = Number(item?.qty)
     if (!Number.isInteger(qty) || qty < 1) {
       return { error: { message: 'Invalid quantity in order', status: 400 } }
     }
+    if (qty > MAX_ITEM_QTY) {
+      return { error: { message: `Quantity per item cannot exceed ${MAX_ITEM_QTY}`, status: 400 } }
+    }
     if (!item?.productId) {
       return { error: { message: 'Product ID is required for each item', status: 400 } }
     }
+    parsed.push({ productId: item.productId, qty })
+  }
 
-    const product = await Product.findById(item.productId).lean()
+  const ids = [...new Set(parsed.map((p) => String(p.productId)))]
+  const products = await Product.find({ _id: { $in: ids } }).lean()
+  const byId = new Map(products.map((p) => [String(p._id), p]))
+
+  const cleanItems = []
+  for (const item of parsed) {
+    const product = byId.get(String(item.productId))
     if (!product) return { error: { message: `Product not found: ${item.productId}`, status: 404 } }
-
     cleanItems.push({
       productId: product._id,
       name: product.name,
-      qty,
+      qty: item.qty,
       price: product.price,
       image: product.image || undefined,
       category: product.category,
+      ownerType: product.ownerType || 'BM_STORE',
+      store: product.store ?? null,
     })
   }
   const subtotal = cleanItems.reduce((sum, it) => sum + it.price * it.qty, 0)
@@ -272,11 +299,19 @@ export const createOrder = asyncHandler(async (req, res) => {
 })
 
 export const getMyOrders = asyncHandler(async (req, res) => {
-  const [orders, peek] = await Promise.all([
-    Order.find({ user: req.user._id }).sort({ createdAt: -1 }).lean(),
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
+  const userQuery = { user: req.user._id }
+  const [orders, total, peek] = await Promise.all([
+    Order.find(userQuery)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Order.countDocuments(userQuery),
     peekNextCustomerOrderNumber(req.user._id),
   ])
-  return sendSuccess(res, { orders, ...peek })
+  return sendSuccess(res, { orders, ...peek, page, limit, total, pages: Math.ceil(total / limit) })
 })
 
 async function findEditableOrder(req) {

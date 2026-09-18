@@ -69,7 +69,7 @@ export const trackReferralVisit = asyncHandler(async (req, res) => {
     referralCode: profile.referralCode,
     customer: req.user?._id || null,
     product: productId || null,
-    landingPath: path || '/',
+    landingPath: typeof path === 'string' && path.trim() ? path.trim().slice(0, 500) : '/',
     visitor,
     active: true,
     expiresAt: referralExpiry(),

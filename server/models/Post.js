@@ -14,5 +14,7 @@ const postSchema = new mongoose.Schema(
 )
 
 postSchema.index({ status: 1, createdAt: -1 })
+// The admin post list is always sorted by creation time with no filter.
+postSchema.index({ createdAt: -1 })
 
 export default mongoose.model('Post', postSchema)

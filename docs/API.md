@@ -193,7 +193,7 @@ special offers (requires `oldPrice > price > 0`).
 | Method | Path        | Auth          | Note                                                    | Returns |
 | ------ | ----------- | ------------- | ------------------------------------------------------- | ------- |
 | POST   | `/orders`   | access cookie | `{items:[{productId, qty}], referralId?, visitorId?, clientKey?, customer}` | `{order}` (201; `{order, deduped:true}` 200 on retried `clientKey`) |
-| GET    | `/orders/me`| access cookie | orders belonging to the logged-in user                  | `{orders, nextCustomerOrderNumber}` |
+| GET    | `/orders/me`| access cookie | orders belonging to the logged-in user, newest first; `?page` (default 1) & `?limit` (default 20, max 50) | `{orders, nextCustomerOrderNumber, page, limit, total, pages}` |
 
 The server recomputes all prices/totals and stores product price snapshots on
 order items; client-supplied prices, discounts, totals and order numbers are
@@ -303,7 +303,8 @@ confirmation. The old per-product reward system (`Reward` model,
 | Method | Path                       | Note                                        | Returns |
 | ------ | -------------------------- | ------------------------------------------- | ------- |
 | GET    | `/admin/users`             | `?role&q&page&limit`; each user includes `orderCount` and `totalSpent`; when `role` is omitted, SELLER and ADMIN accounts are excluded (customers only) | `{users, page, limit, total, pages}` |
-| GET    | `/admin/marketers`         | marketers + profile + computed stats (incl. `availableBalance`, phone). Per-marketer detail (orders/commissions/referrals/payouts) is **marketer-only** via `/marketer/*` | `{marketers}` |
+| DELETE | `/admin/users/:id`         | deletes user + linked marketer profile/referrals/commissions/payouts. Refused (400) when the user has any orders or a linked seller profile — history is never silently dropped | `{id}` |
+| GET    | `/admin/marketers`         | marketers + profile + computed stats (incl. `availableBalance`, phone). Per-marketer detail (orders/commissions/referrals/payouts) is **marketer-only** via `/marketer/*`. `?page` (default 1) & `?limit` (default 20, max 50) | `{marketers, page, limit, total, pages}` |
 | PATCH  | `/admin/marketers/:id/status` | `{status: active\|suspended}`            | `{marketing}` |
 | DELETE | `/admin/marketers/:id`     | deletes user + profile + referrals + commissions + payouts | `{id}` |
 | GET    | `/admin/orders`            | `?status&ownerType`; `ownerType=BM` returns BM Store orders only (`store: null`), `ownerType=SELLER` returns seller-store orders only; omitted returns all | `{orders}` |
@@ -327,7 +328,7 @@ confirmation. The old per-product reward system (`Reward` model,
 | PATCH  | `/admin/banners/:id`       | `{active:true}` blocked when at max         | `{banner}` |
 | DELETE | `/admin/banners/:id`       |                                             | – |
 | POST   | `/admin/payouts`           | `{marketerId, amount, method(CCP\|BaridiMob), reference?, notes?}`; amount ≤ the marketer's **unreserved** (`AVAILABLE`) commissions; claims them FIFO by **atomic** conditional updates into `PAYOUT_REQUESTED` so concurrent payouts never double-claim; `amount` must exactly equal the sum of the claimed commissions (commissions are per-order records — no partial splits; a non-matching amount → 400 and nothing is changed). The marketer's `availableBalance` is **not** reduced here — only when the marketer confirms receipt | `{payout}` (201) |
-| GET    | `/admin/payouts`           | `?marketer&status` (sent\|received\|disputed\|cancelled); payouts populated with marketer | `{payouts}` |
+| GET    | `/admin/payouts`           | `?marketer&status` (sent\|received\|disputed\|cancelled); payouts populated with marketer; `?page` (default 1) & `?limit` (default 20, max 50) | `{payouts, page, limit, total, pages}` |
 | PATCH  | `/admin/payouts/:id`       | `{action: 'cancel'}` — allowed from `sent`/`disputed`; reserved commissions restored to `AVAILABLE` | `{payout}` |
 | GET    | `/admin/seller/sellers`    | `?q&page&limit`; `q` matches name/email/phone; each seller includes `stats {totalProducts, totalOrders}`; store populated with `daysRemaining` (expiry countdown) and `isExpired` | `{sellers, page, pages, total}` |
 | GET    | `/admin/seller/sellers/:id` | a single seller with their store                           | `{seller, store}` |
@@ -342,7 +343,7 @@ confirmation. The old per-product reward system (`Reward` model,
 | POST   | `/admin/seller/products/:id/enable` / `.../disable` | override seller product status       | `{product}` |
 | GET    | `/admin/seller/orders`     | seller orders                                              | `{orders}` |
 | PATCH  | `/admin/seller/orders/:id/status` | same state machine as admin orders                     | `{order}` |
-| GET    | `/admin/posts`             | all posts (draft + published), product populated | `{posts}` |
+| GET    | `/admin/posts`             | all posts (draft + published) newest first, product populated; `?page` (default 1) & `?limit` (default 20, max 50) | `{posts, page, limit, total, pages}` |
 | POST   | `/admin/posts`             | `{textAr, mediaType, images?, video?, productId?, status?}`; Arabic text auto-translated to English (`textAr` → `textEn`); `productId` optional — when provided it must reference a valid product; images capped at 5, video posts clear images | `{post}` (201) |
 | PATCH  | `/admin/posts/:id`         | partial update; changing `textAr` re-translates `textEn`; image/video/product-only edits never call the translation API | `{post}` |
 | DELETE | `/admin/posts/:id`         |                                             | – |

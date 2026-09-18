@@ -32,6 +32,8 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 )
+// Admin lists (getUsers / getMarketers) filter by role and sort by creation time.
+userSchema.index({ role: 1, createdAt: -1 })
 
 userSchema.methods.toSafeJSON = function () {
   return {

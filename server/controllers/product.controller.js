@@ -20,6 +20,8 @@ const discountOf = (price, oldPrice) =>
   Number(oldPrice) > Number(price) && Number(price) > 0 ? Math.round(((Number(oldPrice) - Number(price)) / Number(oldPrice)) * 100) : 0
 
 // Discounts are reserved for products explicitly marked as special offers.
+// French is no longer an active storefront language, so legacy French fields
+// are never exposed on public routes (they remain stored for reference only).
 const toPublic = (doc) => {
   const isOffer = Boolean(doc.isSpecialOffer)
   const price = Number(doc.price) || 0
@@ -27,6 +29,8 @@ const toPublic = (doc) => {
   const out = { ...doc, discount: isOffer ? discountOf(price, oldPrice) : 0 }
   delete out.rating
   delete out.reviewCount
+  delete out.nameFr
+  delete out.descriptionFr
   if (!isOffer) out.oldPrice = undefined
   // Include ownership info
   out.ownerType = doc.ownerType || 'BM_STORE'
@@ -45,7 +49,13 @@ export const getProducts = asyncHandler(async (req, res) => {
     if (store === 'bm-store') {
       query.ownerType = 'BM_STORE'
     } else {
-      query.store = store
+      // A seller-store filter only exposes products while the store is live
+      // (active + valid subscription), matching the storefront.
+      const storeId = String(store)
+      if (!mongoose.isValidObjectId(storeId) || !(await isSellerStorePublic(storeId))) {
+        return sendSuccess(res, { products: [], page, limit, total: 0, pages: 0 })
+      }
+      query.store = storeId
     }
   } else {
     query.ownerType = 'BM_STORE'
@@ -62,10 +72,8 @@ export const getProducts = asyncHandler(async (req, res) => {
     const safe = escapeRegex(q.trim())
     query.$or = [
       { name: { $regex: safe, $options: 'i' } },
-      { nameFr: { $regex: safe, $options: 'i' } },
       { nameAr: { $regex: safe, $options: 'i' } },
       { description: { $regex: safe, $options: 'i' } },
-      { descriptionFr: { $regex: safe, $options: 'i' } },
       { descriptionAr: { $regex: safe, $options: 'i' } },
       { tags: { $regex: safe, $options: 'i' } },
     ]
@@ -91,11 +99,22 @@ const safeId = (id, res) => {
   return id
 }
 
+async function isSellerStorePublic(storeId) {
+  const store = await Store.findById(storeId).lean()
+  if (!store) return false
+  if (store.status !== 'active') return false
+  if (store.subscriptionEndDate && new Date(store.subscriptionEndDate) <= new Date()) return false
+  return true
+}
+
 export const getProductById = asyncHandler(async (req, res) => {
   const id = safeId(req.params.id, res)
   if (!id) return
   const doc = await Product.findById(id).lean()
   if (!doc) return sendError(res, 'Product not found', 404)
+  if (doc.ownerType === 'SELLER' && doc.store && !(await isSellerStorePublic(doc.store))) {
+    return sendError(res, 'Product not found', 404)
+  }
   return sendSuccess(res, toPublic(doc))
 })
 
@@ -103,13 +122,8 @@ export const getProductBySlug = asyncHandler(async (req, res) => {
   const doc = await Product.findOne({ slug: req.params.slug }).lean()
   if (!doc) return sendError(res, 'Product not found', 404)
 
-  // If it's a seller product, check store status
-  if (doc.ownerType === 'SELLER' && doc.store) {
-    const store = await Store.findById(doc.store).lean()
-    const now = new Date()
-    if (!store || store.status !== 'active' || (store.subscriptionEndDate && new Date(store.subscriptionEndDate) <= now)) {
-      return sendError(res, 'Product not found', 404)
-    }
+  if (doc.ownerType === 'SELLER' && doc.store && !(await isSellerStorePublic(doc.store))) {
+    return sendError(res, 'Product not found', 404)
   }
 
   return sendSuccess(res, toPublic(doc))
@@ -190,7 +204,6 @@ export const adminListProducts = asyncHandler(async (req, res) => {
     query.$or = [
       { name: { $regex: safe, $options: 'i' } },
       { nameAr: { $regex: safe, $options: 'i' } },
-      { nameFr: { $regex: safe, $options: 'i' } },
     ]
   }
 

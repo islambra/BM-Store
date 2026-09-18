@@ -18,10 +18,15 @@ const pickFields = (body) => {
 export const getCategories = asyncHandler(async (_req, res) => {
   const [docs, counts] = await Promise.all([
     Category.find({ active: true, store: null }).sort({ order: 1, name: 1 }).lean(),
-    Product.aggregate([{ $group: { _id: '$category', count: { $sum: 1 } } }]),
+    Product.aggregate([{ $match: { ownerType: 'BM_STORE' } }, { $group: { _id: '$category', count: { $sum: 1 } } }]),
   ])
   const countByCategory = new Map(counts.map((c) => [c._id, c.count]))
-  const withCounts = docs.map((c) => ({ ...c, productCount: countByCategory.get(c.slug) || 0 }))
+  // French is not an active storefront language; legacy French names are never
+  // returned to the public storefront.
+  const withCounts = docs.map((c) => {
+    const { nameFr, ...rest } = c
+    return { ...rest, productCount: countByCategory.get(c.slug) || 0 }
+  })
   return sendSuccess(res, withCounts)
 })
 

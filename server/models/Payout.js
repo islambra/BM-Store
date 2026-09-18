@@ -23,5 +23,7 @@ const payoutSchema = new mongoose.Schema(
 
 payoutSchema.index({ marketer: 1, status: 1 })
 payoutSchema.index({ marketer: 1, period: 1 })
+// Admin payout lists (optionally filtered by marketer/status) sort by creation time.
+payoutSchema.index({ createdAt: -1 })
 
 export default mongoose.model('Payout', payoutSchema)

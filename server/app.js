@@ -77,7 +77,9 @@ app.use('/uploads/:id', async (req, res, next) => {
     res.setHeader('Content-Type', file.contentType || 'application/octet-stream')
     res.setHeader('Content-Length', file.length)
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-    getBucket().openDownloadStream(id).pipe(res)
+    const stream = getBucket().openDownloadStream(id)
+    stream.on('error', () => res.destroy())
+    stream.pipe(res)
   } catch (err) {
     console.error('[Image fetch failed]', err.message)
     return next()
@@ -119,7 +121,9 @@ app.use((err, _req, res, _next) => {
             ? 'An account with this email already exists'
             : field === 'slug'
               ? 'This store URL is already taken'
-              : 'A record with this value already exists'
+              : field === 'seller'
+                ? 'This seller already has a store'
+                : 'A record with this value already exists'
     return sendError(res, message, 409)
   }
   if (err.name === 'CastError') {

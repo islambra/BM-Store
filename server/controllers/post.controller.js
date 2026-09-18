@@ -211,12 +211,19 @@ export const deleteComment = asyncHandler(async (req, res) => {
 
 // ---- Admin ----
 
-export const adminListPosts = asyncHandler(async (_req, res) => {
-  const docs = await Post.find()
-    .sort({ createdAt: -1 })
-    .populate('productId', 'name nameAr slug image price')
-    .lean()
-  return sendSuccess(res, { posts: docs })
+export const adminListPosts = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
+  const [docs, total] = await Promise.all([
+    Post.find()
+      .sort({ createdAt: -1 })
+      .populate('productId', 'name nameAr slug image price')
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Post.countDocuments(),
+  ])
+  return sendSuccess(res, { posts: docs, page, limit, total, pages: Math.ceil(total / limit) })
 })
 
 export const adminCreatePost = asyncHandler(async (req, res) => {

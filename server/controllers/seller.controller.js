@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs'
+import mongoose from 'mongoose'
 import Seller from '../models/Seller.js'
 import User from '../models/User.js'
 import Store from '../models/Store.js'
@@ -58,22 +59,43 @@ export const registerSeller = asyncHandler(async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10)
 
-  // Create linked User account for authentication first: the Seller document
-  // requires a `user` reference, so it must exist before the seller is saved.
-  const user = await User.create({
-    name: fullName.trim(),
-    phone: phoneKey,
-    passwordHash,
-    role: 'SELLER',
-  })
-
-  const seller = await Seller.create({
-    user: user._id,
-    fullName: fullName.trim(),
-    email: emailKey,
-    phone: phoneKey,
-    status: 'active',
-  })
+  // Create the linked User and Seller atomically. A half-created account (User
+  // saved but Seller failed) would leave an orphaned auth record, so both
+  // writes share a transaction. Deployment is MongoDB Atlas (replica set), so
+  // multi-document transactions are supported. A unique race (email/phone taken
+  // between the pre-checks and the insert) rolls the whole thing back and is
+  // surfaced as a clean 409 instead of a 500.
+  const session = await mongoose.startSession()
+  let user
+  let seller
+  try {
+    await session.withTransaction(async () => {
+      const created = await User.create(
+        [{ name: fullName.trim(), phone: phoneKey, passwordHash, role: 'SELLER' }],
+        { session }
+      )
+      user = created[0]
+      const sellers = await Seller.create(
+        [{ user: user._id, fullName: fullName.trim(), email: emailKey, phone: phoneKey, status: 'active' }],
+        { session }
+      )
+      seller = sellers[0]
+    })
+  } catch (err) {
+    if (err?.code === 11000) {
+      const field = Object.keys(err?.keyPattern ?? {})[0]
+      return sendError(
+        res,
+        field === 'email'
+          ? 'An account with this email already exists'
+          : 'An account with this phone number already exists',
+        409
+      )
+    }
+    throw err
+  } finally {
+    await session.endSession()
+  }
 
   setAuthCookies(res, user)
   return sendSuccess(res, { seller: safeSeller(seller) }, 'Seller account created', 201)

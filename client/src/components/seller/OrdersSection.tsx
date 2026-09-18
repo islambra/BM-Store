@@ -1,15 +1,17 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Search, Trash2 } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Package, Search, Trash2 } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
 import * as api from '../../services/api'
 import { getErrorMessage } from '../../services/api'
 import ConfirmDialog from '../common/ConfirmDialog'
 import EmptyState from '../common/EmptyState'
+import SectionHeader from '../common/SectionHeader'
 import { Input, Select } from '../common/FormControls'
 import OrderStatusBadge from '../common/OrderStatusBadge'
 import { formatPrice } from '../common/Price'
 import { ErrorNote, Loader } from '../admin/adminShared'
+import { TicketChip } from './sellerShared'
 
 interface StatusAction {
   target: string
@@ -115,21 +117,28 @@ export default function SellerOrdersSection() {
     <div className="space-y-5">
       {notice && <ErrorNote message={notice} />}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="w-full max-w-sm">
-          <Input icon={Search} placeholder={t('admin.searchOrders')} value={query} onChange={(e) => setQuery(e.target.value)} />
-        </div>
-        <Select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-          options={statusOptions}
-          aria-label={t('seller.orders.status')}
-          className="w-full sm:w-56"
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <SectionHeader
+          title={t('seller.orders.title')}
+          subtitle={t('seller.orders.subtitle')}
+          badge={total > 0 ? String(total) : undefined}
         />
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <div className="w-full max-w-sm">
+            <Input icon={Search} placeholder={t('admin.searchOrders')} value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+          <Select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+            options={statusOptions}
+            aria-label={t('seller.orders.status')}
+            className="w-full sm:w-52"
+          />
+        </div>
       </div>
 
       {orders.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface">
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
           {query ? (
             <EmptyState icon={Search} title={t('common.noResults')} />
           ) : (
@@ -144,48 +153,68 @@ export default function SellerOrdersSection() {
             const discount = o.discountPercent ?? 0
             const discountValue = o.discountAmount ?? 0
             return (
-              <div key={String(o._id)} className="rounded-2xl border border-line bg-surface p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-bold tabular-nums text-ink-900" dir="ltr">{o.orderRef}</span>
+              <article key={String(o._id)} className="overflow-hidden rounded-2xl border border-line bg-surface">
+                {/* Ticket strip — reference, state, date */}
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-canvas/60 px-5 py-3.5">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <TicketChip dir="ltr">{o.orderRef}</TicketChip>
                     <OrderStatusBadge status={o.status} />
                     {o.customerOrderNumber != null && (
-                      <span className="inline-flex items-center rounded-full bg-canvas px-2.5 py-1 text-[11px] font-bold tabular-nums text-ink-700">
-                        {t('admin.customerOrder')} #{o.customerOrderNumber}
-                      </span>
+                      <TicketChip dir="ltr">#{o.customerOrderNumber}</TicketChip>
                     )}
                     {discount > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-success-50 px-2.5 py-1 text-[11px] font-bold tabular-nums text-success-700">
-                        −{discount}%
-                      </span>
+                      <span className="badge bg-success-50 text-success-700">−{discount}%</span>
                     )}
                   </div>
-                  <span className="text-xs text-ink-400">
+                  <span className="inline-flex items-center gap-1.5 text-xs tabular-nums text-ink-400">
                     {new Date(o.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : 'en-US')}
                   </span>
                 </div>
-                <ul className="mt-3 space-y-1.5">
+
+                {/* Ledger — items */}
+                <ul className="space-y-1.5 px-5 py-4">
                   {o.items.map((item, i) => (
-                    <li key={item.productId ?? i} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="min-w-0 truncate text-ink-700">
-                        {item.name} <span className="text-ink-400">× {item.qty}</span>
+                    <li key={item.productId ?? i} className="flex items-center justify-between gap-3 rounded-xl bg-canvas/40 px-3 py-2">
+                      <span className="flex min-w-0 items-center gap-3">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            loading="lazy"
+                            className="h-9 w-9 shrink-0 rounded-lg border border-line bg-canvas object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                            <Package size={16} />
+                          </span>
+                        )}
+                        <span className="min-w-0 truncate text-sm font-medium text-ink-800">
+                          {item.name}
+                          <span className="ms-1.5 font-normal text-ink-400">× {item.qty}</span>
+                        </span>
                       </span>
-                      <span className="shrink-0 font-semibold tabular-nums text-ink-900">{formatPrice(item.price * item.qty, lang)}</span>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-ink-900">
+                        {formatPrice(item.price * item.qty, lang)}
+                      </span>
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+
+                {/* Express strip — delivery, total, actions */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-canvas/40 px-5 py-4">
                   <div className="min-w-0 text-xs text-ink-500">
                     <p className="font-semibold text-ink-700">{o.customer.fullName}</p>
-                    <p dir="ltr" className="mt-0.5 tabular-nums">
-                      {o.customer.phone}
-                    </p>
+                    <p dir="ltr" className="mt-0.5 tabular-nums">{o.customer.phone}</p>
                     <p className="mt-0.5">
                       {o.customer.wilayaName || o.customer.wilaya} · {o.customer.commune} · {o.customer.address}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-extrabold tabular-nums text-ink-900">{formatPrice(o.total, lang)}</span>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="me-1 text-end">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-ink-400">{t('client.total')}</p>
+                      <p className="text-base font-extrabold tabular-nums text-ink-900">{formatPrice(o.total, lang)}</p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : String(o._id))}
@@ -222,8 +251,9 @@ export default function SellerOrdersSection() {
                     </button>
                   </div>
                 </div>
+
                 {isOpen && (
-                  <div className="mt-3 space-y-4 rounded-xl bg-canvas/70 px-4 py-3.5 text-sm">
+                  <div className="space-y-4 border-t border-line bg-canvas/60 px-5 py-4 text-sm">
                     <section>
                       <h4 className="text-xs font-extrabold uppercase tracking-wide text-ink-400">
                         {t('admin.customerInfo')}
@@ -304,18 +334,18 @@ export default function SellerOrdersSection() {
                     )}
                   </div>
                 )}
-              </div>
+              </article>
             )
           })}
         </div>
       )}
 
       {pages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-ink-500">
             {t('admin.showing')} {(page - 1) * limit + 1} {t('admin.of')} {Math.min(page * limit, total)} ({total} {t('admin.total')})
           </p>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -323,7 +353,7 @@ export default function SellerOrdersSection() {
               className="icon-btn disabled:opacity-40"
               aria-label={t('common.previous')}
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={18} className="rtl:rotate-180" />
             </button>
             <span className="inline-flex items-center text-sm font-medium text-ink-700">{page} / {pages}</span>
             <button
@@ -333,7 +363,7 @@ export default function SellerOrdersSection() {
               className="icon-btn disabled:opacity-40"
               aria-label={t('common.next')}
             >
-              <ChevronRight size={18} />
+              <ChevronRight size={18} className="rtl:rotate-180" />
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import User from '../models/User.js'
+import Seller from '../models/Seller.js'
 import MarketerProfile from '../models/MarketerProfile.js'
 import Referral from '../models/Referral.js'
 import Commission from '../models/Commission.js'
@@ -47,7 +48,13 @@ export const getUsers = asyncHandler(async (req, res) => {
 })
 
 export const getMarketers = asyncHandler(async (req, res) => {
-  const users = await User.find({ role: 'MARKETER' }).select('-passwordHash').sort({ createdAt: -1 }).lean()
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
+  const query = { role: 'MARKETER' }
+  const [users, total] = await Promise.all([
+    User.find(query).select('-passwordHash').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    User.countDocuments(query),
+  ])
   const ids = users.map((u) => u._id)
 
   const profiles = await MarketerProfile.find({ user: { $in: ids } }).lean()
@@ -80,7 +87,7 @@ export const getMarketers = asyncHandler(async (req, res) => {
     })
   )
 
-  return sendSuccess(res, { marketers: items })
+  return sendSuccess(res, { marketers: items, page, limit, total, pages: Math.ceil(total / limit) })
 })
 
 export const updateMarketerStatus = asyncHandler(async (req, res) => {
@@ -212,11 +219,9 @@ export const recordPayout = asyncHandler(async (req, res) => {
   }
 
   if (remaining > 0) {
-    const exactHit = commissions.some((c) => round2(c.amount) === amt)
-    if (!exactHit) {
-      return sendError(res, 'Payout amount must exactly match one or more available commissions', 400)
-    }
-    return sendError(res, 'Unable to claim commissions; please retry', 409)
+    // Greedy and subset search both failed, so the requested amount cannot be
+    // assembled from the available commissions; there is nothing safe to claim.
+    return sendError(res, 'Payout amount must exactly match one or more available commissions', 400)
   }
 
   const payout = await Payout.create({
@@ -261,16 +266,23 @@ export const updatePayoutStatus = asyncHandler(async (req, res) => {
 })
 
 export const getPayouts = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = {}
   if (req.query.marketer) query.marketer = req.query.marketer
   if (req.query.status) query.status = req.query.status
 
-  const payouts = await Payout.find(query)
-    .populate('marketer', 'name phone')
-    .sort({ createdAt: -1 })
-    .lean()
+  const [payouts, total] = await Promise.all([
+    Payout.find(query)
+      .populate('marketer', 'name phone')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Payout.countDocuments(query),
+  ])
 
-  return sendSuccess(res, { payouts })
+  return sendSuccess(res, { payouts, page, limit, total, pages: Math.ceil(total / limit) })
 })
 
 export const adminDeleteMarketer = asyncHandler(async (req, res) => {
@@ -298,6 +310,20 @@ export const adminDeleteUser = asyncHandler(async (req, res) => {
   if (user.role === 'ADMIN') return sendError(res, 'Cannot delete admin user', 400)
   if (String(user._id) === String(req.user._id)) {
     return sendError(res, 'You cannot delete your own account', 400)
+  }
+
+  // Historical integrity: never leave orders pointing at a deleted user, and
+  // never silently delete order history. If the account is linked to orders or
+  // to a seller profile, refuse deletion outright.
+  const [orderCount, sellerCount] = await Promise.all([
+    Order.countDocuments({ user: user._id }),
+    Seller.countDocuments({ user: user._id }),
+  ])
+  if (orderCount > 0) {
+    return sendError(res, `Cannot delete user: ${orderCount} order(s) are linked to this account`, 400)
+  }
+  if (sellerCount > 0) {
+    return sendError(res, 'Cannot delete user: a seller profile is linked to this account', 400)
   }
 
   await Promise.all([

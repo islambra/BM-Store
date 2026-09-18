@@ -124,6 +124,29 @@ describe('orders', () => {
     assert.equal(res.body.data.order.subtotal, 1500)
   })
 
+  it('rejects order-item quantities above the 999 cap', async () => {
+    const agent = await createCustomerAgent()
+    const product = await createProduct({ name: 'Qty Capped', price: 100 })
+    const res = await agent.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 1000 }],
+      customer: { fullName: 'Qty', phone: '0550', wilaya: '16', commune: 'X', address: 'Y' },
+    })
+    assert.equal(res.status, 400)
+    assert.match(res.body.message, /cannot exceed 999/i)
+  })
+
+  it('rejects orders with more than 50 line items', async () => {
+    const agent = await createCustomerAgent()
+    const product = await createProduct({ name: 'Items Capped', price: 100 })
+    const items = Array.from({ length: 51 }, () => ({ productId: product._id, qty: 1 }))
+    const res = await agent.post('/api/orders').send({
+      items,
+      customer: { fullName: 'Items', phone: '0550', wilaya: '16', commune: 'X', address: 'Y' },
+    })
+    assert.equal(res.status, 400)
+    assert.match(res.body.message, /at most 50 items/i)
+  })
+
   it('places orders for any available product', async () => {
     const agent = await createCustomerAgent()
     const product = await createProduct({ name: 'Always Available', price: 300 })
@@ -757,5 +780,81 @@ describe('admin + seller order deletion', () => {
     const sellerIds = sellerOnly.body.data.orders.map((o) => String(o._id))
     assert.ok(sellerIds.includes(String(sellerOrderId)))
     assert.ok(!sellerIds.includes(String(bmOrder._id)))
+  })
+})
+
+describe('admin user deletion guard', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  it('refuses to delete a user who has orders', async () => {
+    const { agent, id } = await registerAgent('Linked Customer')
+    const product = await createProduct({ name: 'Guarded', price: 100, stock: 5 })
+    await agent.post('/api/orders').send({
+      items: [{ productId: product._id, qty: 1 }],
+      customer: { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
+    })
+
+    const admin = request.agent(app)
+    const { phone: adminPhone, password } = await createAdmin()
+    await admin.post('/api/auth/login').send({ phone: adminPhone, password })
+    const del = await admin.delete(`/api/admin/users/${id}`)
+    assert.equal(del.status, 400)
+    assert.match(del.body.message, /order\(s\) are linked/)
+    assert.ok(await User.findById(id), 'user must still exist')
+  })
+
+  it('refuses to delete a user linked to a seller profile', async () => {
+    const { user } = await createUser({ role: 'SELLER' })
+    await Seller.create({ user: user._id, fullName: 'Seller Ghost', email: `ghost-${Date.now()}@test.dev`, phone: phone() })
+    await Store.create({ seller: (await Seller.findOne({ user: user._id }))._id, name: 'Ghost Store', slug: `ghost-${Date.now()}` })
+
+    const admin = request.agent(app)
+    const { phone: adminPhone, password } = await createAdmin()
+    await admin.post('/api/auth/login').send({ phone: adminPhone, password })
+    const del = await admin.delete(`/api/admin/users/${user._id}`)
+    assert.equal(del.status, 400)
+    assert.match(del.body.message, /seller profile/)
+  })
+
+  it('deletes a clean user with no orders', async () => {
+    const { id } = await registerAgent('Clean Delete')
+
+    const admin = request.agent(app)
+    const { phone: adminPhone, password } = await createAdmin()
+    await admin.post('/api/auth/login').send({ phone: adminPhone, password })
+    const del = await admin.delete(`/api/admin/users/${id}`)
+    assert.equal(del.status, 200)
+    assert.equal(await User.findById(id), null)
+  })
+})
+
+describe('getMyOrders pagination', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  it('paginates customer orders and keeps the reward peek', async () => {
+    const agent = await createCustomerAgent()
+    const product = await createProduct({ name: 'Paged', price: 100, stock: 20 })
+    const customer = { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' }
+    for (let i = 0; i < 3; i += 1) {
+      await agent.post('/api/orders').send({ items: [{ productId: product._id, qty: 1 }], customer })
+    }
+
+    const page1 = await agent.get('/api/orders/me?page=1&limit=2')
+    assert.equal(page1.status, 200)
+    assert.equal(page1.body.data.orders.length, 2)
+    assert.equal(page1.body.data.total, 3)
+    assert.equal(page1.body.data.pages, 2)
+    assert.equal(page1.body.data.page, 1)
+    assert.equal(page1.body.data.limit, 2)
+    assert.equal(page1.body.data.nextCustomerOrderNumber, 1)
+
+    const page2 = await agent.get('/api/orders/me?page=2&limit=2')
+    assert.equal(page2.body.data.orders.length, 1)
+    assert.equal(page2.body.data.page, 2)
+
+    const capped = await agent.get('/api/orders/me?limit=500')
+    assert.equal(capped.body.data.limit, 50)
   })
 })

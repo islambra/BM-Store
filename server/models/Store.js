@@ -5,7 +5,10 @@ export const SUBSCRIPTION_PLANS = ['monthly', 'yearly']
 
 const storeSchema = new mongoose.Schema(
   {
-    seller: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', required: true, index: true },
+    // One seller = one store. The unique index is the hard guarantee behind
+    // the business rule (a second Store for the same seller is rejected with
+    // a duplicate-key error, surfaced as a 409 by the global error handler).
+    seller: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', required: true, unique: true, index: true },
     name: { type: String, required: true, trim: true, maxlength: 100 },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     description: { type: String, trim: true, maxlength: 1000 },

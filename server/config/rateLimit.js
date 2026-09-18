@@ -21,3 +21,7 @@ export const limitAuth = productionLimiter({ limit: 30 })
 // Public, write-heavy endpoint (referral visit tracking). Slows down
 // DB-bloat spam since every tracked (visitor) creates a Referral document.
 export const limitTracking = productionLimiter({ limit: 180 })
+
+// Order creation is a financial write path: light throttle against abuse
+// while staying invisible to normal checkout flows.
+export const limitOrders = productionLimiter({ limit: 60 })

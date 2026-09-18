@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Plus, Search, Edit, Trash2, Package, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Package, Plus, Search, TrendingUp } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { listMyProducts, createMyProduct, updateMyProduct, deleteMyProduct } from '../../services/api'
 import { getErrorMessage } from '../../services/api'
-import { formatPrice } from '../../components/common/Price'
 import SectionHeader from '../../components/common/SectionHeader'
 import { Alert } from '../../components/common/FormControls'
 import { Input, Button } from '../../components/common/FormControls'
-import ProductFormModal from './ProductFormModal'
+import EmptyState from '../../components/common/EmptyState'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
+import ProductFormModal from './ProductFormModal'
+import { CatalogList, CatalogRow, MediaTile, ItemText, PriceRail, RowActions } from './sellerShared'
 
 type Product = {
   _id: string
@@ -22,6 +23,7 @@ type Product = {
   categoryName: string
   isSpecialOffer: boolean
   discount: number
+  confirmedSales?: number
 }
 
 export default function SellerProductsSection() {
@@ -92,132 +94,134 @@ export default function SellerProductsSection() {
     fetchProducts()
   }
 
-  const filteredProducts = products
-
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <SectionHeader title={t('seller.products.title')} subtitle={t('seller.products.subtitle')} />
           <Button onClick={handleCreate}><Plus size={18} /> {t('seller.products.add')}</Button>
         </div>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="animate-pulse flex gap-4 rounded-2xl border border-line bg-surface p-3.5">
-            <div className="h-24 w-24 shrink-0 rounded-xl bg-ink-900/10" />
-            <div className="flex-1 space-y-3">
-              <div className="h-4 w-3/4 bg-ink-900/10 rounded" />
-              <div className="h-3 w-1/2 bg-ink-900/10 rounded" />
-              <div className="h-3 w-1/3 bg-ink-900/10 rounded" />
-            </div>
+        <CatalogList>
+          <div className="animate-pulse">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 border-b border-line px-5 py-4 last:border-b-0">
+                <div className="h-16 w-16 shrink-0 rounded-xl bg-ink-900/10" />
+                <div className="flex-1 space-y-2.5">
+                  <div className="h-4 w-1/3 rounded bg-ink-900/10" />
+                  <div className="h-3 w-1/4 rounded bg-ink-900/10" />
+                </div>
+                <div className="h-8 w-20 rounded-lg bg-ink-900/10" />
+              </div>
+            ))}
           </div>
-        ))}
+        </CatalogList>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <SectionHeader title={t('seller.products.title')} subtitle={t('seller.products.subtitle')} />
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <SectionHeader
+          title={t('seller.products.title')}
+          subtitle={t('seller.products.subtitle')}
+          badge={total > 0 ? String(total) : undefined}
+        />
         <Button onClick={handleCreate}><Plus size={18} /> {t('seller.products.add')}</Button>
       </div>
 
-      <div className="relative">
-        <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
+      <div className="w-full max-w-md">
         <Input
+          icon={Search}
           placeholder={t('common.search')}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-          className="ps-10"
         />
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      {filteredProducts.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-surface p-10 text-center">
-          <Package size={48} className="mx-auto text-ink-400" />
-          <h3 className="mt-4 text-lg font-semibold text-ink-900">{t('common.empty')}</h3>
-          <p className="mt-1 text-ink-500">{t('seller.products.noProducts')}</p>
-          <Button className="mt-4" onClick={handleCreate}><Plus size={16} /> {t('seller.products.add')}</Button>
+      {products.length === 0 ? (
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+          <EmptyState
+            icon={Package}
+            title={t('common.empty')}
+            description={t('seller.products.noProducts')}
+            action={<Button onClick={handleCreate}><Plus size={16} /> {t('seller.products.add')}</Button>}
+          />
         </div>
       ) : (
-        <div className="rounded-2xl border border-line bg-surface overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-line bg-ink-900/5">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.name')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.category')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.type')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.price')}</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">{t('common.actions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {filteredProducts.map((product) => (
-                  <tr key={product._id} className="hover:bg-ink-900/5">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <img src={product.image} alt={product.name} className="h-12 w-12 rounded-lg object-cover" />
-                        <div>
-                          <p className="font-medium text-ink-900">{product.nameAr || product.name}</p>
-                          <p className="text-sm text-ink-500">{product.categoryName || product.category}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-ink-700">{product.categoryName || product.category}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        product.isSpecialOffer ? 'bg-accent-50 text-accent-600' : 'bg-brand-50 text-brand-600'
-                      }`}>
-                        {product.isSpecialOffer ? t('seller.products.typeOffer') : t('seller.products.typeNormal')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-medium text-ink-900">
-                      {formatPrice(product.price, lang)}
-                      {product.isSpecialOffer && product.oldPrice && (
-                        <span className="ml-2 text-sm line-through text-ink-400">{formatPrice(product.oldPrice, lang)}</span>
+        <>
+          <CatalogList>
+            {products.map((product) => (
+              <CatalogRow key={product._id}>
+                <MediaTile
+                  src={product.image}
+                  alt={product.nameAr || product.name}
+                  icon={Package}
+                  size="lg"
+                />
+                <ItemText
+                  title={product.nameAr || product.name}
+                  secondary={
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                      <span>{product.categoryName || product.category}</span>
+                      {typeof product.confirmedSales === 'number' && product.confirmedSales > 0 && (
+                        <span className="inline-flex items-center gap-1 tabular-nums text-ink-400">
+                          <TrendingUp size={12} aria-hidden="true" />
+                          {product.confirmedSales} {t('seller.products.sold')}
+                        </span>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(product)}
-                          className="icon-btn text-ink-400 hover:text-brand-600"
-                          aria-label={t('common.edit')}
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(product)}
-                          className="icon-btn text-ink-400 hover:text-danger-600"
-                          aria-label={t('common.delete')}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </span>
+                  }
+                />
+                <div className="ms-auto flex items-center gap-4">
+                  {product.isSpecialOffer && (
+                    <span className="badge bg-accent-500/10 text-accent-700">{t('seller.products.typeOffer')}</span>
+                  )}
+                  <PriceRail
+                    price={product.price}
+                    oldPrice={product.isSpecialOffer ? product.oldPrice : undefined}
+                    lang={lang}
+                  />
+                  <RowActions
+                    onEdit={() => handleEdit(product)}
+                    onDelete={() => handleDelete(product)}
+                    editLabel={t('common.edit')}
+                    deleteLabel={t('common.delete')}
+                  />
+                </div>
+              </CatalogRow>
+            ))}
+          </CatalogList>
 
           {pages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-line">
+            <div className="flex items-center justify-between gap-3 border-t border-line bg-canvas/40 px-5 py-3">
               <p className="text-sm text-ink-500">
                 {t('admin.showing')} {(page - 1) * limit + 1} {t('admin.of')} {Math.min(page * limit, total)} ({total} {t('admin.total')})
               </p>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} icon><ChevronLeft size={16} /></Button>
-                <Button variant="ghost" onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page === pages} icon><ChevronRight size={16} /></Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  icon={<ChevronLeft size={18} className="rtl:rotate-180" />}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  aria-label={t('common.previous')}
+                />
+                <span className="inline-flex items-center justify-center text-sm font-medium text-ink-700">{page} / {pages}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  icon={<ChevronRight size={18} className="rtl:rotate-180" />}
+                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                  disabled={page === pages}
+                  aria-label={t('common.next')}
+                />
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
 
       <ProductFormModal
@@ -239,8 +243,9 @@ export default function SellerProductsSection() {
         onConfirm={confirmDelete}
         title={t('seller.products.deleteTitle', { name: deletingProduct?.nameAr || deletingProduct?.name || '' })}
         description={t('seller.products.deleteDesc')}
-        confirmText={t('common.delete')}
-        tone="danger"
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        danger
       />
     </div>
   )

@@ -24,7 +24,6 @@ export const getPublicRewards = asyncHandler(async (_req, res) => {
       slug: c.slug,
       name: c.name,
       nameAr: c.nameAr,
-      nameFr: c.nameFr,
       rewardNormalPercent: c.rewardNormalPercent,
       rewardSpecialPercent: c.rewardSpecialPercent,
     }))

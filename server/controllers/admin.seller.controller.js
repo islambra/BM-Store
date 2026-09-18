@@ -214,6 +214,11 @@ export const adminApproveStoreRequest = asyncHandler(async (req, res) => {
     return sendSuccess(res, { store, request }, 'Subscription renewed successfully')
   } else {
     // New store request
+    // One store per seller — never create a second one (also enforced by the
+    // unique `seller` index in the Store schema).
+    const sellerStoreExists = await Store.exists({ seller: request.seller })
+    if (sellerStoreExists) return sendError(res, 'This seller already has a store', 400)
+
     // Check slug availability again
     const slugExists = await Store.exists({ slug: request.slug })
     if (slugExists) return sendError(res, 'Store URL is no longer available', 400)

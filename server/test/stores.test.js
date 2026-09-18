@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
+import mongoose from 'mongoose'
 import app from '../app.js'
 import { connectTest, disconnectTest, createAdmin, uniquePhone } from './helpers.mjs'
 import Product from '../models/Product.js'
@@ -12,6 +13,25 @@ import Store from '../models/Store.js'
 describe('public stores: BM Store is NOT a seller store', () => {
   before(connectTest)
   after(disconnectTest)
+
+  it('enforces one store per seller via the unique seller index', async () => {
+    const seller = await Seller.create({
+      user: new mongoose.Types.ObjectId(),
+      fullName: 'One Store Seller',
+      email: `oss-${Date.now()}@test.dev`,
+      phone: uniquePhone(),
+    })
+    const opts = { seller: seller._id, name: 'First Store', slug: `oss-first-${Date.now()}` }
+    const first = await Store.create(opts)
+    assert.ok(first._id)
+
+    await assert.rejects(
+      Store.create({ ...opts, slug: `oss-second-${Date.now()}` }),
+      (err) => err?.code === 11000,
+      'a second store for the same seller must be rejected by the unique index'
+    )
+    assert.equal(await Store.countDocuments({ seller: seller._id }), 1)
+  })
 
   it('does not list the BM Store in the stores directory but still serves its catalog via /bm-store', async () => {
     const cat = `bmcat-${Date.now()}`
@@ -221,5 +241,67 @@ describe('sellers may reuse BM Store category and product names', () => {
     assert.equal(prodRes.body.data.name, sharedName)
     assert.equal(prodRes.body.data.ownerType, 'SELLER')
     assert.notEqual(prodRes.body.data.slug, bmProduct.slug, 'seller slug must not collide with the global product slug')
+  })
+})
+
+describe('seller store category product counts', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  it('returns real per-category counts on the public store page and in the seller dashboard', async () => {
+    const stamp = Date.now()
+
+    const number = uniquePhone()
+    await request(app).post('/api/seller/register').send({
+      fullName: 'Count Seller',
+      email: `count-${number}@test.dev`,
+      phone: number,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    const agent = request.agent(app)
+    const login = await agent.post('/api/seller/login').send({ phone: number, password: 'Secret@1234' })
+    assert.equal(login.status, 200)
+
+    const seller = await Seller.findOne({ phone: number }).lean()
+    const store = await Store.create({
+      seller: seller._id,
+      name: 'Count Store',
+      slug: `count-store-${stamp}`,
+      status: 'active',
+      subscriptionPlan: 'monthly',
+      subscriptionStartDate: new Date(),
+      subscriptionEndDate: new Date(Date.now() + 30 * 86400000),
+    })
+
+    const catA = `count-a-${stamp}`
+    const catB = `count-b-${stamp}`
+    await Category.create([
+      { store: store._id, slug: catA, name: 'Count A', nameAr: 'فئة أ', active: true, order: 1 },
+      { store: store._id, slug: catB, name: 'Count B', nameAr: 'فئة ب', active: true, order: 2 },
+    ])
+
+    await Product.create([
+      { store: store._id, ownerType: 'SELLER', slug: `count-p1-${stamp}`, name: 'P1', price: 100, category: catA, categoryName: 'Count A' },
+      { store: store._id, ownerType: 'SELLER', slug: `count-p2-${stamp}`, name: 'P2', price: 200, category: catA, categoryName: 'Count A' },
+      { store: store._id, ownerType: 'SELLER', slug: `count-p3-${stamp}`, name: 'P3', price: 300, category: catA, categoryName: 'Count A' },
+      { store: store._id, ownerType: 'SELLER', slug: `count-p4-${stamp}`, name: 'P4', price: 400, category: catB, categoryName: 'Count B' },
+      { store: store._id, ownerType: 'SELLER', slug: `count-p5-${stamp}`, name: 'P5', price: 500, category: catB, categoryName: 'Count B' },
+    ])
+
+    // Public store page: per-category productCount must be real numbers.
+    const detail = await request(app).get(`/api/stores/${store.slug}`)
+    assert.equal(detail.status, 200)
+    assert.equal(detail.body.data.store.productCount, 5)
+    const bySlug = Object.fromEntries(detail.body.data.categories.map((c) => [c.slug, c]))
+    assert.equal(bySlug[catA].productCount, 3, 'public store category A must show its real product count')
+    assert.equal(bySlug[catB].productCount, 2, 'public store category B must show its real product count')
+
+    // Seller dashboard: the same counts surface through /api/store/categories.
+    const mine = await agent.get('/api/store/categories')
+    assert.equal(mine.status, 200)
+    const mineBySlug = Object.fromEntries(mine.body.data.categories.map((c) => [c.slug, c]))
+    assert.equal(mineBySlug[catA].productCount, 3, 'dashboard category A must show its real product count')
+    assert.equal(mineBySlug[catB].productCount, 2, 'dashboard category B must show its real product count')
   })
 })

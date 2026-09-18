@@ -641,6 +641,7 @@ export interface SellerCategoryPayload {
   icon?: string
   order: number
   active: boolean
+  productCount?: number
   store: string
   createdAt: string
   updatedAt: string
