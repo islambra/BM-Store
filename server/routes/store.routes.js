@@ -19,6 +19,9 @@ import {
   getMyEarnings,
   getMySubscription,
   submitRenewalRequest,
+  getMyDelivery,
+  updateMyDeliveryDefault,
+  updateMyWilayaDelivery,
 } from '../controllers/store.controller.js'
 
 const router = Router()
@@ -51,6 +54,11 @@ router.delete('/orders/:id', deleteMyOrder)
 
 // Earnings
 router.get('/earnings', getMyEarnings)
+
+// Delivery costs (per-wilaya overrides + store default)
+router.get('/delivery', getMyDelivery)
+router.patch('/delivery', updateMyDeliveryDefault)
+router.patch('/delivery/:code', updateMyWilayaDelivery)
 
 // Subscription
 router.get('/subscription', getMySubscription)

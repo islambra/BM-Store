@@ -1,4 +1,6 @@
 import Wilaya from '../models/Wilaya.js'
+import Store from '../models/Store.js'
+import StoreDelivery from '../models/StoreDelivery.js'
 import { DEFAULT_DELIVERY_PRICE } from '../config/wilayas.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 
@@ -48,15 +50,39 @@ export const adminUpdate = asyncHandler(async (req, res) => {
 })
 
 /**
+ * Seller-store default delivery price (fallback for wilayas the seller has not
+ * configured individually, and for the legacy unknown-code path).
+ */
+async function storeDefaultPrice(storeId) {
+  const store = storeId ? await Store.findById(storeId, 'defaultDeliveryPrice').lean() : null
+  const dp = store?.defaultDeliveryPrice
+  return typeof dp === 'number' && Number.isFinite(dp) && dp >= 0 ? Math.round(dp) : DEFAULT_DELIVERY_PRICE
+}
+
+/**
+ * Resolves the delivery price for a seller store: a per-wilaya StoreDelivery
+ * override wins, then the store's defaultDeliveryPrice, then the platform
+ * default. BM Store orders (no storeId) use the global Wilaya price.
+ */
+async function sellerDeliveryPrice(storeId, wilayaId) {
+  if (!storeId || !wilayaId) return null
+  const override = await StoreDelivery.findOne({ store: storeId, wilaya: wilayaId }).lean()
+  if (override) return Math.round(override.deliveryPrice)
+  return storeDefaultPrice(storeId)
+}
+
+/**
  * Resolves the destination wilaya for an order, entirely server-side.
  *
  * Prefers a Mongo `_id` ("wilayaId" — the payload the storefront sends today).
  * A legacy "wilaya" code is still accepted for backwards compatibility. The
  * delivery price is ALWAYS taken from the database — never from the client.
+ * Orders placed on a seller store (`storeId`) are priced with that store's own
+ * delivery costs; BM Store orders use the global per-wilaya price.
  *
  * Returns `{ wilayaId, wilayaName, wilayaCode, deliveryPrice }` or an error.
  */
-export async function getDeliveryInfo({ wilayaId, wilaya, wilayaName } = {}) {
+export async function getDeliveryInfo({ wilayaId, wilaya, wilayaName, storeId } = {}) {
   if (wilayaId) {
     let doc = null
     try {
@@ -65,11 +91,12 @@ export async function getDeliveryInfo({ wilayaId, wilaya, wilayaName } = {}) {
       return { error: 'Please choose a valid wilaya' }
     }
     if (!doc || !activeOf(doc)) return { error: 'Please choose a valid wilaya' }
+    const sellerPrice = await sellerDeliveryPrice(storeId, doc._id)
     return {
       wilayaId: doc._id,
       wilayaName: doc.name,
       wilayaCode: doc.code,
-      deliveryPrice: priceOf(doc),
+      deliveryPrice: sellerPrice !== null ? sellerPrice : priceOf(doc),
     }
   }
 
@@ -77,20 +104,21 @@ export async function getDeliveryInfo({ wilayaId, wilaya, wilayaName } = {}) {
     const code = String(wilaya).trim()
     const doc = await Wilaya.findOne({ code }).lean()
     if (doc && activeOf(doc)) {
+      const sellerPrice = await sellerDeliveryPrice(storeId, doc._id)
       return {
         wilayaId: doc._id,
         wilayaName: doc.name,
         wilayaCode: doc.code,
-        deliveryPrice: priceOf(doc),
+        deliveryPrice: sellerPrice !== null ? sellerPrice : priceOf(doc),
       }
     }
-    // Legacy path: unknown/inactive code → flat default price. Keeps existing
-    // orders and old tests (which send codes) working unchanged.
+    // Legacy path: unknown/inactive code → the store default (seller orders)
+    // or the flat platform default (BM Store / old tests which send codes).
     return {
       wilayaId: null,
       wilayaName: wilayaName ? String(wilayaName).trim() : code,
       wilayaCode: code,
-      deliveryPrice: DEFAULT_DELIVERY_PRICE,
+      deliveryPrice: storeId ? await storeDefaultPrice(storeId) : DEFAULT_DELIVERY_PRICE,
     }
   }
 

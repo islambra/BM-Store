@@ -5,6 +5,9 @@ import Category from '../models/Category.js'
 import Order from '../models/Order.js'
 import Seller from '../models/Seller.js'
 import StoreRequest from '../models/StoreRequest.js'
+import Wilaya from '../models/Wilaya.js'
+import StoreDelivery from '../models/StoreDelivery.js'
+import { DEFAULT_DELIVERY_PRICE } from '../config/wilayas.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 import { deleteGridFSByUrl } from '../utils/gridfs.js'
 import { reverseOrderEffects } from './order.controller.js'
@@ -49,6 +52,85 @@ export const updateMyStore = asyncHandler(async (req, res) => {
 
   await store.save()
   return sendSuccess(res, { store }, 'Store updated')
+})
+
+// Delivery costs — per-wilaya overrides backed by StoreDelivery, plus the
+// store's own default fallback price. Mirrors the admin wilaya screen but for
+// a single seller store; always resolved server-side at order time.
+const sellerDeliveryShape = (w, priceByWilayaId, defaultPrice) => ({
+  _id: w._id,
+  code: w.code,
+  name: w.name,
+  nameAr: w.nameAr,
+  deliveryPrice: priceByWilayaId.has(String(w._id))
+    ? Math.round(priceByWilayaId.get(String(w._id)))
+    : defaultPrice,
+})
+
+export const getMyDelivery = asyncHandler(async (req, res) => {
+  const seller = await getSellerFromReq(req)
+  if (!seller) return sendError(res, 'Seller profile not found', 401)
+
+  const store = await getSellerStore(seller._id)
+  if (!store) return sendError(res, 'Store not found', 404)
+
+  const defaultPrice =
+    typeof store.defaultDeliveryPrice === 'number' && Number.isFinite(store.defaultDeliveryPrice) && store.defaultDeliveryPrice >= 0
+      ? Math.round(store.defaultDeliveryPrice)
+      : DEFAULT_DELIVERY_PRICE
+
+  const [wilayas, overrides] = await Promise.all([
+    Wilaya.find().sort({ order: 1, code: 1 }).lean(),
+    StoreDelivery.find({ store: store._id }).lean(),
+  ])
+  const priceByWilayaId = new Map(overrides.map((o) => [String(o.wilaya), o.deliveryPrice]))
+
+  return sendSuccess(res, {
+    defaultPrice,
+    wilayas: wilayas.map((w) => sellerDeliveryShape(w, priceByWilayaId, defaultPrice)),
+  })
+})
+
+export const updateMyDeliveryDefault = asyncHandler(async (req, res) => {
+  const seller = await getSellerFromReq(req)
+  if (!seller) return sendError(res, 'Seller profile not found', 401)
+
+  const store = await Store.findOne({ seller: seller._id })
+  if (!store) return sendError(res, 'Store not found', 404)
+
+  const { deliveryPrice } = req.body ?? {}
+  const price = Number(deliveryPrice)
+  if (!Number.isFinite(price) || price < 0) {
+    return sendError(res, 'Delivery price must be a number of 0 or more', 400)
+  }
+
+  store.defaultDeliveryPrice = Math.round(price)
+  await store.save()
+  return sendSuccess(res, { defaultPrice: store.defaultDeliveryPrice }, 'Default delivery price updated')
+})
+
+export const updateMyWilayaDelivery = asyncHandler(async (req, res) => {
+  const seller = await getSellerFromReq(req)
+  if (!seller) return sendError(res, 'Seller profile not found', 401)
+
+  const store = await getSellerStore(seller._id)
+  if (!store) return sendError(res, 'Store not found', 404)
+
+  const wilaya = await Wilaya.findOne({ code: req.params.code }).lean()
+  if (!wilaya) return sendError(res, 'Wilaya not found', 404)
+
+  const { deliveryPrice } = req.body ?? {}
+  const price = Number(deliveryPrice)
+  if (!Number.isFinite(price) || price < 0) {
+    return sendError(res, 'Delivery price must be a number of 0 or more', 400)
+  }
+
+  await StoreDelivery.findOneAndUpdate(
+    { store: store._id, wilaya: wilaya._id },
+    { $set: { deliveryPrice: Math.round(price) } },
+    { upsert: true }
+  )
+  return sendSuccess(res, { code: wilaya.code, deliveryPrice: Math.round(price) }, 'Delivery price updated')
 })
 
 // Products

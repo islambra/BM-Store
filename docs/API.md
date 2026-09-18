@@ -90,8 +90,22 @@ Storage endpoints (all require a seller session) are relative to `/store`:
 `GET/PATCH /store` (my store), `/store/products` (+ `/products/:id`,
 `/products` POST/PATCH/DELETE, `PATCH /products/:id/toggle`),
 `/store/categories` (CRUD), `/store/orders` (+ `PATCH /orders/:id/status`),
-`GET /store/earnings`, `GET /store/subscription`, and
+`GET /store/earnings`, `GET /store/subscription`,
 `POST /store/subscription/renew`.
+
+**Delivery costs (per seller store).**
+
+| Method | Path                 | Auth          | Note                                                          | Returns |
+| ------ | -------------------- | ------------- | ------------------------------------------------------------- | ------- |
+| GET    | `/store/delivery`    | seller cookie | all 58 wilayas with the price computed for **this store** (per-wilaya override → store default → platform default 350), plus the store default price | `{defaultPrice, wilayas:[{_id, code, name, nameAr, deliveryPrice}]}` |
+| PATCH  | `/store/delivery`    | seller cookie | `{deliveryPrice}` — sets the store's default delivery price (whole number ≥ 0); applies to every wilaya without a specific override and is used automatically when an override already matches the default | `{defaultPrice}` |
+| PATCH  | `/store/delivery/:code` | seller cookie | `{deliveryPrice}` — sets (upserts) the delivery price for one wilaya by its code (`01`–`58`); whole number ≥ 0; unknown code → 404 | `{code, deliveryPrice}` |
+
+Prices are resolved **server-side** at checkout: an order placed on a seller
+store charges this store's price for the selected wilaya (overrides → store
+default → platform `DEFAULT_DELIVERY_PRICE`), while BM Store orders keep the
+platform price. The seller's overrides never touch the platform/admin wilaya
+prices.
 
 **Subscription lifecycle (server-side scheduler).** A store's subscription runs
 until `subscriptionEndDate`; after that the store is marked `expired` and hidden

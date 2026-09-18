@@ -142,6 +142,7 @@ function MainRoutes() {
           <Route path="orders" element={<SellerPage />} />
           <Route path="earnings" element={<SellerPage />} />
           <Route path="subscription" element={<SellerPage />} />
+          <Route path="delivery" element={<SellerPage />} />
           <Route path="profile" element={<SellerPage />} />
         </Route>
       </Route>

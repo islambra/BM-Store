@@ -17,6 +17,10 @@ const storeSchema = new mongoose.Schema(
     phone: { type: String, trim: true, maxlength: 30 },
     wilaya: { type: String, trim: true },
     city: { type: String, trim: true },
+    // Delivery fee charged for a wilaya that has no per-wilaya override in
+    // StoreDelivery. The seller can change it from their delivery tab; the
+    // platform default is applied when no value is stored.
+    defaultDeliveryPrice: { type: Number, default: 350, min: 0 },
     status: { type: String, enum: STORE_STATUSES, default: 'pending', index: true },
     subscriptionPlan: { type: String, enum: SUBSCRIPTION_PLANS },
     subscriptionStartDate: { type: Date },

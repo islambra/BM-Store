@@ -784,6 +784,31 @@ export function updateMyStore(body: {
   return patch<{ store: SellerStorePayload }>('/store', body)
 }
 
+export interface SellerDeliveryWilayaPayload {
+  _id: string
+  code: string
+  name: string
+  nameAr?: string
+  deliveryPrice: number
+}
+
+export interface SellerDeliveryPayload {
+  defaultPrice: number
+  wilayas: SellerDeliveryWilayaPayload[]
+}
+
+export function getMyDelivery() {
+  return get<SellerDeliveryPayload>('/store/delivery')
+}
+
+export function updateMyDeliveryDefault(body: { deliveryPrice: number }) {
+  return patch<{ defaultPrice: number }>('/store/delivery', body)
+}
+
+export function updateMyWilayaDelivery(code: string, body: { deliveryPrice: number }) {
+  return patch<{ code: string; deliveryPrice: number }>(`/store/delivery/${code}`, body)
+}
+
 export function listMyProducts(params?: { page?: number; limit?: number; q?: string }) {
   const qs = new URLSearchParams()
   if (params?.page) qs.set('page', String(params.page))

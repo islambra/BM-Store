@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle, ClipboardList, HandCoins, LayoutDashboard, Link2, Package, Settings, Store, User } from 'lucide-react'
+import { AlertTriangle, ClipboardList, HandCoins, LayoutDashboard, Link2, Package, Settings, Store, Truck, User } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { getSellerMe } from '../services/api'
 import PageHeader from '../components/common/PageHeader'
@@ -14,6 +14,7 @@ import SellerOrdersSection from '../components/seller/OrdersSection'
 import SellerEarningsSection from '../components/seller/EarningsSection'
 import SellerSubscriptionSection from '../components/seller/SubscriptionSection'
 import SellerProfileSection from '../components/seller/ProfileSection'
+import SellerDeliverySection from '../components/seller/DeliverySection'
 import { Alert } from '../components/common/FormControls'
 
 const tabs = [
@@ -24,6 +25,7 @@ const tabs = [
   { id: 'orders', labelKey: 'seller.tabOrders', icon: ClipboardList },
   { id: 'earnings', labelKey: 'seller.tabEarnings', icon: HandCoins },
   { id: 'subscription', labelKey: 'seller.tabSubscription', icon: Settings },
+  { id: 'delivery', labelKey: 'seller.tabDelivery', icon: Truck },
   { id: 'profile', labelKey: 'seller.tabProfile', icon: User },
 ] as const
 
@@ -154,6 +156,7 @@ export default function SellerPage() {
       {active === 'orders' && <SellerOrdersSection />}
       {active === 'earnings' && <SellerEarningsSection />}
       {active === 'subscription' && <SellerSubscriptionSection />}
+      {active === 'delivery' && <SellerDeliverySection />}
       {active === 'profile' && <SellerProfileSection />}
     </SellerShell>
   )

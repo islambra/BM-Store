@@ -210,9 +210,10 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
 
   // Shipping is priced and snapshotted server-side from the destination
-  // wilaya ("wilayaId"; a legacy "wilaya" code is still accepted). The client
-  // can never influence the delivery price.
-  const info = await getDeliveryInfo(delivery)
+  // wilaya ("wilayaId"; a legacy "wilaya" code is still accepted). Seller-store
+  // orders use that store's own delivery costs; BM Store orders use the global
+  // price. The client can never influence the delivery price.
+  const info = await getDeliveryInfo({ ...delivery, storeId })
   if (info.error) return sendError(res, info.error, 400)
   const shipping = info.deliveryPrice
   // NOTE: customerOrderNumber / discountPercent / discountAmount are assigned
@@ -389,11 +390,13 @@ const { storeId } = storeValidation
     if (delivery.fullName !== undefined) order.customer.fullName = String(delivery.fullName).trim()
     if (delivery.phone !== undefined) order.customer.phone = String(delivery.phone).trim()
     if (delivery.wilaya !== undefined || delivery.wilayaId !== undefined) {
-      // Re-resolve + resnapshot from the database on a wilaya change.
+      // Re-resolve + resnapshot from the database on a wilaya change. Seller
+      // orders re-price against the store's own delivery costs.
       const info = await getDeliveryInfo({
         wilayaId: delivery.wilayaId,
         wilaya: delivery.wilaya,
         wilayaName: delivery.wilayaName,
+        storeId: order.store || undefined,
       })
       if (info.error) return sendError(res, info.error, 400)
       order.customer.wilaya = info.wilayaCode
