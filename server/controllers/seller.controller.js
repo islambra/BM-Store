@@ -247,6 +247,7 @@ export const submitStoreRequest = asyncHandler(async (req, res) => {
   const {
     storeName,
     storeDescription,
+    storeDescriptionAr,
     storeLogo,
     storePhone,
     wilaya,
@@ -256,8 +257,8 @@ export const submitStoreRequest = asyncHandler(async (req, res) => {
     paymentProof,
   } = req.body ?? {}
 
-  if (!storeName?.trim() || !subscriptionPlan || !paymentProof?.trim() || !slug?.trim()) {
-    return sendError(res, 'Store name, subscription plan, payment proof, and store URL are required', 400)
+  if (!storeName?.trim() || !storeDescriptionAr?.trim() || !subscriptionPlan || !paymentProof?.trim() || !slug?.trim()) {
+    return sendError(res, 'Store name, description (English and Arabic), subscription plan, payment proof, and store URL are required', 400)
   }
 
   if (!['monthly', 'yearly'].includes(subscriptionPlan)) {
@@ -289,6 +290,7 @@ export const submitStoreRequest = asyncHandler(async (req, res) => {
     sellerPhone: seller.phone,
     storeName: storeName.trim(),
     storeDescription: storeDescription?.trim(),
+    storeDescriptionAr: storeDescriptionAr?.trim(),
     storeLogo,
     storePhone: storePhone?.trim(),
     wilaya: wilaya?.trim(),

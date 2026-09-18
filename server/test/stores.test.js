@@ -96,7 +96,7 @@ describe('seller subscription renewal', () => {
     assert.equal(submitted.status, 201)
     const requestId = submitted.body.data.storeRequest._id
 
-    const approved = await adminAgent().then((admin) => admin.post(`/api/admin/store-requests/${requestId}/approve`))
+    const approved = await adminAgent().then((admin) => admin.post(`/api/admin/seller/store-requests/${requestId}/approve`))
     assert.equal(approved.status, 200)
 
     const updated = await Store.findById(store._id).lean()
@@ -104,5 +104,122 @@ describe('seller subscription renewal', () => {
     const days = (newEnd - Date.now()) / 86400000
     assert.ok(days > 38 && days < 42, `expected ~40 days (10 carried over + 1 month), got ${days}`)
     assert.ok(newEnd > oldEnd, 'new end date must be later than the old end date')
+  })
+})
+
+describe('seller store description (EN + AR)', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  it('requires an Arabic description on the store request and keeps it on approval', async () => {
+    const number = uniquePhone()
+    await request(app).post('/api/seller/register').send({
+      fullName: 'Desc Seller',
+      email: `desc-${number}@test.dev`,
+      phone: number,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    const agent = request.agent(app)
+    const login = await agent.post('/api/seller/login').send({ phone: number, password: 'Secret@1234' })
+    assert.equal(login.status, 200)
+
+    const missing = await agent.post('/api/seller/store-request').send({
+      storeName: 'Desc Store',
+      storeDescription: 'Fresh spices',
+      slug: `desc-store-${Date.now()}`,
+      subscriptionPlan: 'monthly',
+      paymentProof: 'https://img/proof.jpg',
+    })
+    assert.equal(missing.status, 400, 'Arabic description must be required')
+
+    const submitted = await agent.post('/api/seller/store-request').send({
+      storeName: 'Desc Store',
+      storeDescription: 'Fresh spices',
+      storeDescriptionAr: 'توابل طازجة',
+      slug: `desc-store-${Date.now()}`,
+      subscriptionPlan: 'monthly',
+      paymentProof: 'https://img/proof.jpg',
+    })
+    assert.equal(submitted.status, 201)
+    assert.equal(submitted.body.data.storeRequest.storeDescriptionAr, 'توابل طازجة')
+
+    const { phone: adminPhone, password: adminPassword } = await createAdmin()
+    const admin = request.agent(app)
+    await admin.post('/api/auth/login').send({ phone: adminPhone, password: adminPassword })
+
+    const approved = await admin.post(`/api/admin/seller/store-requests/${submitted.body.data.storeRequest._id}/approve`)
+    assert.equal(approved.status, 201)
+    assert.equal(approved.body.data.store.description, 'Fresh spices')
+    assert.equal(approved.body.data.store.descriptionAr, 'توابل طازجة')
+
+    const patched = await agent.patch('/api/store').send({ descriptionAr: 'توابل معدلة' })
+    assert.equal(patched.status, 200)
+    assert.equal(patched.body.data.store.descriptionAr, 'توابل معدلة')
+  })
+})
+
+describe('sellers may reuse BM Store category and product names', () => {
+  before(connectTest)
+  after(disconnectTest)
+
+  it('creates a seller category and product that share the BM Store names', async () => {
+    const stamp = Date.now()
+    const sharedName = `Shared Name ${stamp}`
+    const slugBase = sharedName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
+    // BM Store (global) category + product already using the shared name/slug.
+    await Category.create({ slug: slugBase, name: sharedName, nameAr: 'مشترك', active: true, order: 1 })
+    const bmProduct = await Product.create({
+      slug: slugBase,
+      name: sharedName,
+      price: 100,
+      category: slugBase,
+      categoryName: sharedName,
+    })
+
+    // Seller with an active store.
+    const number = uniquePhone()
+    await request(app).post('/api/seller/register').send({
+      fullName: 'Same Name Seller',
+      email: `samename-${number}@test.dev`,
+      phone: number,
+      password: 'Secret@1234',
+      confirmPassword: 'Secret@1234',
+    })
+    const agent = request.agent(app)
+    const login = await agent.post('/api/seller/login').send({ phone: number, password: 'Secret@1234' })
+    assert.equal(login.status, 200)
+
+    const seller = await Seller.findOne({ phone: number }).lean()
+    await Store.create({
+      seller: seller._id,
+      name: 'Same Name Store',
+      slug: `same-name-store-${stamp}`,
+      status: 'active',
+      subscriptionPlan: 'monthly',
+      subscriptionStartDate: new Date(),
+      subscriptionEndDate: new Date(Date.now() + 30 * 86400000),
+    })
+
+    const catRes = await agent.post('/api/store/categories').send({ name: sharedName, nameAr: 'مشترك' })
+    assert.equal(catRes.status, 201, JSON.stringify(catRes.body))
+    assert.equal(catRes.body.data.name, sharedName)
+    assert.equal(catRes.body.data.slug, slugBase, 'seller category keeps the same slug as the BM Store category')
+
+    const prodRes = await agent.post('/api/store/products').send({
+      name: sharedName,
+      nameAr: 'منتج مشترك',
+      price: 150,
+      category: catRes.body.data.slug,
+    })
+    assert.equal(prodRes.status, 201, JSON.stringify(prodRes.body))
+    assert.equal(prodRes.body.data.name, sharedName)
+    assert.equal(prodRes.body.data.ownerType, 'SELLER')
+    assert.notEqual(prodRes.body.data.slug, bmProduct.slug, 'seller slug must not collide with the global product slug')
   })
 })

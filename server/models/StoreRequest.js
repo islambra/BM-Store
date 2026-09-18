@@ -12,6 +12,7 @@ const storeRequestSchema = new mongoose.Schema(
     // Store information
     storeName: { type: String, required: true, trim: true },
     storeDescription: { type: String, trim: true },
+    storeDescriptionAr: { type: String, trim: true },
     storeLogo: { type: String },
     storePhone: { type: String, trim: true },
     wilaya: { type: String, trim: true },

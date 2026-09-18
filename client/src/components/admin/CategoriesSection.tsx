@@ -7,10 +7,11 @@ import { getErrorMessage } from '../../services/api'
 import { Field, Input } from '../common/FormControls'
 import ImageUploader from '../common/ImageUploader'
 import ConfirmDialog from '../common/ConfirmDialog'
+import { localizedName } from '../../utils/localize'
 import { ErrorNote, Loader, Table } from './adminShared'
 
 export default function CategoriesSection() {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const { data, loading, error, reload } = useAsync(() => api.getAdminCategories())
   const [form, setForm] = useState({ nameAr: '', image: '' })
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -71,13 +72,18 @@ export default function CategoriesSection() {
           {busy ? t('common.saving') : t('admin.category.create')}
         </button>
       </div>
-      <Table headers={[t('admin.category.nameAr')]}>
+      <Table headers={[t('admin.categoryName')]}>
         {(data ?? []).map((c) => (
           <tr key={String(c._id)} className="hover:bg-canvas">
             <td className="px-4 py-3">
               <div className="flex items-center gap-3">
                 <img src={c.image} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
-                <p className="font-semibold text-ink-900">{c.nameAr ?? c.name}</p>
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink-900">{localizedName(c, lang)}</p>
+                  <p className="truncate text-xs text-ink-400" dir={lang === 'ar' ? 'ltr' : 'rtl'}>
+                    {lang === 'ar' ? c.name : c.nameAr}
+                  </p>
+                </div>
               </div>
             </td>
             <td className="px-4 py-3 text-end">

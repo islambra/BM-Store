@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  ClipboardList, Gift, HandCoins, Image as ImageIcon, LayoutGrid, Megaphone, MessageSquare, ShieldCheck, Store, Tags, UserRound, Users,
+  ClipboardList, Gift, HandCoins, Image as ImageIcon, LayoutGrid, Megaphone, MessageSquare, ShieldCheck, Store, Tags, Truck, UserRound, Users,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import PageHeader from '../components/common/PageHeader'
@@ -20,6 +20,7 @@ import RewardsSection from '../components/admin/RewardsSection'
 import BannersSection from '../components/admin/BannersSection'
 import PostsSection from '../components/admin/PostsSection'
 import PayoutsSection from '../components/admin/PayoutsSection'
+import DeliverySection from '../components/admin/DeliverySection'
 
 export default function AdminPage() {
   const { t } = useLanguage()
@@ -36,6 +37,7 @@ export default function AdminPage() {
     { id: 'orders', label: t('admin.tabs.orders'), icon: ClipboardList },
     { id: 'products', label: t('admin.tabs.products'), icon: Tags },
     { id: 'categories', label: t('admin.tabs.categories'), icon: LayoutGrid },
+    { id: 'delivery', label: t('admin.tabs.delivery'), icon: Truck },
     { id: 'rewards', label: t('admin.tabs.rewards'), icon: Gift },
     { id: 'banners', label: t('admin.tabs.banners'), icon: ImageIcon },
     { id: 'posts', label: t('admin.tabs.posts'), icon: MessageSquare },
@@ -56,6 +58,7 @@ export default function AdminPage() {
         {active === 'orders' && <OrdersSection />}
         {active === 'products' && <ProductsSection />}
         {active === 'categories' && <CategoriesSection />}
+        {active === 'delivery' && <DeliverySection />}
         {active === 'rewards' && <RewardsSection />}
         {active === 'banners' && <BannersSection />}
         {active === 'posts' && <PostsSection />}

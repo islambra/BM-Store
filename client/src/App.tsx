@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useParams } from 'react-router-dom'
 import { LanguageProvider } from './context/LanguageContext'
+import { ToastProvider } from './context/ToastContext'
 import { CatalogProvider } from './context/CatalogContext'
 import { StoreProvider } from './context/StoreContext'
 import { AuthProvider } from './context/AuthContext'
@@ -179,19 +180,21 @@ export default function App() {
   return (
     <BrowserRouter>
       <LanguageProvider>
-        <CatalogProvider>
-          <StoreProvider>
-            <AuthProvider>
-              <ScrollToTop />
-              {storeSlug ? (
-                <StoreSubdomainRoutes slug={storeSlug} />
-              ) : (
-                <MainRoutes />
-              )}
-              <ChatWidget />
-            </AuthProvider>
-          </StoreProvider>
-        </CatalogProvider>
+        <ToastProvider>
+          <CatalogProvider>
+            <StoreProvider>
+              <AuthProvider>
+                <ScrollToTop />
+                {storeSlug ? (
+                  <StoreSubdomainRoutes slug={storeSlug} />
+                ) : (
+                  <MainRoutes />
+                )}
+                <ChatWidget />
+              </AuthProvider>
+            </StoreProvider>
+          </CatalogProvider>
+        </ToastProvider>
       </LanguageProvider>
     </BrowserRouter>
   )

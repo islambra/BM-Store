@@ -13,6 +13,8 @@ import HeroBanner from '../models/HeroBanner.js'
 import MarketerProfile from '../models/MarketerProfile.js'
 import Product from '../models/Product.js'
 import { runRewardOrderIndexMigration } from '../config/rewardMigrations.js'
+import { runCategoryIndexMigration } from '../config/categoryMigrations.js'
+import { seedWilayas } from '../config/wilayas.js'
 
 function testUri() {
   const raw = process.env.MONGODB_URI || 'mongodb://localhost:27017/bmstore'
@@ -30,6 +32,8 @@ export async function connectTest() {
     })
   }
   await runRewardOrderIndexMigration()
+  await runCategoryIndexMigration()
+  await seedWilayas()
 }
 
 export async function disconnectTest() {
@@ -100,7 +104,7 @@ export async function createBanner({ titleEn = 'Banner', active = true, order = 
   })
 }
 
-export async function createProduct({ name = 'Test Product', price = 1000, slug, category = 'spices', stock = 10, isActive = true } = {}) {
+export async function createProduct({ name = 'Test Product', price = 1000, slug, category = 'spices' } = {}) {
   const uniqueSlug = slug ?? `test-${Date.now()}-${Math.floor(Math.random() * 100000)}`
   return Product.create({
     name,
@@ -111,7 +115,5 @@ export async function createProduct({ name = 'Test Product', price = 1000, slug,
     image: 'https://img/test.jpg',
     category,
     categoryName: category,
-    stock,
-    isActive,
   })
 }

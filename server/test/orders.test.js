@@ -107,9 +107,9 @@ describe('orders', () => {
     assert.equal(res.body.data.order.items[0].price, 500)
   })
 
-  it('rejects an order exceeding stock', async () => {
+  it('accepts any quantity (no stock tracking)', async () => {
     const agent = await createCustomerAgent()
-    const product = await createProduct({ name: 'Low Stock', price: 300, stock: 2 })
+    const product = await createProduct({ name: 'Open Order', price: 300 })
     const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 5 }],
       customer: {
@@ -120,17 +120,18 @@ describe('orders', () => {
         address: 'Y',
       },
     })
-    assert.equal(res.status, 400)
+    assert.equal(res.status, 201)
+    assert.equal(res.body.data.order.subtotal, 1500)
   })
 
-  it('rejects an inactive product', async () => {
+  it('places orders for any available product', async () => {
     const agent = await createCustomerAgent()
-    const product = await createProduct({ name: 'Inactive', price: 300, stock: 10, isActive: false })
+    const product = await createProduct({ name: 'Always Available', price: 300 })
     const res = await agent.post('/api/orders').send({
       items: [{ productId: product._id, qty: 1 }],
       customer: { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
     })
-    assert.equal(res.status, 400)
+    assert.equal(res.status, 201)
   })
 
   it('rejects invalid orders', async () => {
@@ -220,14 +221,15 @@ describe('customer order edit + delete while pending', () => {
     assert.equal(res.body.data.order.total, 1850)
   })
 
-  it('rejects quantity edits exceeding stock', async () => {
+  it('allows quantity edits regardless of quantity', async () => {
     const agent = await createCustomerAgent()
-    const product = await createProduct({ name: 'Scarce Edit', price: 200, stock: 2 })
+    const product = await createProduct({ name: 'Free Edit', price: 200 })
     const order = await customerOrder(agent, product, 1)
     const res = await agent.patch(`/api/orders/${order._id}`).send({
       items: [{ productId: String(product._id), qty: 9 }],
     })
-    assert.equal(res.status, 400)
+    assert.equal(res.status, 200)
+    assert.equal(res.body.data.order.items[0].qty, 9)
   })
 
   it('blocks edits from other users and guests', async () => {
@@ -293,20 +295,13 @@ describe('admin order management + product CRUD', () => {
       price: 1200,
       category: 'spices',
       categoryName: 'Spices',
-      stock: 20,
     })
     assert.equal(created.status, 201)
-    assert.equal(created.body.data.stock, 20)
     const id = created.body.data._id
 
-    const updated = await admin.patch(`/api/admin/products/${id}`).send({ stock: 15, isFeatured: true })
+    const updated = await admin.patch(`/api/admin/products/${id}`).send({ isFeatured: true })
     assert.equal(updated.status, 200)
-    assert.equal(updated.body.data.stock, 15)
     assert.equal(updated.body.data.isFeatured, true)
-
-    const toggled = await admin.patch(`/api/admin/products/${id}/toggle`).send({ isActive: false })
-    assert.equal(toggled.status, 200)
-    assert.equal(toggled.body.data.isActive, false)
 
     const deleted = await admin.delete(`/api/admin/products/${id}`)
     assert.equal(deleted.status, 200)
@@ -325,13 +320,12 @@ describe('admin order management + product CRUD', () => {
     const admin = request.agent(app)
     await admin.post('/api/auth/login').send({ phone, password })
 
-    const product = await createProduct({ name: 'Ordered', price: 100, stock: 5 })
+    const product = await createProduct({ name: 'Ordered', price: 100 })
     const order = await admin.post('/api/orders').send({
       items: [{ productId: product._id, qty: 1 }],
       customer: { fullName: 'C', phone: '0', wilaya: '16', commune: 'X', address: 'Y' },
     })
     const id = order.body.data.order._id
-    const stockBefore = (await Product.findById(product._id)).stock
     const salesBefore = (await Product.findById(product._id)).confirmedSales
 
     const list = await admin.get('/api/admin/orders')
@@ -342,8 +336,6 @@ describe('admin order management + product CRUD', () => {
     assert.equal(done.status, 200)
     assert.equal(done.body.data.order.status, 'confirmed')
 
-    const stockAfter = (await Product.findById(product._id)).stock
-    assert.equal(stockAfter, stockBefore - 1)
     const salesAfter = (await Product.findById(product._id)).confirmedSales
     assert.equal(salesAfter, salesBefore + 1)
   })
@@ -591,19 +583,17 @@ describe('admin + seller order deletion', () => {
     assert.equal(await Order.countDocuments({ _id: order._id }), 0)
   })
 
-  it('admin delete of a confirmed order restores stock and confirmedSales', async () => {
+  it('admin delete of a confirmed order rolls back confirmedSales', async () => {
     const admin = await adminAgent()
-    const product = await createProduct({ name: 'Del Confirmed', price: 100, stock: 10 })
+    const product = await createProduct({ name: 'Del Confirmed', price: 100 })
     const order = await adminOrder(admin, product, 3)
 
     const confirmed = await admin.patch(`/api/admin/orders/${order._id}/status`).send({ status: 'confirmed' })
     assert.equal(confirmed.status, 200)
-    assert.equal((await Product.findById(product._id)).stock, 7)
     assert.equal((await Product.findById(product._id)).confirmedSales, 3)
 
     const del = await admin.delete(`/api/admin/orders/${order._id}`)
     assert.equal(del.status, 200)
-    assert.equal((await Product.findById(product._id)).stock, 10)
     assert.equal((await Product.findById(product._id)).confirmedSales, 0)
     assert.equal(await Order.countDocuments({ _id: order._id }), 0)
   })
@@ -653,7 +643,7 @@ describe('admin + seller order deletion', () => {
     assert.equal(after.body.data.stats.availableBalance, 0)
   })
 
-  it('seller deletes only their own store order and restores stock on confirmed', async () => {
+  it('seller deletes only their own store order and rolls back confirmedSales on confirmed', async () => {
     const admin = await adminAgent()
 
     const makeSeller = async (suffix) => {
@@ -676,7 +666,7 @@ describe('admin + seller order deletion', () => {
         status: 'active',
         subscriptionEndDate: new Date(Date.now() + 86400000 * 30),
       })
-      const product = await createProduct({ name: `Prod ${suffix}`, price: 500, stock: 10 })
+      const product = await createProduct({ name: `Prod ${suffix}`, price: 500 })
       await Product.updateOne({ _id: product._id }, { $set: { ownerType: 'SELLER', store: store._id, seller: seller._id } })
       return { agent, store, product }
     }
@@ -700,20 +690,19 @@ describe('admin + seller order deletion', () => {
     assert.equal(created.status, 201)
     const orderId = created.body.data.order._id
 
-    // Confirm it as admin, stock is decremented by 2.
+    // Confirm it as admin, confirmedSales is incremented by 2.
     const confirmed = await admin.patch(`/api/admin/orders/${orderId}/status`).send({ status: 'confirmed' })
     assert.equal(confirmed.status, 200)
-    assert.equal((await Product.findById(sellerA.product._id)).stock, 8)
+    assert.equal((await Product.findById(sellerA.product._id)).confirmedSales, 2)
 
     // Seller B must not be able to delete A's order.
     const wrongDelete = await sellerB.agent.delete(`/api/store/orders/${orderId}`)
     assert.equal(wrongDelete.status, 404)
 
-    // Seller A deletes its own order: stock restored.
+    // Seller A deletes its own order: confirmedSales rolled back.
     const ownDelete = await sellerA.agent.delete(`/api/store/orders/${orderId}`)
     assert.equal(ownDelete.status, 200)
     assert.equal(await Order.countDocuments({ _id: orderId }), 0)
-    assert.equal((await Product.findById(sellerA.product._id)).stock, 10)
     assert.equal((await Product.findById(sellerA.product._id)).confirmedSales, 0)
   })
 

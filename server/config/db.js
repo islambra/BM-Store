@@ -1,5 +1,7 @@
 import mongoose from 'mongoose'
 import { runRewardOrderIndexMigration } from './rewardMigrations.js'
+import { runCategoryIndexMigration } from './categoryMigrations.js'
+import { seedWilayas } from './wilayas.js'
 
 export async function connectDB(uri) {
   if (!uri || uri.startsWith('your_')) {
@@ -13,5 +15,7 @@ export async function connectDB(uri) {
     serverSelectionTimeoutMS: 10000,
   })
   await runRewardOrderIndexMigration()
+  await runCategoryIndexMigration()
+  await seedWilayas()
   return conn
 }

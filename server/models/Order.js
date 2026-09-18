@@ -35,8 +35,15 @@ const deliverySchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true, maxlength: 120 },
     phone: { type: String, required: true, trim: true, maxlength: 30 },
+    // Wilaya snapshot: frozen at order time so historical orders keep their
+    // original fee even if the admin later changes the wilaya's price.
+    // `wilaya` (the code) is kept for backwards compatibility with existing
+    // reads; `wilayaId`/`wilayaCode`/`deliveryPrice` are the full snapshot.
     wilaya: { type: String, required: true, trim: true },
+    wilayaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Wilaya' },
+    wilayaCode: { type: String, trim: true },
     wilayaName: { type: String, trim: true },
+    deliveryPrice: { type: Number, min: 0 },
     commune: { type: String, required: true, trim: true, maxlength: 120 },
     address: { type: String, required: true, trim: true, maxlength: 300 },
     note: { type: String, trim: true, maxlength: 500 },

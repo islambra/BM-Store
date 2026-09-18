@@ -224,16 +224,12 @@ export interface ProductRecord {
   categoryName: string
   discount: number
   tags?: string[]
-  stock: number
-  lowStockThreshold: number
-  isActive: boolean
   isFeatured: boolean
   isSpecialOffer?: boolean
   confirmedSales?: number
   ownerType?: 'BM_STORE' | 'SELLER'
   store?: string
   seller?: string
-  status?: 'active' | 'paused_by_seller' | 'disabled_by_admin'
 }
 
 export interface BannerRecord {
@@ -264,6 +260,19 @@ export function getShopConfig() {
   return get<{ deliveryFee: number }>('/config')
 }
 
+export interface WilayaRecord {
+  _id: string
+  code: string
+  name: string
+  nameAr?: string
+  deliveryPrice: number
+  isActive?: boolean
+}
+
+export function getWilayas() {
+  return get<WilayaRecord[]>('/wilayas')
+}
+
 export function getBanners() {
   return get<BannerRecord[]>('/banners')
 }
@@ -276,7 +285,6 @@ export async function listProducts(params?: {
   limit?: number
   minPrice?: number
   maxPrice?: number
-  inStock?: boolean
   featured?: boolean
   offer?: boolean
 }) {
@@ -288,7 +296,6 @@ export async function listProducts(params?: {
   if (params?.limit) qs.set('limit', String(params.limit))
   if (params?.minPrice !== undefined) qs.set('minPrice', String(params.minPrice))
   if (params?.maxPrice !== undefined) qs.set('maxPrice', String(params.maxPrice))
-  if (params?.inStock !== undefined) qs.set('inStock', String(params.inStock))
   if (params?.featured !== undefined) qs.set('featured', String(params.featured))
   if (params?.offer !== undefined) qs.set('offer', String(params.offer))
   const q = qs.toString()
@@ -316,7 +323,10 @@ export interface CreateOrderInput {
   customer: {
     fullName: string
     phone: string
-    wilaya: string
+    /** Wilaya `_id` from `/wilayas` — the server resolves name/code/price. */
+    wilayaId?: string
+    /** Legacy fallback: wilaya code (kept for backwards compatibility). */
+    wilaya?: string
     wilayaName?: string
     commune: string
     address: string
@@ -354,7 +364,11 @@ export interface MyOrderRecord {
     fullName: string
     phone: string
     wilaya: string
+    /** Wilaya snapshot frozen at order time (may be absent on legacy orders). */
+    wilayaId?: string
+    wilayaCode?: string
     wilayaName?: string
+    deliveryPrice?: number
     commune: string
     address: string
     note?: string
@@ -374,7 +388,16 @@ export function updateMyOrder(
   id: string,
   body: {
     items?: { productId: string; qty: number }[]
-    customer?: { wilaya?: string; wilayaName?: string; commune?: string; address?: string; note?: string }
+    customer?: {
+      /** Wilaya `_id` from `/wilayas` — server resolves the snapshot. */
+      wilayaId?: string
+      /** Legacy fallback: wilaya code. */
+      wilaya?: string
+      wilayaName?: string
+      commune?: string
+      address?: string
+      note?: string
+    }
   },
 ) {
   return patch<{ order: MyOrderRecord }>(`/orders/${id}`, body)
@@ -545,6 +568,7 @@ export interface SellerStoreRequestPayload {
   sellerPhone: string
   storeName: string
   storeDescription?: string
+  storeDescriptionAr?: string
   storeLogo?: string
   storePhone?: string
   wilaya?: string
@@ -568,6 +592,7 @@ export interface SellerStorePayload {
   name: string
   slug: string
   description?: string
+  descriptionAr?: string
   logo?: string
   phone?: string
   wilaya?: string
@@ -595,9 +620,6 @@ export interface SellerProductPayload {
   category: string
   categoryName: string
   tags?: string[]
-  stock: number
-  lowStockThreshold: number
-  isActive: boolean
   isFeatured: boolean
   isSpecialOffer: boolean
   confirmedSales?: number
@@ -605,7 +627,6 @@ export interface SellerProductPayload {
   ownerType: 'BM_STORE' | 'SELLER'
   store: string
   seller: string
-  status: 'active' | 'paused_by_seller' | 'disabled_by_admin'
   createdAt: string
   updatedAt: string
 }
@@ -653,8 +674,6 @@ export interface SellerOrderPayload {
 
 export interface SellerEarningsStats {
   totalProducts: number
-  activeProducts: number
-  pausedProducts: number
   totalOrders: number
   pendingOrders: number
   deliveredOrders: number
@@ -727,6 +746,7 @@ export function changeSellerPassword(body: { currentPassword: string; newPasswor
 export function submitStoreRequest(body: {
   storeName: string
   storeDescription?: string
+  storeDescriptionAr: string
   storeLogo?: string
   storePhone?: string
   wilaya?: string
@@ -753,6 +773,7 @@ export function getMyStore() {
 export function updateMyStore(body: {
   name?: string
   description?: string
+  descriptionAr?: string
   logo?: string
   phone?: string
   wilaya?: string
@@ -761,11 +782,10 @@ export function updateMyStore(body: {
   return patch<{ store: SellerStorePayload }>('/store', body)
 }
 
-export function listMyProducts(params?: { page?: number; limit?: number; status?: string; q?: string }) {
+export function listMyProducts(params?: { page?: number; limit?: number; q?: string }) {
   const qs = new URLSearchParams()
   if (params?.page) qs.set('page', String(params.page))
   if (params?.limit) qs.set('limit', String(params.limit))
-  if (params?.status) qs.set('status', params.status)
   if (params?.q) qs.set('q', params.q)
   const q = qs.toString()
   return get<SellerPage & { products: SellerProductPayload[] }>(`/store/products${q ? `?${q}` : ''}`)
@@ -785,10 +805,6 @@ export function updateMyProduct(id: string, body: Partial<SellerProductPayload>)
 
 export function deleteMyProduct(id: string) {
   return remove<null>(`/store/products/${id}`)
-}
-
-export function toggleMyProductStatus(id: string, body: { isActive?: boolean; isSpecialOffer?: boolean; status?: string }) {
-  return patch<SellerProductPayload>(`/store/products/${id}/toggle`, body)
 }
 
 export function listMyCategories() {
@@ -848,6 +864,7 @@ export interface PublicStorePayload {
   slug: string
   logo?: string
   description?: string
+  descriptionAr?: string
   wilaya?: string
   city?: string
   phone?: string
@@ -925,7 +942,6 @@ export interface AdminSellerRecord {
   } | null
   stats: {
     totalProducts: number
-    activeProducts: number
     totalOrders: number
     deliveredOrders: number
     deliveredRevenue: number
@@ -975,7 +991,6 @@ export interface AdminStoreRecord {
   createdAt: string
   stats: {
     totalProducts: number
-    activeProducts: number
     totalOrders: number
     deliveredOrders: number
     deliveredRevenue: number
@@ -1096,13 +1111,12 @@ export function deleteAdminOrder(id: string) {
   return remove<null>(`/admin/orders/${id}`)
 }
 
-export function getAdminProducts(params?: { page?: number; limit?: number; q?: string; category?: string; isActive?: boolean }) {
+export function getAdminProducts(params?: { page?: number; limit?: number; q?: string; category?: string }) {
   const qs = new URLSearchParams()
   if (params?.page) qs.set('page', String(params.page))
   if (params?.limit) qs.set('limit', String(params.limit))
   if (params?.q) qs.set('q', params.q)
   if (params?.category) qs.set('category', params.category)
-  if (params?.isActive !== undefined) qs.set('isActive', String(params.isActive))
   const q = qs.toString()
   return get<Page & { products: ProductRecord[] }>(`/admin/products${q ? `?${q}` : ''}`)
 }
@@ -1119,7 +1133,7 @@ export function deleteAdminProduct(id: string) {
   return remove<null>(`/admin/products/${id}`)
 }
 
-export function toggleAdminProduct(id: string, body: { isActive?: boolean; isFeatured?: boolean; isSpecialOffer?: boolean }) {
+export function toggleAdminProduct(id: string, body: { isFeatured?: boolean; isSpecialOffer?: boolean }) {
   return patch<ProductRecord>(`/admin/products/${id}/toggle`, body)
 }
 
@@ -1181,6 +1195,19 @@ export function updateCategoryReward(
   },
 ) {
   return patch<AdminRewards>(`/admin/rewards/categories/${id}`, body)
+}
+
+export interface AdminWilayas {
+  wilayas: WilayaRecord[]
+  defaultPrice: number
+}
+
+export function getAdminWilayas() {
+  return get<AdminWilayas>('/admin/wilayas')
+}
+
+export function updateWilaya(code: string, body: { deliveryPrice?: number; isActive?: boolean }) {
+  return patch<WilayaRecord>(`/admin/wilayas/${code}`, body)
 }
 
 export function getPublicRewards() {

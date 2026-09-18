@@ -19,6 +19,7 @@ const BM_STORE = {
   slug: 'bm-store',
   logo: null,
   description: null,
+  descriptionAr: null,
   wilaya: null,
   city: null,
   phone: null,
@@ -28,7 +29,7 @@ const BM_STORE = {
 }
 
 async function getBmStoreEntry() {
-  const productCount = await Product.countDocuments({ ownerType: 'BM_STORE', isActive: true, status: 'active' })
+  const productCount = await Product.countDocuments({ ownerType: 'BM_STORE' })
   return { ...BM_STORE, productCount }
 }
 
@@ -67,7 +68,7 @@ export const listPublicStores = asyncHandler(async (req, res) => {
   const [stores, total] = await Promise.all([
     Store.find(query)
       .populate('seller', 'fullName')
-      .select('name slug logo description wilaya city phone')
+      .select('name slug logo description descriptionAr wilaya city phone')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -78,7 +79,7 @@ export const listPublicStores = asyncHandler(async (req, res) => {
   // Get product counts
   const storeIds = stores.map((s) => s._id)
   const productCounts = await Product.aggregate([
-    { $match: { store: { $in: storeIds }, isActive: true, status: 'active' } },
+    { $match: { store: { $in: storeIds } } },
     { $group: { _id: '$store', count: { $sum: 1 } } },
   ])
   const countByStore = Object.fromEntries(productCounts.map((c) => [String(c._id), c.count]))
@@ -104,7 +105,7 @@ export const getPublicStore = asyncHandler(async (req, res) => {
     const bm = await getBmStoreEntry()
     if (bm.productCount === 0) return sendError(res, 'Store not found', 404)
 
-    const productQuery = { ownerType: 'BM_STORE', isActive: true, status: 'active' }
+    const productQuery = { ownerType: 'BM_STORE' }
     const page = Math.max(1, parseInt(req.query.page, 10) || 1)
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
     const { category: catSlug, sort } = req.query
@@ -187,7 +188,7 @@ export const getPublicStore = asyncHandler(async (req, res) => {
   const categories = await Category.find({ store: store._id, active: true }).sort({ order: 1 }).lean()
 
   // Get products
-  const productQuery = { store: store._id, isActive: true, status: 'active' }
+  const productQuery = { store: store._id }
 
   // Special offers
   const specialOffers = await Product.find({ ...productQuery, isSpecialOffer: true })
@@ -302,7 +303,7 @@ export const searchCategoriesAcrossStores = asyncHandler(async (req, res) => {
   // Get product counts per category per store
   const categoryStoreKeys = categories.map((c) => `${c.store}-${c.slug}`)
   const productCounts = await Product.aggregate([
-    { $match: { store: { $in: storeIds }, isActive: true, status: 'active' } },
+    { $match: { store: { $in: storeIds } } },
     { $group: { _id: { store: '$store', category: '$category' }, count: { $sum: 1 } } },
   ])
   const countByCategoryStore = Object.fromEntries(
@@ -355,7 +356,7 @@ export const getStoreCategories = asyncHandler(async (req, res) => {
   // Get product counts
   const categorySlugs = categories.map((c) => c.slug)
   const productCounts = await Product.aggregate([
-    { $match: { store: store._id, category: { $in: categorySlugs }, isActive: true, status: 'active' } },
+    { $match: { store: store._id, category: { $in: categorySlugs } } },
     { $group: { _id: '$category', count: { $sum: 1 } } },
   ])
   const countByCategory = Object.fromEntries(productCounts.map((c) => [c._id, c.count]))

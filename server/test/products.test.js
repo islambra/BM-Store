@@ -38,7 +38,6 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
       descriptionAr: 'زعتر جبلي فاخر',
       price: 500,
       oldPrice: 0,
-      stock: 50,
       category: `cat-${Date.now()}`,
       categoryName: 'Cat',
       images: ['/uploads/photo.jpg'],
@@ -46,8 +45,6 @@ describe('catalog: best sellers, special offers, images, multilingual', () => {
     assert.equal(created.status, 201)
     const id = created.body.data._id
     const raw = await Product.findById(id).lean()
-    assert.equal(raw.isActive, true)
-    assert.equal(raw.status, 'active')
     assert.equal(raw.ownerType, 'BM_STORE')
 
     const list = await request(app).get('/api/products').query({ limit: 50 })

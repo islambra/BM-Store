@@ -8,7 +8,6 @@ import {
   createMyProduct,
   updateMyProduct,
   deleteMyProduct,
-  toggleMyProductStatus,
   listMyCategories,
   createMyCategory,
   updateMyCategory,
@@ -37,7 +36,6 @@ router.get('/products/:id', getMyProduct)
 router.post('/products', createMyProduct)
 router.patch('/products/:id', updateMyProduct)
 router.delete('/products/:id', deleteMyProduct)
-router.patch('/products/:id/toggle', toggleMyProductStatus)
 
 // Categories
 router.get('/categories', listMyCategories)

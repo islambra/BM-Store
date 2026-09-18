@@ -9,6 +9,7 @@ const storeSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 100 },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     description: { type: String, trim: true, maxlength: 1000 },
+    descriptionAr: { type: String, trim: true, maxlength: 1000 },
     logo: { type: String },
     phone: { type: String, trim: true, maxlength: 30 },
     wilaya: { type: String, trim: true },

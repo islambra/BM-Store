@@ -32,6 +32,7 @@ import {
   adminUpdateSettings,
   adminUpdateCategoryReward,
 } from '../controllers/reward.controller.js'
+import { adminList as adminListWilayas, adminUpdate as adminUpdateWilaya } from '../controllers/wilaya.controller.js'
 
 const router = Router()
 
@@ -63,6 +64,9 @@ router.delete('/categories/:id', category.adminDelete)
 router.get('/rewards', adminGetRewards)
 router.patch('/rewards/settings', adminUpdateSettings)
 router.patch('/rewards/categories/:id', adminUpdateCategoryReward)
+
+router.get('/wilayas', adminListWilayas)
+router.patch('/wilayas/:code', adminUpdateWilaya)
 
 router.get('/banners', banner.adminList)
 router.post('/banners', banner.adminCreate)

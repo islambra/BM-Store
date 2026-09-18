@@ -148,6 +148,7 @@ function StoreRequestForm({ paymentInfo }: {
 
   const [storeName, setStoreName] = useState('')
   const [storeDescription, setStoreDescription] = useState('')
+  const [storeDescriptionAr, setStoreDescriptionAr] = useState('')
   const [storeLogo, setStoreLogo] = useState('')
   const [storePhone, setStorePhone] = useState('')
   const [wilaya, setWilaya] = useState('')
@@ -182,7 +183,7 @@ function StoreRequestForm({ paymentInfo }: {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!storeName.trim() || !slug || !paymentProof) return
+    if (!storeName.trim() || !storeDescriptionAr.trim() || !slug || !paymentProof) return
     if (slugAvailable === false) return
 
     setSaving(true)
@@ -192,6 +193,7 @@ function StoreRequestForm({ paymentInfo }: {
       await submitStoreRequest({
         storeName: storeName.trim(),
         storeDescription: storeDescription.trim() || undefined,
+        storeDescriptionAr: storeDescriptionAr.trim(),
         storeLogo: storeLogo || undefined,
         storePhone: storePhone.trim() || undefined,
         wilaya: wilaya || undefined,
@@ -280,6 +282,17 @@ function StoreRequestForm({ paymentInfo }: {
         <div>
           <Label>{t('seller.storeDescription')}</Label>
           <Textarea value={storeDescription} onChange={(e) => setStoreDescription(e.target.value)} rows={3} className="mt-1.5" />
+        </div>
+        <div>
+          <Label>{t('seller.storeDescriptionAr')} *</Label>
+          <Textarea
+            dir="rtl"
+            value={storeDescriptionAr}
+            onChange={(e) => setStoreDescriptionAr(e.target.value)}
+            rows={3}
+            required
+            className="mt-1.5"
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -412,7 +425,7 @@ function StoreRequestForm({ paymentInfo }: {
       <div className="flex items-center justify-end gap-3">
         <Button
           type="submit"
-          disabled={saving || !storeName.trim() || !slug || slugAvailable === false || !paymentProof}
+          disabled={saving || !storeName.trim() || !storeDescriptionAr.trim() || !slug || slugAvailable === false || !paymentProof}
         >
           {saving ? '...' : t('seller.submitRequest')}
         </Button>

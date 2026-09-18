@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { ArrowRight, ArrowLeft, Calendar, ChevronLeft, ChevronRight, Heart, MessageCircle, Share2, Store, Loader2 } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAuth } from '../../context/AuthContext'
+import { useLoginPrompt } from '../../hooks/useLoginPrompt'
 import * as api from '../../services/api'
 import { formatPrice } from '../common/Price'
 import type { PostItem } from '../../services/catalog'
@@ -12,8 +13,7 @@ import ShareModal from './ShareModal'
 export default function PostCard({ post, single = false }: { post: PostItem; single?: boolean }) {
   const { t, lang } = useLanguage()
   const { user } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const promptLogin = useLoginPrompt()
   const rtl = lang === 'ar'
   const ArrowIcon = rtl ? ArrowLeft : ArrowRight
   const text = rtl ? (post.textAr || post.textEn) : (post.textEn || post.textAr)
@@ -26,18 +26,33 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
   const [commentsOpen, setCommentsOpen] = useState(single)
   const [commentsCount, setCommentsCount] = useState(post.commentsCount)
   const [shareOpen, setShareOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+  const textRef = useRef<HTMLParagraphElement>(null)
+
+  // Only offer expand/collapse when the clamped text is actually cut off.
+  useEffect(() => {
+    if (single) return
+    const el = textRef.current
+    if (!el) return
+    const measure = () => {
+      if (expanded) return
+      setOverflowing(el.scrollHeight - el.clientHeight > 1)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [text, single, expanded])
 
   const date = new Intl.DateTimeFormat(rtl ? 'ar-DZ' : 'en-US', {
     dateStyle: 'medium',
     timeZone: 'UTC',
   }).format(new Date(post.createdAt))
 
-  const goToLogin = () => navigate('/login', { state: { from: location.pathname } })
-
   const handleLike = async () => {
     if (likeBusy) return
     if (!user) {
-      goToLogin()
+      promptLogin()
       return
     }
     const prevLiked = liked
@@ -97,9 +112,26 @@ export default function PostCard({ post, single = false }: { post: PostItem; sin
         {/* Content side */}
         <div className="flex min-w-0 flex-1 flex-col px-4 pb-3 lg:px-4 lg:pb-4 lg:pt-0.5">
           {text ? (
-            <p className={`whitespace-pre-line text-[13px] leading-relaxed text-ink-800 ${single ? '' : 'line-clamp-4'}`}>
-              {text}
-            </p>
+            <>
+              <p
+                ref={textRef}
+                onClick={() => { if (!single && !expanded && overflowing) setExpanded(true) }}
+                className={`whitespace-pre-line text-[13px] leading-relaxed text-ink-800 ${!single && !expanded ? 'line-clamp-4' : ''} ${
+                  !single && !expanded && overflowing ? 'cursor-pointer' : ''
+                }`}
+              >
+                {text}
+              </p>
+              {!single && overflowing && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="mt-1 self-start text-[12px] font-semibold text-brand-700 underline-offset-2 hover:text-brand-800 hover:underline"
+                >
+                  {expanded ? t('posts.showLess') : t('posts.readMore')}
+                </button>
+              )}
+            </>
           ) : (
             <p className="text-[13px] text-ink-400 italic">
               {t('posts.newPostFallback')}

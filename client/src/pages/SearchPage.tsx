@@ -34,7 +34,6 @@ export default function SearchPage() {
       sort: filters.sort,
       minPrice: filters.minPrice || undefined,
       maxPrice: filters.maxPrice || undefined,
-      inStock: filters.inStock || undefined,
       category: filters.category || undefined,
       limit: 32,
     })

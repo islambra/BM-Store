@@ -13,6 +13,7 @@ import {
   peekNextCustomerOrderNumber,
 } from '../utils/customerDiscount.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
+import { getDeliveryInfo } from './wilaya.controller.js'
 
 export const DELIVERY_FEE = 350
 const COMMISSION_RATE = 10
@@ -129,9 +130,6 @@ async function priceItems(items) {
 
     const product = await Product.findById(item.productId).lean()
     if (!product) return { error: { message: `Product not found: ${item.productId}`, status: 404 } }
-    if (!product.isActive) return { error: { message: `Product is not available: ${product.name}`, status: 400 } }
-    if (product.status && product.status !== 'active') return { error: { message: `Product is not available: ${product.name}`, status: 400 } }
-    if (product.stock < qty) return { error: { message: `Insufficient stock for: ${product.name}`, status: 400 } }
 
     cleanItems.push({
       productId: product._id,
@@ -174,14 +172,22 @@ export const createOrder = asyncHandler(async (req, res) => {
   const { storeId, isBmStore } = storeValidation
 
   const delivery = customer ?? {}
-  const required = ['fullName', 'phone', 'wilaya', 'commune', 'address']
+  const required = ['fullName', 'phone', 'commune', 'address']
   for (const field of required) {
     if (!String(delivery[field] ?? '').trim()) {
       return sendError(res, 'Missing delivery information', 400)
     }
   }
+  if (!delivery.wilayaId && !String(delivery.wilaya ?? '').trim()) {
+    return sendError(res, 'Missing delivery information', 400)
+  }
 
-  const shipping = DELIVERY_FEE
+  // Shipping is priced and snapshotted server-side from the destination
+  // wilaya ("wilayaId"; a legacy "wilaya" code is still accepted). The client
+  // can never influence the delivery price.
+  const info = await getDeliveryInfo(delivery)
+  if (info.error) return sendError(res, info.error, 400)
+  const shipping = info.deliveryPrice
   // NOTE: customerOrderNumber / discountPercent / discountAmount are assigned
   // below, server-side only. Anything with these names in req.body is ignored.
 
@@ -225,8 +231,11 @@ export const createOrder = asyncHandler(async (req, res) => {
         customer: {
           fullName: String(delivery.fullName).trim(),
           phone: String(delivery.phone).trim(),
-          wilaya: String(delivery.wilaya).trim(),
-          wilayaName: delivery.wilayaName ? String(delivery.wilayaName).trim() : undefined,
+          wilaya: info.wilayaCode,
+          wilayaId: info.wilayaId ?? undefined,
+          wilayaCode: info.wilayaCode,
+          wilayaName: info.wilayaName,
+          deliveryPrice: info.deliveryPrice,
           commune: String(delivery.commune).trim(),
           address: String(delivery.address).trim(),
           note: delivery.note ? String(delivery.note).trim() : undefined,
@@ -284,8 +293,8 @@ async function findEditableOrder(req) {
 
 /**
  * Customer edits their own order while it is still pending (before it is
- * confirmed). Items are re-priced from the database, stock is re-validated
- * and totals are recomputed server-side.
+ * confirmed). Items are re-priced from the database and totals are recomputed
+ * server-side.
  */
 export const updateMyOrder = asyncHandler(async (req, res) => {
   const { order, error } = await findEditableOrder(req)
@@ -337,15 +346,28 @@ const { storeId } = storeValidation
 
   if (customer !== undefined) {
     const delivery = customer ?? {}
-    for (const field of ['fullName', 'phone', 'wilaya', 'commune', 'address']) {
+    for (const field of ['fullName', 'phone', 'wilaya', 'wilayaId', 'commune', 'address']) {
       if (delivery[field] !== undefined && !String(delivery[field] ?? '').trim()) {
         return sendError(res, 'Missing delivery information', 400)
       }
     }
     if (delivery.fullName !== undefined) order.customer.fullName = String(delivery.fullName).trim()
     if (delivery.phone !== undefined) order.customer.phone = String(delivery.phone).trim()
-    if (delivery.wilaya !== undefined) order.customer.wilaya = String(delivery.wilaya).trim()
-    if (delivery.wilayaName !== undefined) {
+    if (delivery.wilaya !== undefined || delivery.wilayaId !== undefined) {
+      // Re-resolve + resnapshot from the database on a wilaya change.
+      const info = await getDeliveryInfo({
+        wilayaId: delivery.wilayaId,
+        wilaya: delivery.wilaya,
+        wilayaName: delivery.wilayaName,
+      })
+      if (info.error) return sendError(res, info.error, 400)
+      order.customer.wilaya = info.wilayaCode
+      order.customer.wilayaId = info.wilayaId ?? undefined
+      order.customer.wilayaCode = info.wilayaCode
+      order.customer.wilayaName = info.wilayaName
+      order.customer.deliveryPrice = info.deliveryPrice
+      order.delivery = info.deliveryPrice
+    } else if (delivery.wilayaName !== undefined) {
       order.customer.wilayaName = String(delivery.wilayaName).trim() || undefined
     }
     if (delivery.commune !== undefined) order.customer.commune = String(delivery.commune).trim()
@@ -353,6 +375,16 @@ const { storeId } = storeValidation
     if (delivery.note !== undefined) {
       order.customer.note = String(delivery.note).trim() || undefined
     }
+  }
+
+  // Recompute the total whenever items or the destination wilaya changed
+  // (the shipping price is re-priced server-side from the new wilaya).
+  if (customer?.wilaya !== undefined || customer?.wilayaId !== undefined || items !== undefined) {
+    const discountAmount =
+      Number.isInteger(order.customerOrderNumber) && order.customerOrderNumber > 0
+        ? calcDiscountAmount(order.subtotal, getLegacyDiscountPercent(order.customerOrderNumber))
+        : 0
+    order.total = order.subtotal + order.delivery - discountAmount
   }
 
   await order.save()
@@ -430,8 +462,8 @@ async function cancelExistingCommission(order) {
 /**
  * Reverses the side effects of confirming/delivering an order so a hard delete
  * leaves the catalog and the marketer books consistent:
- * - orders that reached "confirmed"/"delivered" return product stock and roll
- *   back confirmedSales (mirrors how confirm decremented them);
+ * - orders that reached "confirmed"/"delivered" roll back confirmedSales
+ *   (mirrors how confirm incremented them);
  * - delivered referral (BM Store) orders cancel the credited AVAILABLE
  *   commission and decrement the marketer's totalEarnings.
  * Safe to call on any order — pending/terminal orders have no effects.
@@ -444,7 +476,7 @@ export async function reverseOrderEffects(order) {
       const storeFilter = product?.store ? { store: product.store } : {}
       await Product.updateOne(
         { _id: item.productId, ...storeFilter },
-        { $inc: { stock: item.qty, confirmedSales: -item.qty } }
+        { $inc: { confirmedSales: -item.qty } }
       )
     }
   }
@@ -466,7 +498,7 @@ export async function reverseOrderEffects(order) {
 
 /**
  * Admin permanently deletes an order (main catalog + seller orders). Reverses
- * stock/confirmedSales for confirmed/delivered orders and cancels any released
+ * confirmedSales for confirmed/delivered orders and cancels any released
  * marketer commission before removing the record.
  */
 export const adminDeleteOrder = asyncHandler(async (req, res) => {
@@ -495,28 +527,16 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   const wasConfirmed = previousStatus !== 'confirmed' && status === 'confirmed'
   const wasDelivered = previousStatus !== 'delivered' && status === 'delivered'
 
+  // Confirming an order increments product confirmedSales (no stock tracking).
   if (wasConfirmed) {
-    const decremented = []
-    try {
-      for (const item of order.items) {
-        if (!item.productId) continue
-        const product = await Product.findById(item.productId).lean()
-        const storeFilter = product?.store ? { store: product.store } : {}
-        const updated = await Product.findOneAndUpdate(
-          { _id: item.productId, ...storeFilter, stock: { $gte: item.qty } },
-          { $inc: { stock: -item.qty, confirmedSales: item.qty } },
-          { projection: { _id: 1 } }
-        )
-        if (!updated) throw new Error(`OUT_OF_STOCK:${item.productId}`)
-        decremented.push({ productId: item.productId, qty: item.qty })
-      }
-    } catch (err) {
-      for (const d of decremented) {
-        const product = await Product.findById(d.productId).lean()
-        const storeFilter = product?.store ? { store: product.store } : {}
-        await Product.updateOne({ _id: d.productId, ...storeFilter }, { $inc: { stock: d.qty, confirmedSales: -d.qty } })
-      }
-      return sendError(res, 'Not enough stock to confirm this order', 400)
+    for (const item of order.items) {
+      if (!item.productId) continue
+      const product = await Product.findById(item.productId).lean()
+      const storeFilter = product?.store ? { store: product.store } : {}
+      await Product.updateOne(
+        { _id: item.productId, ...storeFilter },
+        { $inc: { confirmedSales: item.qty } }
+      )
     }
   }
 

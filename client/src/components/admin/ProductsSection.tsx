@@ -9,6 +9,7 @@ import EmptyState from '../common/EmptyState'
 import ImageUploader from '../common/ImageUploader'
 import { Alert, Field, Input, Select, Textarea } from '../common/FormControls'
 import { formatPrice } from '../common/Price'
+import { localizedName } from '../../utils/localize'
 import { ErrorNote, Loader } from './adminShared'
 
 function emptyForm() {
@@ -171,7 +172,12 @@ export default function ProductsSection() {
                   <td className="px-3 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <img src={p.images?.[0] ?? p.image} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
-                      <p className="max-w-[220px] truncate font-semibold text-ink-900">{p.nameAr ?? p.name}</p>
+                      <div className="min-w-0">
+                        <p className="max-w-[220px] truncate font-semibold text-ink-900">{localizedName(p, lang)}</p>
+                        <p className="max-w-[220px] truncate text-xs text-ink-400" dir={lang === 'ar' ? 'ltr' : 'rtl'}>
+                          {lang === 'ar' ? p.name : p.nameAr}
+                        </p>
+                      </div>
                     </div>
                   </td>
                   <td className="px-3 py-3 text-ink-500">{p.categoryName ?? p.category}</td>
@@ -272,7 +278,7 @@ export default function ProductsSection() {
                     <option value="">{t('common.select')}</option>
                     {(categories.data ?? []).map((c) => (
                       <option key={String(c._id)} value={c.slug}>
-                        {c.nameAr ?? c.name}
+                        {localizedName(c, lang)}
                       </option>
                     ))}
                   </Select>

@@ -9,7 +9,6 @@ import Order from '../models/Order.js'
 import { sendSuccess, sendError, asyncHandler } from '../utils/response.js'
 import { ORDER_STATUSES, isValidTransition } from '../models/Order.js'
 import { deleteGridFSByUrl } from '../utils/gridfs.js'
-import { restoreStoreProducts } from '../services/storeLifecycle.js'
 
 // Seller list
 export const adminListSellers = asyncHandler(async (req, res) => {
@@ -41,7 +40,7 @@ export const adminListSellers = asyncHandler(async (req, res) => {
   const [productStats, orderStats] = await Promise.all([
     Product.aggregate([
       { $match: { store: { $in: storeIds } } },
-      { $group: { _id: '$store', totalProducts: { $sum: 1 }, activeProducts: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'active'] }] }, 1, 0] } } } },
+      { $group: { _id: '$store', totalProducts: { $sum: 1 } } },
     ]),
     Order.aggregate([
       { $match: { store: { $in: storeIds }, status: { $nin: ['cancelled', 'rejected'] } } },
@@ -73,7 +72,6 @@ export const adminListSellers = asyncHandler(async (req, res) => {
       } : null,
       stats: {
         totalProducts: pStat?.totalProducts || 0,
-        activeProducts: pStat?.activeProducts || 0,
         totalOrders: oStat?.totalOrders || 0,
         deliveredOrders: oStat?.deliveredOrders || 0,
         deliveredRevenue: Math.round(oStat?.deliveredRevenue || 0),
@@ -125,13 +123,13 @@ export const adminGetSeller = asyncHandler(async (req, res) => {
   if (!seller) return sendError(res, 'Seller not found', 404)
 
   const store = await Store.findOne({ seller: seller._id }).lean()
-  let stats = { totalProducts: 0, activeProducts: 0, totalOrders: 0, deliveredOrders: 0, deliveredRevenue: 0 }
+  let stats = { totalProducts: 0, totalOrders: 0, deliveredOrders: 0, deliveredRevenue: 0 }
 
   if (store) {
     const [pStat, oStat] = await Promise.all([
       Product.aggregate([
         { $match: { store: store._id } },
-        { $group: { _id: null, totalProducts: { $sum: 1 }, activeProducts: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'active'] }] }, 1, 0] } } } },
+        { $group: { _id: null, totalProducts: { $sum: 1 } } },
       ]),
       Order.aggregate([
         { $match: { store: store._id, status: { $nin: ['cancelled', 'rejected'] } } },
@@ -140,7 +138,6 @@ export const adminGetSeller = asyncHandler(async (req, res) => {
     ])
     stats = {
       totalProducts: pStat[0]?.totalProducts || 0,
-      activeProducts: pStat[0]?.activeProducts || 0,
       totalOrders: oStat[0]?.totalOrders || 0,
       deliveredOrders: oStat[0]?.deliveredOrders || 0,
       deliveredRevenue: Math.round(oStat[0]?.deliveredRevenue || 0),
@@ -209,9 +206,6 @@ export const adminApproveStoreRequest = asyncHandler(async (req, res) => {
     store.subscriptionEndDate = endDate
     await store.save()
 
-    // Restore a soft-deleted/expired store's products with their old data.
-    await restoreStoreProducts(store._id)
-
     request.status = 'approved'
     request.reviewedAt = new Date()
     request.reviewedBy = req.user._id
@@ -237,6 +231,7 @@ export const adminApproveStoreRequest = asyncHandler(async (req, res) => {
       name: request.storeName,
       slug: request.slug,
       description: request.storeDescription,
+      descriptionAr: request.storeDescriptionAr,
       logo: request.storeLogo,
       phone: request.storePhone,
       wilaya: request.wilaya,
@@ -307,7 +302,7 @@ export const adminListStores = asyncHandler(async (req, res) => {
   const [productStats, orderStats] = await Promise.all([
     Product.aggregate([
       { $match: { store: { $in: storeIds } } },
-      { $group: { _id: '$store', totalProducts: { $sum: 1 }, activeProducts: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'active'] }] }, 1, 0] } } } },
+      { $group: { _id: '$store', totalProducts: { $sum: 1 } } },
     ]),
     Order.aggregate([
       { $match: { store: { $in: storeIds }, status: { $nin: ['cancelled', 'rejected'] } } },
@@ -325,7 +320,6 @@ export const adminListStores = asyncHandler(async (req, res) => {
       ...store,
       stats: {
         totalProducts: pStat?.totalProducts || 0,
-        activeProducts: pStat?.activeProducts || 0,
         totalOrders: oStat?.totalOrders || 0,
         deliveredOrders: oStat?.deliveredOrders || 0,
         deliveredRevenue: Math.round(oStat?.deliveredRevenue || 0),
@@ -345,7 +339,7 @@ export const adminGetStore = asyncHandler(async (req, res) => {
   const [pStat, oStat] = await Promise.all([
     Product.aggregate([
       { $match: { store: store._id } },
-      { $group: { _id: null, totalProducts: { $sum: 1 }, activeProducts: { $sum: { $cond: [{ $and: [{ $eq: ['$isActive', true] }, { $eq: ['$status', 'active'] }] }, 1, 0] } } } },
+      { $group: { _id: null, totalProducts: { $sum: 1 } } },
     ]),
     Order.aggregate([
       { $match: { store: store._id, status: { $nin: ['cancelled', 'rejected'] } } },
@@ -358,7 +352,6 @@ export const adminGetStore = asyncHandler(async (req, res) => {
       ...store,
       stats: {
         totalProducts: pStat[0]?.totalProducts || 0,
-        activeProducts: pStat[0]?.activeProducts || 0,
         totalOrders: oStat[0]?.totalOrders || 0,
         deliveredOrders: oStat[0]?.deliveredOrders || 0,
         deliveredRevenue: Math.round(oStat[0]?.deliveredRevenue || 0),
@@ -408,9 +401,6 @@ export const adminListSellerProducts = asyncHandler(async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = { ownerType: 'SELLER' }
   if (req.query.store) query.store = req.query.store
-  if (req.query.isActive === 'true') query.isActive = true
-  if (req.query.isActive === 'false') query.isActive = false
-  if (req.query.status) query.status = req.query.status
   if (req.query.q) {
     const safe = String(req.query.q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     query.$or = [
@@ -443,32 +433,6 @@ export const adminDeleteSellerProduct = asyncHandler(async (req, res) => {
   await Promise.all(images.map((img) => deleteGridFSByUrl(img)))
 
   return sendSuccess(res, null, 'Product deleted')
-})
-
-export const adminDisableSellerProduct = asyncHandler(async (req, res) => {
-  if (!mongoose.isValidObjectId(req.params.id)) return sendError(res, 'Product not found', 404)
-
-  const product = await Product.findOne({ _id: req.params.id, ownerType: 'SELLER' })
-  if (!product) return sendError(res, 'Seller product not found', 404)
-
-  product.status = 'disabled_by_admin'
-  product.isActive = false
-  await product.save()
-
-  return sendSuccess(res, product, 'Product disabled by admin')
-})
-
-export const adminEnableSellerProduct = asyncHandler(async (req, res) => {
-  if (!mongoose.isValidObjectId(req.params.id)) return sendError(res, 'Product not found', 404)
-
-  const product = await Product.findOne({ _id: req.params.id, ownerType: 'SELLER' })
-  if (!product) return sendError(res, 'Seller product not found', 404)
-
-  product.status = 'active'
-  product.isActive = true
-  await product.save()
-
-  return sendSuccess(res, product, 'Product enabled by admin')
 })
 
 // Seller Orders (admin view)
@@ -518,24 +482,14 @@ export const adminUpdateSellerOrderStatus = asyncHandler(async (req, res) => {
   const wasConfirmed = previousStatus !== 'confirmed' && status === 'confirmed'
   const wasDelivered = previousStatus !== 'delivered' && status === 'delivered'
 
+  // Confirming an order increments product confirmedSales (no stock tracking).
   if (wasConfirmed) {
-    const decremented = []
-    try {
-      for (const item of order.items) {
-        if (!item.productId) continue
-        const updated = await Product.findOneAndUpdate(
-          { _id: item.productId, stock: { $gte: item.qty } },
-          { $inc: { stock: -item.qty, confirmedSales: item.qty } },
-          { projection: { _id: 1 } }
-        )
-        if (!updated) throw new Error(`OUT_OF_STOCK:${item.productId}`)
-        decremented.push({ productId: item.productId, qty: item.qty })
-      }
-    } catch (err) {
-      for (const d of decremented) {
-        await Product.updateOne({ _id: d.productId }, { $inc: { stock: d.qty, confirmedSales: -d.qty } })
-      }
-      return sendError(res, 'Not enough stock to confirm this order', 400)
+    for (const item of order.items) {
+      if (!item.productId) continue
+      await Product.updateOne(
+        { _id: item.productId },
+        { $inc: { confirmedSales: item.qty } }
+      )
     }
   }
 

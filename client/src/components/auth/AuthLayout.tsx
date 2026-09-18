@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, ArrowLeft, X, type LucideIcon } from 'lucide-react'
-import logo from '../../assets/logo.jpg'
 import { useLanguage } from '../../context/LanguageContext'
 
 interface Benefit {
@@ -101,7 +100,6 @@ export default function AuthLayout({
 
           <div className="relative">
             <span className="inline-flex items-center gap-2 rounded-2xl bg-white/10 p-2 pe-3.5 backdrop-blur">
-              <img src={logo} alt="BM Store" className="h-8 w-auto object-contain" />
               <span className="font-display text-sm font-extrabold tracking-tight">{t('brand.storeName')}</span>
             </span>
             <h2 className="mt-7 font-display text-[1.55rem] font-extrabold leading-[1.1] tracking-tight text-balance">
@@ -133,9 +131,8 @@ export default function AuthLayout({
         {/* Form panel */}
         <div className="flex flex-col justify-center p-6 sm:p-8">
           <span className="mb-6 inline-flex w-fit items-center gap-2 rounded-2xl bg-brand-50 p-2 lg:hidden">
-            <img src={logo} alt="BM Store" className="h-6 w-auto object-contain" />
-            <span className="pe-1 font-display text-sm font-extrabold text-brand-800">{t('brand.storeName')}</span>
-          </span>
+          <span className="pe-1 font-display text-sm font-extrabold text-brand-800">{t('brand.storeName')}</span>
+        </span>
 
           <p className="eyebrow">{eyebrow}</p>
           <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink-900 sm:text-2xl">{title}</h1>

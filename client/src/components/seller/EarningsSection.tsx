@@ -13,8 +13,6 @@ export default function SellerEarningsSection() {
   const [error, setError] = useState('')
   const [stats, setStats] = useState<{
     totalProducts: number
-    activeProducts: number
-    pausedProducts: number
     totalOrders: number
     pendingOrders: number
     deliveredOrders: number
@@ -136,14 +134,6 @@ export default function SellerEarningsSection() {
             <div className="flex justify-between">
               <span className="text-ink-500">{t('seller.earnings.totalProducts')}</span>
               <span className="font-semibold text-ink-900">{stats.totalProducts}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-ink-500">{t('seller.earnings.activeProducts')}</span>
-              <span className="font-semibold text-ink-900">{stats.activeProducts}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-ink-500">{t('seller.earnings.pausedProducts')}</span>
-              <span className="font-semibold text-ink-900">{stats.pausedProducts}</span>
             </div>
           </div>
         </div>

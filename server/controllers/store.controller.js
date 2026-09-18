@@ -37,10 +37,11 @@ export const updateMyStore = asyncHandler(async (req, res) => {
   const store = await Store.findOne({ seller: seller._id })
   if (!store) return sendError(res, 'Store not found', 404)
 
-  const { name, description, logo, phone, wilaya, city } = req.body ?? {}
+  const { name, description, descriptionAr, logo, phone, wilaya, city } = req.body ?? {}
 
   if (name !== undefined) store.name = String(name).trim()
   if (description !== undefined) store.description = String(description).trim()
+  if (descriptionAr !== undefined) store.descriptionAr = String(descriptionAr).trim()
   if (logo !== undefined) store.logo = String(logo).trim() || undefined
   if (phone !== undefined) store.phone = String(phone).trim()
   if (wilaya !== undefined) store.wilaya = String(wilaya).trim()
@@ -80,12 +81,8 @@ const pickSellerProductFields = (body, current = null) => {
     if (body[f] !== undefined) out[f] = body[f]
   }
   if (body.images !== undefined) out.images = Array.isArray(body.images) ? body.images.slice(0, 5) : []
-  if (body.stock !== undefined) out.stock = Math.max(0, Number(body.stock))
-  if (body.lowStockThreshold !== undefined) out.lowStockThreshold = Math.max(0, Number(body.lowStockThreshold))
-  if (body.isActive !== undefined) out.isActive = Boolean(body.isActive)
   if (body.price !== undefined) out.price = Number(body.price)
   if (body.isSpecialOffer !== undefined) out.isSpecialOffer = Boolean(body.isSpecialOffer)
-  if (body.status !== undefined) out.status = body.status
 
   const isOffer = out.isSpecialOffer ?? current?.isSpecialOffer ?? false
   if (body.oldPrice !== undefined) {
@@ -120,7 +117,6 @@ export const listMyProducts = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = { store: store._id }
-  if (req.query.status) query.status = req.query.status
   if (req.query.q) {
     const safe = String(req.query.q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     query.$or = [
@@ -185,13 +181,11 @@ export const createMyProduct = asyncHandler(async (req, res) => {
   delete data.descriptionFr
 
   if (data.oldPrice === undefined || data.oldPrice === null) delete data.oldPrice
-  if (data.stock === undefined) data.stock = 0
 
   data.slug = await uniqueProductSlug(data.name, store._id)
   data.store = store._id
   data.seller = seller._id
   data.ownerType = 'SELLER'
-  data.status = 'active'
 
   const product = await Product.create(data)
   return sendSuccess(res, product, 'Product created', 201)
@@ -208,11 +202,6 @@ export const updateMyProduct = asyncHandler(async (req, res) => {
 
   const product = await Product.findOne({ _id: req.params.id, store: store._id })
   if (!product) return sendError(res, 'Product not found', 404)
-
-  // Admin disabled products cannot be reactivated by seller
-  if (product.status === 'disabled_by_admin') {
-    return sendError(res, 'This product has been disabled by admin and cannot be modified', 403)
-  }
 
   const invalidOffer = validateSellerOffer(req.body ?? {}, product)
   if (invalidOffer) return sendError(res, invalidOffer, 400)
@@ -264,51 +253,6 @@ export const deleteMyProduct = asyncHandler(async (req, res) => {
   await Promise.all(images.map((img) => deleteGridFSByUrl(img)))
 
   return sendSuccess(res, null, 'Product deleted')
-})
-
-export const toggleMyProductStatus = asyncHandler(async (req, res) => {
-  const seller = await getSellerFromReq(req)
-  if (!seller) return sendError(res, 'Seller profile not found', 401)
-
-  const store = await getSellerStore(seller._id)
-  if (!store) return sendError(res, 'Store not found', 404)
-
-  if (!mongoose.isValidObjectId(req.params.id)) return sendError(res, 'Product not found', 404)
-
-  const product = await Product.findOne({ _id: req.params.id, store: store._id })
-  if (!product) return sendError(res, 'Product not found', 404)
-
-  // Admin disabled products cannot be reactivated by seller
-  if (product.status === 'disabled_by_admin' && req.body.status === 'active') {
-    return sendError(res, 'This product has been disabled by admin and cannot be reactivated', 403)
-  }
-
-  if (req.body.isActive !== undefined) product.isActive = Boolean(req.body.isActive)
-  if (req.body.status !== undefined) {
-    const newStatus = req.body.status
-    if (!['active', 'paused_by_seller'].includes(newStatus)) {
-      return sendError(res, 'Invalid status', 400)
-    }
-    // Only allow pausing/activating if not admin disabled
-    if (product.status !== 'disabled_by_admin') {
-      product.status = newStatus
-      product.isActive = newStatus === 'active'
-    }
-  }
-  if (req.body.isSpecialOffer !== undefined) {
-    const wantOffer = Boolean(req.body.isSpecialOffer)
-    if (wantOffer) {
-      const invalidOffer = validateSellerOffer({ isSpecialOffer: true }, product)
-      if (invalidOffer) return sendError(res, invalidOffer, 400)
-    } else {
-      await Product.updateOne({ _id: product._id }, { $unset: { oldPrice: '' } })
-      product.oldPrice = undefined
-    }
-    product.isSpecialOffer = wantOffer
-  }
-
-  const updated = await product.save()
-  return sendSuccess(res, updated, 'Product updated')
 })
 
 // Categories
@@ -392,7 +336,7 @@ export const updateMyCategory = asyncHandler(async (req, res) => {
   if (slug !== undefined) {
     const newSlug = String(slug).toLowerCase().trim()
     if (newSlug !== category.slug) {
-      const exists = await Category.exists({ slug: newSlug, _id: { $ne: category._id } })
+      const exists = await Category.exists({ slug: newSlug, store: store._id, _id: { $ne: category._id } })
       if (exists) return sendError(res, 'This slug is already in use', 400)
       category.slug = newSlug
     }
@@ -496,24 +440,14 @@ export const updateMyOrderStatus = asyncHandler(async (req, res) => {
   const wasConfirmed = previousStatus !== 'confirmed' && status === 'confirmed'
   const wasDelivered = previousStatus !== 'delivered' && status === 'delivered'
 
+  // Confirming an order increments product confirmedSales (no stock tracking).
   if (wasConfirmed) {
-    const decremented = []
-    try {
-      for (const item of order.items) {
-        if (!item.productId) continue
-        const updated = await Product.findOneAndUpdate(
-          { _id: item.productId, store: store._id, stock: { $gte: item.qty } },
-          { $inc: { stock: -item.qty, confirmedSales: item.qty } },
-          { projection: { _id: 1 } }
-        )
-        if (!updated) throw new Error(`OUT_OF_STOCK:${item.productId}`)
-        decremented.push({ productId: item.productId, qty: item.qty })
-      }
-    } catch (err) {
-      for (const d of decremented) {
-        await Product.updateOne({ _id: d.productId, store: store._id }, { $inc: { stock: d.qty, confirmedSales: -d.qty } })
-      }
-      return sendError(res, 'Not enough stock to confirm this order', 400)
+    for (const item of order.items) {
+      if (!item.productId) continue
+      await Product.updateOne(
+        { _id: item.productId, store: store._id },
+        { $inc: { confirmedSales: item.qty } }
+      )
     }
   }
 
@@ -525,8 +459,8 @@ export const updateMyOrderStatus = asyncHandler(async (req, res) => {
 
 /**
  * Seller permanently deletes one of their own store's orders. Reverses
- * stock/confirmedSales when the order was confirmed/delivered before removing
- * the record.
+ * confirmedSales when the order was confirmed/delivered before removing the
+ * record.
  */
 export const deleteMyOrder = asyncHandler(async (req, res) => {
   const seller = await getSellerFromReq(req)
@@ -556,10 +490,8 @@ export const getMyEarnings = asyncHandler(async (req, res) => {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  const [totalProducts, activeProducts, pausedProducts, totalOrders, pendingOrders, deliveredOrders, cancelledOrders, deliveredRevenue, monthlyRevenue] = await Promise.all([
+  const [totalProducts, totalOrders, pendingOrders, deliveredOrders, cancelledOrders, deliveredRevenue, monthlyRevenue] = await Promise.all([
     Product.countDocuments({ store: store._id }),
-    Product.countDocuments({ store: store._id, status: 'active', isActive: true }),
-    Product.countDocuments({ store: store._id, status: 'paused_by_seller' }),
     Order.countDocuments({ store: store._id }),
     Order.countDocuments({ store: store._id, status: 'pending' }),
     Order.countDocuments({ store: store._id, status: 'delivered' }),
@@ -577,8 +509,6 @@ export const getMyEarnings = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     stats: {
       totalProducts,
-      activeProducts,
-      pausedProducts,
       totalOrders,
       pendingOrders,
       deliveredOrders,
@@ -647,6 +577,7 @@ export const submitRenewalRequest = asyncHandler(async (req, res) => {
     sellerPhone: seller.phone,
     storeName: store.name,
     storeDescription: store.description,
+    storeDescriptionAr: store.descriptionAr,
     storeLogo: store.logo,
     storePhone: store.phone,
     wilaya: store.wilaya,

@@ -19,6 +19,7 @@ export default function SellerStoreSection() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    descriptionAr: '',
     logo: '',
     phone: '',
     wilaya: '',
@@ -37,6 +38,7 @@ export default function SellerStoreSection() {
         setFormData({
           name: res.store.name || '',
           description: res.store.description || '',
+          descriptionAr: res.store.descriptionAr || '',
           logo: res.store.logo || '',
           phone: res.store.phone || '',
           wilaya: res.store.wilaya || '',
@@ -132,6 +134,19 @@ export default function SellerStoreSection() {
               onChange={handleChange}
               rows={4}
               placeholder={t('seller.store.descriptionPlaceholder')}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="descriptionAr">{t('seller.store.descriptionAr')}</Label>
+            <Textarea
+              dir="rtl"
+              id="descriptionAr"
+              name="descriptionAr"
+              value={formData.descriptionAr}
+              onChange={handleChange}
+              rows={4}
+              placeholder={t('seller.store.descriptionArPlaceholder')}
             />
           </div>
 

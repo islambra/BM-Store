@@ -1,8 +1,10 @@
 ﻿import 'dotenv/config'
 import { before, after, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import mongoose from 'mongoose'
 import request from 'supertest'
 import app from '../app.js'
+import Category from '../models/Category.js'
 import { connectTest, disconnectTest, clearCollection, createAdmin, createCategory } from './helpers.mjs'
 
 // Required 8 data-driven categories with these server slugs.
@@ -56,6 +58,28 @@ describe('categories', () => {
   it('USER cannot create categories', async () => {
     const res = await request(app).post('/api/admin/categories').send({ slug: 'spices', name: 'Spices' })
     assert.equal(res.status, 401)
+  })
+
+  it('keeps seller categories out of the public list and lets the admin reuse their slug', async () => {
+    const h = await adminHeaders()
+    await Category.create({
+      slug: 'spices',
+      name: 'Seller Spices',
+      nameAr: 'توابل',
+      store: new mongoose.Types.ObjectId(),
+      active: true,
+    })
+
+    const publicList = await request(app).get('/api/categories')
+    assert.equal(publicList.status, 200)
+    assert.ok(
+      !publicList.body.data.some((c) => c.slug === 'spices'),
+      'seller categories must not leak into the global storefront list'
+    )
+
+    const created = await request(app).post('/api/admin/categories').set(h).send({ slug: 'spices', name: 'Spices' })
+    assert.equal(created.status, 201)
+    assert.equal(created.body.data.slug, 'spices')
   })
 
   it('admin updates and deletes categories', async () => {

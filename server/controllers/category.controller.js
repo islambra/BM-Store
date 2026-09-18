@@ -11,11 +11,14 @@ const pickFields = (body) => {
   return out
 }
 
-// Public — active categories only, display order, with active product counts.
+// Public — active BM Store (global) categories only, display order, with
+// active product counts. Seller categories are served per store via
+// `/api/stores/:slug/categories`, so scoping by `store: null` keeps the main
+// storefront free of seller categories and of cross-store slug duplicates.
 export const getCategories = asyncHandler(async (_req, res) => {
   const [docs, counts] = await Promise.all([
-    Category.find({ active: true }).sort({ order: 1, name: 1 }).lean(),
-    Product.aggregate([{ $match: { isActive: true } }, { $group: { _id: '$category', count: { $sum: 1 } } }]),
+    Category.find({ active: true, store: null }).sort({ order: 1, name: 1 }).lean(),
+    Product.aggregate([{ $group: { _id: '$category', count: { $sum: 1 } } }]),
   ])
   const countByCategory = new Map(counts.map((c) => [c._id, c.count]))
   const withCounts = docs.map((c) => ({ ...c, productCount: countByCategory.get(c.slug) || 0 }))
@@ -37,12 +40,22 @@ const slugify = (name) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 50) || 'category'
 
+// BM Store (global) categories carry no `store`; seller categories are scoped
+// to a store. Slug uniqueness is per store, so these checks must only look at
+// the BM Store categories — otherwise a seller category with the same slug
+// would force the admin's category to get a suffixed slug.
+const bmStoreCategorySlug = (slug, exceptId) => {
+  const query = { slug, store: null }
+  if (exceptId) query._id = { $ne: exceptId }
+  return Category.exists(query)
+}
+
 async function uniqueSlug(name, exceptId) {
   const base = slugify(name)
-  if (!exceptId && !(await Category.exists({ slug: base }))) return base
+  if (!exceptId && !(await bmStoreCategorySlug(base))) return base
   for (let i = 2; i < 100; i += 1) {
     const candidate = `${base}-${i}`
-    const exists = await Category.exists({ slug: candidate, _id: { $ne: exceptId } })
+    const exists = await bmStoreCategorySlug(candidate, exceptId)
     if (!exists) return candidate
   }
   return `${base}-${Date.now()}`
@@ -67,7 +80,7 @@ export const adminCreate = asyncHandler(async (req, res) => {
 
   if (data.slug) {
     data.slug = String(data.slug).toLowerCase().trim()
-    const exists = await Category.exists({ slug: data.slug })
+    const exists = await bmStoreCategorySlug(data.slug)
     if (exists) return sendError(res, 'A category with this slug already exists', 409)
   } else {
     data.slug = await uniqueSlug(data.name)
@@ -101,7 +114,7 @@ export const adminUpdate = asyncHandler(async (req, res) => {
   delete data.nameFr
 
   if (data.slug && data.slug !== current.slug) {
-    const clash = await Category.exists({ slug: String(data.slug).toLowerCase(), _id: { $ne: current._id } })
+    const clash = await bmStoreCategorySlug(String(data.slug).toLowerCase(), current._id)
     if (clash) return sendError(res, 'A category with this slug already exists', 409)
     data.slug = String(data.slug).toLowerCase()
   }
@@ -115,7 +128,7 @@ export const adminDelete = asyncHandler(async (req, res) => {
   const doc = await Category.findById(req.params.id)
   if (!doc) return sendError(res, 'Category not found', 404)
 
-  const productsCount = await Product.countDocuments({ category: doc.slug })
+  const productsCount = await Product.countDocuments({ category: doc.slug, ownerType: 'BM_STORE' })
   if (productsCount > 0) {
     return sendError(res, `Cannot delete category. ${productsCount} product(s) are using this category. Please move or delete them first.`, 400)
   }

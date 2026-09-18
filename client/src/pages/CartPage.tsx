@@ -102,15 +102,14 @@ export default function CartPage() {
                       <Minus size={14} />
                     </button>
                     <span className="w-8 text-center text-sm font-bold text-ink-900">{quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => updateQuantity(product.id, quantity + 1)}
-                      disabled={quantity >= product.stock}
-                      className="px-2.5 py-2 text-ink-500 transition-colors hover:text-ink-900 disabled:opacity-40"
-                      aria-label={t('cart.increase')}
-                    >
-                      <Plus size={14} />
-                    </button>
+<button
+  type="button"
+  onClick={() => updateQuantity(product.id, quantity + 1)}
+  className="px-2.5 py-2 text-ink-500 transition-colors hover:text-ink-900"
+  aria-label={t('cart.increase')}
+>
+  <Plus size={14} />
+</button>
                   </div>
                   <div className="text-end">
                     <p className="text-sm font-bold text-ink-900">

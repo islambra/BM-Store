@@ -17,16 +17,12 @@ export interface Product {
   categoryName: string
   discount: number
   tags?: string[]
-  stock: number
-  lowStockThreshold: number
-  isActive: boolean
   isFeatured: boolean
   isSpecialOffer?: boolean
   confirmedSales?: number
   ownerType?: 'BM_STORE' | 'SELLER'
   store?: string
   seller?: string
-  status?: 'active' | 'paused_by_seller' | 'disabled_by_admin'
 }
 
 export interface Category {

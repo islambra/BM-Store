@@ -44,4 +44,16 @@ describe('App routing', () => {
     render(<App />)
     expect(await screen.findByRole('button', { name: 'Open chat' })).toBeInTheDocument()
   })
+
+  it('hides the chatbot bubble on auth pages', () => {
+    window.history.replaceState({}, '', '/login')
+    render(<App />)
+    expect(screen.queryByRole('button', { name: 'Open chat' })).not.toBeInTheDocument()
+  })
+
+  it('hides the chatbot bubble outside the main browsing pages', () => {
+    window.history.replaceState({}, '', '/cart')
+    render(<App />)
+    expect(screen.queryByRole('button', { name: 'Open chat' })).not.toBeInTheDocument()
+  })
 })

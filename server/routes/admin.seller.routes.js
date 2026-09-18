@@ -14,8 +14,6 @@ import {
   adminActivateStore,
   adminListSellerProducts,
   adminDeleteSellerProduct,
-  adminDisableSellerProduct,
-  adminEnableSellerProduct,
   adminListSellerOrders,
   adminUpdateSellerOrderStatus,
 } from '../controllers/admin.seller.controller.js'
@@ -45,8 +43,6 @@ router.post('/stores/:id/activate', adminActivateStore)
 // Seller Products
 router.get('/products', adminListSellerProducts)
 router.delete('/products/:id', adminDeleteSellerProduct)
-router.post('/products/:id/disable', adminDisableSellerProduct)
-router.post('/products/:id/enable', adminEnableSellerProduct)
 
 // Seller Orders
 router.get('/orders', adminListSellerOrders)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -18,14 +18,14 @@ import {
 } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAsync } from '../../hooks/useAsync'
-import { deleteMyOrder, getErrorMessage, getMyOrders, updateMyOrder, type MyOrderRecord } from '../../services/api'
+import { deleteMyOrder, getErrorMessage, getMyOrders, getWilayas, updateMyOrder, type MyOrderRecord, type WilayaRecord } from '../../services/api'
 import { cachedProductFetcher } from '../../services/catalog'
 import { formatPrice } from '../../components/common/Price'
 import OrderStatusBadge, { statusKey } from '../../components/common/OrderStatusBadge'
 import EmptyState from '../../components/common/EmptyState'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import { Field, Input, Select, Textarea } from '../../components/common/FormControls'
-import { getWilayaName, wilayas } from '../../data/wilayas'
+import { wilayas } from '../../data/wilayas'
 
 const TIMELINE_STAGES = ['pending', 'confirmed', 'delivered']
 
@@ -384,12 +384,35 @@ function EditOrderModal({
   const [items, setItems] = useState<DraftItem[]>(
     order.items.map((it) => ({ productId: String(it.productId), name: it.name, qty: it.qty, price: it.price })),
   )
-  const [wilaya, setWilaya] = useState(order.customer.wilaya)
+  const [wilaya, setWilaya] = useState(order.customer.wilayaId ?? order.customer.wilaya)
   const [commune, setCommune] = useState(order.customer.commune)
   const [address, setAddress] = useState(order.customer.address)
   const [note, setNote] = useState(order.customer.note ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // Active wilayas with their live delivery price (values are `_id`s).
+  const [wilayaList, setWilayaList] = useState<WilayaRecord[]>([])
+  useEffect(() => {
+    let active = true
+    getWilayas()
+      .then((res) => {
+        if (active) setWilayaList(res)
+      })
+      .catch(() => {
+        if (active) setWilayaList([])
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const options = useMemo(() => {
+    if (wilayaList.length > 0) {
+      return wilayaList.map((w) => ({ value: w._id, code: w.code, name: w.name, nameAr: w.nameAr }))
+    }
+    return wilayas.map((w) => ({ value: w.code, code: w.code, name: w.name, nameAr: w.nameAr }))
+  }, [wilayaList])
 
   useEffect(() => {
     document.body.style.overflow = 'hidden'
@@ -411,12 +434,11 @@ function EditOrderModal({
     }
     setBusy(true)
     try {
-      const entry = wilayas.find((w) => w.code === wilaya)
+      const selected = options.find((o) => o.value === wilaya)
       await updateMyOrder(order._id, {
         items: items.map(({ productId, qty }) => ({ productId, qty })),
         customer: {
-          wilaya: wilaya.trim(),
-          wilayaName: entry ? getWilayaName(entry, lang) : wilaya.trim(),
+          ...(selected && wilayaList.length > 0 ? { wilayaId: selected.value } : { wilaya: wilaya.trim() }),
           commune: commune.trim(),
           address: address.trim(),
           note: note.trim(),
@@ -505,9 +527,9 @@ function EditOrderModal({
               <option value="" disabled>
                 {t('checkout.wilayaPlaceholder')}
               </option>
-              {wilayas.map((w) => (
-                <option key={w.code} value={w.code}>
-                  {w.code} - {getWilayaName(w, lang)}
+              {options.map((w) => (
+                <option key={w.value} value={w.value}>
+                  {w.code} - {lang === 'ar' ? w.nameAr || w.name : w.name}
                 </option>
               ))}
             </Select>

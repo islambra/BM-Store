@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { Loader2, MessageCircle, Pencil, Send, Trash2, X, Check } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
 import { useAuth } from '../../context/AuthContext'
+import { useLoginPrompt } from '../../hooks/useLoginPrompt'
 import * as api from '../../services/api'
 import type { CommentRecord } from '../../services/api'
 import ConfirmDialog from '../common/ConfirmDialog'
@@ -42,8 +42,7 @@ export default function CommentsSection({
 }) {
   const { t, lang } = useLanguage()
   const { user } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const promptLogin = useLoginPrompt()
 
   const [comments, setComments] = useState<CommentRecord[]>([])
   const [total, setTotal] = useState(0)
@@ -98,8 +97,6 @@ export default function CommentsSection({
   useEffect(() => {
     void load(1, true)
   }, [load])
-
-  const goToLogin = () => navigate('/login', { state: { from: location.pathname } })
 
   const send = async () => {
     const text = draft.trim()
@@ -200,16 +197,20 @@ export default function CommentsSection({
           </button>
         </form>
       ) : (
-        <div className="flex flex-col items-start gap-2 rounded-2xl border border-dashed border-line bg-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-ink-500">{t('posts.loginToComment')}</p>
-          <button
-            type="button"
-            onClick={goToLogin}
-            className="rounded-full bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
-          >
-            {t('posts.login')}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={promptLogin}
+          className="flex w-full items-center gap-2.5 text-start"
+          aria-label={t('posts.writeComment')}
+        >
+          <AvatarBadge name="" />
+          <span className="h-10 flex-1 truncate rounded-full border border-line bg-canvas px-4 text-sm leading-10 text-ink-400">
+            {t('posts.writeComment')}
+          </span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white">
+            <Send size={16} className="rtl:-scale-x-100" />
+          </span>
+        </button>
       )}
 
       {/* List */}

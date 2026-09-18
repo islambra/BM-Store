@@ -9,7 +9,6 @@ export interface ProductFilters {
   sort: 'featured' | 'priceAsc' | 'priceDesc' | 'popular' | 'best-selling' | 'newest'
   minPrice: number
   maxPrice: number
-  inStock: boolean
 }
 
 export const defaultFilters: ProductFilters = {
@@ -17,7 +16,6 @@ export const defaultFilters: ProductFilters = {
   sort: 'featured',
   minPrice: 0,
   maxPrice: 5000,
-  inStock: false,
 }
 
 const catName = (c: { name: string; nameAr?: string; nameFr?: string }, lang: string) =>
@@ -134,18 +132,6 @@ export default function FilterPanel({
             aria-label={t('filter.priceMax')}
           />
         </div>
-      </div>
-
-      <div>
-        <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-ink-700">
-          <input
-            type="checkbox"
-            checked={filters.inStock}
-            onChange={(e) => onChange({ inStock: e.target.checked })}
-            className="h-4.5 w-4.5 rounded border-line accent-brand-600"
-          />
-          {t('filter.inStock')}
-        </label>
       </div>
     </div>
   )

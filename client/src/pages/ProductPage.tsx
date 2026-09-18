@@ -85,8 +85,8 @@ export default function ProductPage() {
   if (loading) {
     return (
       <div className="container-app pt-6 sm:pt-10">
-        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-          <div className="aspect-square animate-pulse rounded-3xl bg-ink-900/10" />
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:gap-10 xl:gap-12">
+          <div className="mx-auto aspect-square w-full max-w-[460px] animate-pulse rounded-2xl bg-ink-900/10 lg:mx-0 lg:max-w-none" />
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <ProductCardSkeleton key={i} />
@@ -176,21 +176,16 @@ export default function ProductPage() {
         </div>
       )}
 
-      <div className="mt-5 grid gap-8 lg:grid-cols-2 lg:gap-12">
+      <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:gap-10 xl:gap-12">
         {/* Gallery */}
-        <div className="min-w-0">
-          <div className="group relative overflow-hidden rounded-3xl border border-line bg-surface shadow-soft">
+        <div className="mx-auto w-full min-w-0 max-w-[460px] lg:mx-0 lg:max-w-none">
+          <div className="group relative overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
             {product.isSpecialOffer && product.discount > 0 && (
               <span className="absolute start-4 top-4 z-10 inline-flex items-center rounded-lg bg-accent-500 px-2.5 py-1.5 text-sm font-extrabold text-white shadow-lift">
                 -{product.discount}%
               </span>
             )}
-            {product.stock <= 0 && (
-              <div className="absolute inset-0 z-10 grid place-items-center bg-surface/60 backdrop-blur-[2px]">
-                <span className="badge bg-red-600 px-3.5 py-1.5 text-sm text-white">{t('product.outOfStock')}</span>
-              </div>
-            )}
-            <div className="aspect-square lg:aspect-[4/3]">
+            <div className="aspect-square">
               <img
                 src={product.images[mainImage] ?? product.image}
                 alt={name}
@@ -237,20 +232,6 @@ export default function ProductPage() {
             {name}
           </h1>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {product.stock > 0 ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                <Check size={13} />
-                {t('product.inStock')}
-              </span>
-            ) : (
-              <span className="badge bg-red-50 text-red-600">{t('product.outOfStock')}</span>
-            )}
-            {product.stock > 0 && product.stock <= 10 && (
-              <span className="badge bg-amber-50 text-amber-700">{t('product.stockLeft', { count: product.stock })}</span>
-            )}
-          </div>
-
           {/* Price panel */}
           <div className="mt-5 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-5">
@@ -286,15 +267,14 @@ export default function ProductPage() {
                   <Minus size={16} />
                 </button>
                 <span className="w-10 text-center text-sm font-bold text-ink-900">{qty}</span>
-                <button
-                  type="button"
-                  onClick={() => setQty((q) => Math.min(product.stock, q + 1))}
-                  disabled={qty >= product.stock}
-                  className="px-3.5 py-3 text-ink-500 hover:text-ink-900 disabled:opacity-40"
-                  aria-label={t('cart.increase')}
-                >
-                  <Plus size={16} />
-                </button>
+<button
+  type="button"
+  onClick={() => setQty((q) => q + 1)}
+  className="px-3.5 py-3 text-ink-500 hover:text-ink-900"
+  aria-label={t('cart.increase')}
+>
+  <Plus size={16} />
+</button>
               </div>
               <button
                 type="button"
@@ -310,7 +290,7 @@ export default function ProductPage() {
               </button>
             </div>
             <div className="flex gap-3">
-              <button type="button" onClick={handleAdd} className="btn-secondary flex-1 py-3.5" disabled={product.stock <= 0}>
+              <button type="button" onClick={handleAdd} className="btn-secondary flex-1 py-3.5">
                 {added ? <Check size={18} /> : <ShoppingCart size={18} />}
                 {t('common.addToCart')}
               </button>
@@ -318,7 +298,6 @@ export default function ProductPage() {
                 type="button"
                 onClick={handleBuyNow}
                 className="btn-primary flex-1 py-3.5"
-                disabled={product.stock <= 0}
               >
                 {t('common.buyNow')}
               </button>

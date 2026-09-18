@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Plus, Search, Edit, Trash2, Pause, Play, Package, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Package, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLanguage } from '../../context/LanguageContext'
-import { listMyProducts, createMyProduct, updateMyProduct, deleteMyProduct, toggleMyProductStatus } from '../../services/api'
+import { listMyProducts, createMyProduct, updateMyProduct, deleteMyProduct } from '../../services/api'
 import { getErrorMessage } from '../../services/api'
 import { formatPrice } from '../../components/common/Price'
 import SectionHeader from '../../components/common/SectionHeader'
 import { Alert } from '../../components/common/FormControls'
-import { Input, Select, Button } from '../../components/common/FormControls'
+import { Input, Button } from '../../components/common/FormControls'
 import ProductFormModal from './ProductFormModal'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 
@@ -20,10 +20,7 @@ type Product = {
   images: string[]
   category: string
   categoryName: string
-  stock: number
-  isActive: boolean
   isSpecialOffer: boolean
-  status: 'active' | 'paused_by_seller' | 'disabled_by_admin'
   discount: number
 }
 
@@ -33,11 +30,9 @@ export default function SellerProductsSection() {
   const [products, setProducts] = useState<Product[]>([])
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null)
-  const [pausingProduct, setPausingProduct] = useState<Product | null>(null)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(0)
@@ -46,7 +41,7 @@ export default function SellerProductsSection() {
   const fetchProducts = async () => {
     setLoading(true)
     try {
-      const res = await listMyProducts({ page, limit, q: search, status: statusFilter })
+      const res = await listMyProducts({ page, limit, q: search })
       setProducts(res.products)
       setTotal(res.total)
       setPages(res.pages)
@@ -59,7 +54,7 @@ export default function SellerProductsSection() {
 
   useEffect(() => {
     fetchProducts()
-  }, [page, search, statusFilter])
+  }, [page, search])
 
   useEffect(() => {
     if (error) window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -88,23 +83,6 @@ export default function SellerProductsSection() {
       setError(getErrorMessage(err))
     } finally {
       setDeletingProduct(null)
-    }
-  }
-
-  const handlePause = (product: Product) => {
-    setPausingProduct(product)
-  }
-
-  const confirmPause = async () => {
-    if (!pausingProduct) return
-    try {
-      const newStatus = pausingProduct.status === 'active' ? 'paused_by_seller' : 'active'
-      await toggleMyProductStatus(pausingProduct._id, { status: newStatus })
-      fetchProducts()
-    } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setPausingProduct(null)
     }
   }
 
@@ -144,26 +122,14 @@ export default function SellerProductsSection() {
         <Button onClick={handleCreate}><Plus size={18} /> {t('seller.products.add')}</Button>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
-          <Input
-            placeholder={t('common.search')}
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="ps-10"
-          />
-        </div>
-        <Select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-          className="w-full sm:w-48"
-        >
-          <option value="">{t('admin.all')}</option>
-          <option value="active">{t('seller.products.statusActive')}</option>
-          <option value="paused_by_seller">{t('seller.products.statusPaused')}</option>
-          <option value="disabled_by_admin">{t('seller.products.statusDisabled')}</option>
-        </Select>
+      <div className="relative">
+        <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
+        <Input
+          placeholder={t('common.search')}
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          className="ps-10"
+        />
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}
@@ -185,8 +151,6 @@ export default function SellerProductsSection() {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.category')}</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.type')}</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.price')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.stock')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500">{t('seller.products.status')}</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-500">{t('common.actions')}</th>
                 </tr>
               </thead>
@@ -216,18 +180,6 @@ export default function SellerProductsSection() {
                         <span className="ml-2 text-sm line-through text-ink-400">{formatPrice(product.oldPrice, lang)}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-ink-700">{product.stock}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        product.status === 'active' ? 'bg-brand-50 text-brand-700' :
-                        product.status === 'paused_by_seller' ? 'bg-amber-50 text-amber-600' :
-                        'bg-red-50 text-red-600'
-                      }`}>
-                        {product.status === 'active' && t('seller.products.statusActive')}
-                        {product.status === 'paused_by_seller' && t('seller.products.statusPaused')}
-                        {product.status === 'disabled_by_admin' && t('seller.products.statusDisabled')}
-                      </span>
-                    </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -238,16 +190,6 @@ export default function SellerProductsSection() {
                         >
                           <Edit size={16} />
                         </button>
-                        {product.status !== 'disabled_by_admin' && (
-                          <button
-                            type="button"
-                            onClick={() => handlePause(product)}
-                            className="icon-btn text-ink-400 hover:text-amber-600"
-                            aria-label={product.status === 'active' ? t('seller.products.pause') : t('seller.products.activate')}
-                          >
-                            {product.status === 'active' ? <Pause size={16} /> : <Play size={16} />}
-                          </button>
-                        )}
                         <button
                           type="button"
                           onClick={() => handleDelete(product)}
@@ -299,16 +241,6 @@ export default function SellerProductsSection() {
         description={t('seller.products.deleteDesc')}
         confirmText={t('common.delete')}
         tone="danger"
-      />
-
-      <ConfirmDialog
-        open={!!pausingProduct}
-        onCancel={() => setPausingProduct(null)}
-        onConfirm={confirmPause}
-        title={pausingProduct?.status === 'active' ? t('seller.products.pauseTitle') : t('seller.products.activateTitle')}
-        description={pausingProduct?.status === 'active' ? t('seller.products.pauseDesc') : t('seller.products.activateDesc')}
-        confirmText={pausingProduct?.status === 'active' ? t('seller.products.pause') : t('seller.products.activate')}
-        tone={pausingProduct?.status === 'active' ? 'warning' : 'primary'}
       />
     </div>
   )

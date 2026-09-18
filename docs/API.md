@@ -49,7 +49,7 @@ Rules:
 | Method | Path       | Auth | Purpose        |
 | ------ | ---------- | ---- | -------------- |
 | GET    | `/health`  | –    | Liveness probe |
-| GET    | `/config`  | –    | Storefront config — `{deliveryFee}` (single source of truth for the flat delivery fee) |
+| GET    | `/config`  | –    | Storefront config — `{deliveryFee}` (the default/fallback delivery price; per-wilaya prices come from `/wilayas`) |
 
 ## Auth (rate-limited: 30 req / 15 min, enforced in production only)
 
@@ -143,6 +143,7 @@ subdomain URL. The main site (never a store subdomain) is derived from
 | GET    | `/products/slug/:slug`|                                                   | `{product}` |
 | GET    | `/products/:id`       |                                                   | `{product}` |
 | GET    | `/categories`         | active only, ordered by `order`; each category includes `productCount` | `Category[]` |
+| GET    | `/wilayas`            | active only, ordered by `order`; each wilaya includes its admin-set delivery price | `[{_id, code, name, nameAr, deliveryPrice}]` (checkout sends `_id` as `wilayaId`) |
 | GET    | `/banners`            | active only (max 5 enforced); image-only payload `{_id, image, link, order}` | `HeroBanner[]` |
 | GET    | `/posts/home`         | latest 6 published posts, populated product `{_id, name, nameAr, slug, image, price, oldPrice, isSpecialOffer, discount}` | `Post[]` |
 | GET    | `/posts`              | `?page&limit` (paged, published only); each post includes `likesCount`, `commentsCount`, and `userLiked` (when authenticated) | `{posts, page, total, pages}` |
@@ -196,7 +197,18 @@ special offers (requires `oldPrice > price > 0`).
 
 The server recomputes all prices/totals and stores product price snapshots on
 order items; client-supplied prices, discounts, totals and order numbers are
-ignored. A flat `DELIVERY_FEE` is added to every order.
+ignored.
+
+**Delivery (per-wilaya pricing).** `customer` requires `{fullName, phone,
+commune, address}` plus either `wilayaId` (the `_id` from `GET /wilayas`, the
+modern path) or a legacy `wilaya` code (fallback: unknown/inactive codes price
+at the default `350`). With `wilayaId` the wilaya must exist and be active,
+else `400`. The server resolves the price from MongoDB — a client-supplied
+delivery price is never trusted — and snapshots
+`{wilayaId, wilayaCode, wilayaName, deliveryPrice}` onto `order.customer`
+(`wilaya` stays the code, `order.delivery` stays the fee). Shipping is added on
+top: `total = subtotal + delivery - discountAmount`. Editing a pending order's
+wilaya re-resolves and re-snapshots it and recomputes `total`.
 
 **Reward discount (single source of truth: `utils/customerDiscount.js`).**
 The reward is a **BM Store only** discount: Seller orders never receive it.
@@ -308,6 +320,8 @@ confirmation. The old per-product reward system (`Reward` model,
 | GET    | `/admin/rewards`           | system toggle + BM Store categories with reward fields | `{settings:{rewardSystemEnabled}, categories:[{_id, slug, name, nameAr, nameFr, rewardEnabled, rewardNormalPercent, rewardSpecialPercent, active}]}` |
 | PATCH  | `/admin/rewards/settings`  | `{rewardSystemEnabled: boolean}`; boolean required | `{settings, categories}` (same as GET) |
 | PATCH  | `/admin/rewards/categories/:id` | `{rewardEnabled?, rewardNormalPercent?, rewardSpecialPercent?}`; Seller category → 400; percents must be whole numbers 0–100 | `{settings, categories}` |
+| GET    | `/admin/wilayas`           | all 58 wilayas seeded with the default price; never overwrites admin edits | `{wilayas:[{code, name, nameAr, deliveryPrice, isActive, order}], defaultPrice}` |
+| PATCH  | `/admin/wilayas/:code`     | `{deliveryPrice?, isActive?}`; price must be a whole number ≥ 0 | `{wilaya}` |
 | GET    | `/admin/banners`           |                                             | `{banners, activeCount, max}` |
 | POST   | `/admin/banners`           | requires only `image` (plus optional `link`, `order`, `active`); max 5 active | `{banner}` (201) |
 | PATCH  | `/admin/banners/:id`       | `{active:true}` blocked when at max         | `{banner}` |

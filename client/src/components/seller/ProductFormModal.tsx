@@ -22,10 +22,8 @@ interface ProductFormModalProps {
     oldPrice?: number
     category: string
     categoryName: string
-    stock: number
     images: string[]
     isSpecialOffer: boolean
-    status: string
   } | null
   onSubmit: (data: any) => void
 }
@@ -45,7 +43,6 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
     price: 0,
     oldPrice: '',
     category: '',
-    stock: 0,
     isSpecialOffer: false,
   })
 
@@ -59,7 +56,6 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
         price: product.price,
         oldPrice: product.oldPrice?.toString() || '',
         category: product.category,
-        stock: product.stock,
         isSpecialOffer: product.isSpecialOffer,
       })
       setImages((product.images ?? []).filter(Boolean).slice(0, 5))
@@ -72,7 +68,6 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
         price: 0,
         oldPrice: '',
         category: '',
-        stock: 0,
         isSpecialOffer: false,
       })
       setImages([])
@@ -131,7 +126,6 @@ export default function ProductFormModal({ open, onClose, product, onSubmit }: P
       oldPrice: formData.isSpecialOffer && Number(formData.oldPrice) > 0 ? Number(formData.oldPrice) : undefined,
       category: formData.category,
       isSpecialOffer: formData.isSpecialOffer,
-      stock: product ? formData.stock : (formData.stock || 100),
       image: images[0],
       images: images.slice(0, 5),
     }

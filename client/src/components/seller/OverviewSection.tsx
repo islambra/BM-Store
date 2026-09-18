@@ -15,8 +15,6 @@ export default function SellerOverviewSection() {
   const [error, setError] = useState('')
   const [stats, setStats] = useState<{
     totalProducts: number
-    activeProducts: number
-    pausedProducts: number
     totalOrders: number
     pendingOrders: number
     deliveredOrders: number

@@ -40,7 +40,6 @@ export default function CategoryPage() {
       sort: filters.sort,
       minPrice: filters.minPrice || undefined,
       maxPrice: filters.maxPrice || undefined,
-      inStock: filters.inStock || undefined,
       limit: 32,
     })
       .then((p) => {

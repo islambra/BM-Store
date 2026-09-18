@@ -19,12 +19,12 @@ import { useStore } from '../context/StoreContext'
 import { useAuth } from '../context/AuthContext'
 import { localizedName } from '../utils/localize'
 import { localizeError } from '../utils/errors'
-import { wilayas, getWilayaName } from '../data/wilayas'
+import { wilayas } from '../data/wilayas'
 import { formatPrice } from '../components/common/Price'
 import EmptyState from '../components/common/EmptyState'
 import PageHeader from '../components/common/PageHeader'
 import { Alert, Field, Input, Textarea, Select } from '../components/common/FormControls'
-import { createOrder, getMyOrders, getPublicRewards, type PublicRewards } from '../services/api'
+import { createOrder, getMyOrders, getPublicRewards, getWilayas, type PublicRewards, type WilayaRecord } from '../services/api'
 import { getStoredReferral, getVisitorId } from '../services/referral'
 
 function newClientKey() {
@@ -94,6 +94,24 @@ export default function CheckoutPage() {
     }
   }, [])
 
+  // Active wilayas come from the backend with their live delivery price. The
+  // selected option value is the wilaya `_id`, and checkout sends only that id
+  // — the server resolves the name/code/price and never trusts the client.
+  const [wilayaList, setWilayaList] = useState<WilayaRecord[]>([])
+  useEffect(() => {
+    let active = true
+    getWilayas()
+      .then((res) => {
+        if (active) setWilayaList(res)
+      })
+      .catch(() => {
+        if (active) setWilayaList([])
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
   // Per-category estimate for the NEXT order: order #n uses the special
   // percent when n is a milestone (n % 10 === 0), otherwise the normal one.
   const eligible = useMemo(() => {
@@ -117,7 +135,31 @@ export default function CheckoutPage() {
   const estimateDiscount = eligible.reduce((sum, row) => sum + row.amount, 0)
   const estimatePercent = cartTotal > 0 && estimateDiscount > 0 ? Math.round((estimateDiscount / cartTotal) * 100) : 0
 
-  const delivery = cartTotal > 0 ? deliveryFee : 0
+  // Deliverable wilayas: the backend list (values are `_id`s) when available,
+  // otherwise the static list falls back to legacy codes.
+  const options = useMemo(() => {
+    if (wilayaList.length > 0) {
+      return wilayaList.map((w) => ({
+        value: w._id,
+        kind: 'id' as const,
+        code: w.code,
+        name: w.name,
+        nameAr: w.nameAr,
+        deliveryPrice: w.deliveryPrice,
+      }))
+    }
+    return wilayas.map((w) => ({
+      value: w.code,
+      kind: 'code' as const,
+      code: w.code,
+      name: w.name,
+      nameAr: w.nameAr,
+      deliveryPrice: deliveryFee,
+    }))
+  }, [wilayaList, deliveryFee])
+
+  const chosen = options.find((o) => o.value === wilaya)
+  const delivery = cartTotal > 0 ? (chosen ? chosen.deliveryPrice : deliveryFee) : 0
   const total = cartTotal + delivery - (cartTotal > 0 ? estimateDiscount : 0)
 
   const submit = async (e: React.FormEvent) => {
@@ -130,12 +172,12 @@ export default function CheckoutPage() {
     setActionError('')
     setSubmitting(true)
 
-    const wilayaEntry = wilayas.find((w) => w.code === wilaya)
+    const selected = options.find((o) => o.value === wilaya)
     const customer = {
       fullName: profileName,
       phone: profilePhone,
-      wilaya,
-      wilayaName: wilayaEntry ? getWilayaName(wilayaEntry, lang) : wilaya,
+      // Send only the wilaya `_id`; the server resolves code/name/price.
+      ...(selected?.kind === 'id' ? { wilayaId: selected.value } : { wilaya: wilaya }),
       commune: commune.trim(),
       address: address.trim(),
       note: note.trim() || undefined,
@@ -295,9 +337,9 @@ export default function CheckoutPage() {
                   <option value="" disabled>
                     {t('checkout.wilayaPlaceholder')}
                   </option>
-                  {wilayas.map((w) => (
-                    <option key={w.code} value={w.code}>
-                      {w.code} - {getWilayaName(w, lang)}
+                  {options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.code} - {lang === 'ar' ? o.nameAr || o.name : o.name} · {formatPrice(o.deliveryPrice, lang)}
                     </option>
                   ))}
                 </Select>

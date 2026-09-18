@@ -48,16 +48,12 @@ export function toProduct(r: ProductRecord): Product {
     categoryName: r.categoryName ?? r.category,
     discount: r.discount ?? 0,
     tags: r.tags,
-    stock: r.stock ?? 0,
-    lowStockThreshold: r.lowStockThreshold ?? 5,
-    isActive: r.isActive ?? true,
     isFeatured: r.isFeatured ?? false,
     isSpecialOffer: r.isSpecialOffer ?? false,
     confirmedSales: r.confirmedSales ?? 0,
     ownerType: r.ownerType,
     store: r.store,
     seller: r.seller,
-    status: r.status,
   }
 }
 
@@ -96,7 +92,6 @@ export interface CatalogQuery {
   limit?: number
   minPrice?: number
   maxPrice?: number
-  inStock?: boolean
   offer?: boolean
 }
 
@@ -109,7 +104,6 @@ export async function loadProductsPage(query: CatalogQuery = {}): Promise<Catalo
     limit: query.limit ?? 20,
     minPrice: query.minPrice,
     maxPrice: query.maxPrice,
-    inStock: query.inStock,
     offer: query.offer,
   })
   return {

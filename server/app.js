@@ -25,6 +25,7 @@ import storeRoutes from './routes/store.routes.js'
 import publicStoreRoutes from './routes/public.store.routes.js'
 import rewardRoutes from './routes/reward.routes.js'
 import adminSellerRoutes from './routes/admin.seller.routes.js'
+import wilayaRoutes from './routes/wilaya.routes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -89,6 +90,7 @@ app.get('/api/config', (_req, res) => sendSuccess(res, { deliveryFee: DELIVERY_F
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
+app.use('/api/wilayas', wilayaRoutes)
 app.use('/api/rewards', rewardRoutes)
 app.use('/api/banners', bannerRoutes)
 app.use('/api/orders', orderRoutes)

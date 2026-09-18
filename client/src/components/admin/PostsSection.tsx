@@ -16,6 +16,7 @@ export default function PostsSection() {
   const [editingPost, setEditingPost] = useState<PostRecord | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PostRecord | null>(null)
   const [notice, setNotice] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const openCreate = () => {
     setEditingPost(null)
@@ -129,9 +130,16 @@ export default function PostsSection() {
 
                 <div className="space-y-3 p-4">
                   <div className="min-w-0">
-                    <p className="line-clamp-2 text-sm font-semibold leading-snug text-ink-900">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId((v) => (v === post._id ? null : post._id))}
+                      title={expandedId === post._id ? t('posts.showLess') : t('posts.readMore')}
+                      className={`w-full text-start text-sm font-semibold leading-snug text-ink-900 transition-colors hover:text-brand-700 ${
+                        expandedId === post._id ? 'block' : 'line-clamp-2'
+                      }`}
+                    >
                       {title}
-                    </p>
+                    </button>
                     <p className="mt-1 truncate text-xs text-ink-400">
                       {post.productId?.name ?? t('admin.post.noProduct')}
                     </p>

@@ -35,11 +35,11 @@ const toPublic = (doc) => {
 }
 
 export const getProducts = asyncHandler(async (req, res) => {
-  const { category, q, sort, minPrice, maxPrice, inStock, featured, offer, store } = req.query
+  const { category, q, sort, minPrice, maxPrice, featured, offer, store } = req.query
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
 
-  const query = { isActive: true, status: 'active' }
+  const query = {}
   // By default, only show BM Store products unless store filter is specified
   if (store) {
     if (store === 'bm-store') {
@@ -58,7 +58,6 @@ export const getProducts = asyncHandler(async (req, res) => {
     if (minPrice) query.price.$gte = Number(minPrice)
     if (maxPrice) query.price.$lte = Number(maxPrice)
   }
-  if (inStock === 'true') query.stock = { $gt: 0 }
   if (q && typeof q === 'string' && q.trim()) {
     const safe = escapeRegex(q.trim())
     query.$or = [
@@ -101,7 +100,7 @@ export const getProductById = asyncHandler(async (req, res) => {
 })
 
 export const getProductBySlug = asyncHandler(async (req, res) => {
-  const doc = await Product.findOne({ slug: req.params.slug, isActive: true, status: 'active' }).lean()
+  const doc = await Product.findOne({ slug: req.params.slug }).lean()
   if (!doc) return sendError(res, 'Product not found', 404)
 
   // If it's a seller product, check store status
@@ -146,9 +145,6 @@ const pickProductFields = (body, current = null) => {
   }
   if (body.images !== undefined) out.images = Array.isArray(body.images) ? body.images.slice(0, 5) : []
   if (body.tags !== undefined) out.tags = body.tags
-  if (body.stock !== undefined) out.stock = Math.max(0, Number(body.stock))
-  if (body.lowStockThreshold !== undefined) out.lowStockThreshold = Math.max(0, Number(body.lowStockThreshold))
-  if (body.isActive !== undefined) out.isActive = Boolean(body.isActive)
   if (body.isFeatured !== undefined) out.isFeatured = Boolean(body.isFeatured)
   if (body.price !== undefined) out.price = Number(body.price)
   if (body.isSpecialOffer !== undefined) out.isSpecialOffer = Boolean(body.isSpecialOffer)
@@ -185,8 +181,6 @@ export const adminListProducts = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
   const query = {}
-  if (req.query.isActive === 'true') query.isActive = true
-  if (req.query.isActive === 'false') query.isActive = false
   if (req.query.isFeatured === 'true') query.isFeatured = true
   if (req.query.category) query.category = req.query.category
   if (req.query.ownerType) query.ownerType = req.query.ownerType
@@ -245,7 +239,6 @@ export const adminCreateProduct = asyncHandler(async (req, res) => {
   delete data.descriptionFr
 
   if (data.oldPrice === undefined || data.oldPrice === null) delete data.oldPrice
-  if (data.stock === undefined) data.stock = 100
   data.slug = await uniqueSlug(data.name)
   const product = await Product.create(data)
   return sendSuccess(res, product, 'Product created', 201)
@@ -317,7 +310,6 @@ export const adminToggleProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(id)
   if (!product) return sendError(res, 'Product not found', 404)
 
-  if (req.body.isActive !== undefined) product.isActive = Boolean(req.body.isActive)
   if (req.body.isFeatured !== undefined) product.isFeatured = Boolean(req.body.isFeatured)
   if (req.body.isSpecialOffer !== undefined) {
     const wantOffer = Boolean(req.body.isSpecialOffer)
